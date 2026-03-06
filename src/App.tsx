@@ -82,6 +82,7 @@ const App = () => (
               
               {/* 004 数据处理 */}
               <Route path="/data-process/workflows" element={<DataProcessWorkflows />} />
+              <Route path="/data-process/workflow-canvas" element={<WorkflowCanvas />} />
               <Route path="/data-process/templates" element={<DataProcessTemplates />} />
               <Route path="/data-process/template-store" element={<DataProcessTemplateStore />} />
               <Route path="/data-process/run-records" element={<DataProcessRunRecords />} />

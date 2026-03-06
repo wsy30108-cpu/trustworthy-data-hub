@@ -83,7 +83,7 @@ const DataProcessWorkflows = () => {
                 <button className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="运行">
                   <Play className="w-4 h-4" />
                 </button>
-                <button className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="编辑画布">
+                <button onClick={() => navigate(`/data-process/workflow-canvas?name=${encodeURIComponent(wf.name)}`)} className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="编辑画布">
                   <Eye className="w-4 h-4" />
                 </button>
                 <button className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="复制">
