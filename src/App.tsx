@@ -17,10 +17,31 @@ const ConsoleSystem = lazy(() => import("./pages/console/ConsoleSystem"));
 const ConsoleStorage = lazy(() => import("./pages/console/ConsoleStorage"));
 const ConsoleDatasource = lazy(() => import("./pages/console/ConsoleDatasource"));
 const ConsoleCatalog = lazy(() => import("./pages/console/ConsoleCatalog"));
+
 const DataManagementDatasets = lazy(() => import("./pages/data-management/DataManagementDatasets"));
+const DataManagementFileSearch = lazy(() => import("./pages/data-management/DataManagementFileSearch"));
+const DataManagementDirectories = lazy(() => import("./pages/data-management/DataManagementDirectories"));
+
 const DataProcessWorkflows = lazy(() => import("./pages/data-process/DataProcessWorkflows"));
+const DataProcessTemplates = lazy(() => import("./pages/data-process/DataProcessTemplates"));
+const DataProcessTemplateStore = lazy(() => import("./pages/data-process/DataProcessTemplateStore"));
+const DataProcessRunRecords = lazy(() => import("./pages/data-process/DataProcessRunRecords"));
+const DataProcessOperators = lazy(() => import("./pages/data-process/DataProcessOperators"));
+const DataProcessOperatorStore = lazy(() => import("./pages/data-process/DataProcessOperatorStore"));
+const DataProcessFeatureExtract = lazy(() => import("./pages/data-process/DataProcessFeatureExtract"));
+const DataProcessQuality = lazy(() => import("./pages/data-process/DataProcessQuality"));
+
 const DataAnnotationTasks = lazy(() => import("./pages/data-annotation/DataAnnotationTasks"));
+const DataAnnotationTaskHall = lazy(() => import("./pages/data-annotation/DataAnnotationTaskHall"));
+const DataAnnotationTools = lazy(() => import("./pages/data-annotation/DataAnnotationTools"));
+const DataAnnotationPerformance = lazy(() => import("./pages/data-annotation/DataAnnotationPerformance"));
+const DataAnnotationStatistics = lazy(() => import("./pages/data-annotation/DataAnnotationStatistics"));
+
 const DataServiceMarketplace = lazy(() => import("./pages/data-service/DataServiceMarketplace"));
+const DataServiceListing = lazy(() => import("./pages/data-service/DataServiceListing"));
+const DataServiceApproval = lazy(() => import("./pages/data-service/DataServiceApproval"));
+const DataServiceMyApplications = lazy(() => import("./pages/data-service/DataServiceMyApplications"));
+
 const PlaceholderPage = lazy(() => import("./pages/PlaceholderPage"));
 
 const queryClient = new QueryClient();
@@ -41,7 +62,6 @@ const App = () => (
           <Routes>
             <Route path="/" element={<HomePage />} />
             
-            {/* 业务子平台 - 共享Shell布局 */}
             <Route element={<PlatformLayout />}>
               {/* 002 控制台 */}
               <Route path="/console/dashboard" element={<ConsoleDashboard />} />
@@ -53,23 +73,34 @@ const App = () => (
               <Route path="/console/storage" element={<ConsoleStorage />} />
               <Route path="/console/datasource" element={<ConsoleDatasource />} />
               <Route path="/console/catalog" element={<ConsoleCatalog />} />
-              <Route path="/console/*" element={<PlaceholderPage />} />
               
               {/* 003 数据管理 */}
               <Route path="/data-management/datasets" element={<DataManagementDatasets />} />
-              <Route path="/data-management/*" element={<PlaceholderPage />} />
+              <Route path="/data-management/file-search" element={<DataManagementFileSearch />} />
+              <Route path="/data-management/directories" element={<DataManagementDirectories />} />
               
               {/* 004 数据处理 */}
               <Route path="/data-process/workflows" element={<DataProcessWorkflows />} />
-              <Route path="/data-process/*" element={<PlaceholderPage />} />
+              <Route path="/data-process/templates" element={<DataProcessTemplates />} />
+              <Route path="/data-process/template-store" element={<DataProcessTemplateStore />} />
+              <Route path="/data-process/run-records" element={<DataProcessRunRecords />} />
+              <Route path="/data-process/operators" element={<DataProcessOperators />} />
+              <Route path="/data-process/operator-store" element={<DataProcessOperatorStore />} />
+              <Route path="/data-process/feature-extract" element={<DataProcessFeatureExtract />} />
+              <Route path="/data-process/quality" element={<DataProcessQuality />} />
               
               {/* 005 数据标注 */}
               <Route path="/data-annotation/tasks" element={<DataAnnotationTasks />} />
-              <Route path="/data-annotation/*" element={<PlaceholderPage />} />
+              <Route path="/data-annotation/task-hall" element={<DataAnnotationTaskHall />} />
+              <Route path="/data-annotation/tools" element={<DataAnnotationTools />} />
+              <Route path="/data-annotation/performance" element={<DataAnnotationPerformance />} />
+              <Route path="/data-annotation/statistics" element={<DataAnnotationStatistics />} />
               
               {/* 006 数据服务 */}
               <Route path="/data-service/marketplace" element={<DataServiceMarketplace />} />
-              <Route path="/data-service/*" element={<PlaceholderPage />} />
+              <Route path="/data-service/listing" element={<DataServiceListing />} />
+              <Route path="/data-service/approval" element={<DataServiceApproval />} />
+              <Route path="/data-service/my-applications" element={<DataServiceMyApplications />} />
             </Route>
             
             <Route path="*" element={<NotFound />} />
