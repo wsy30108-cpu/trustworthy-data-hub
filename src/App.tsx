@@ -30,6 +30,7 @@ const DataProcessOperators = lazy(() => import("./pages/data-process/DataProcess
 const DataProcessOperatorStore = lazy(() => import("./pages/data-process/DataProcessOperatorStore"));
 const DataProcessFeatureExtract = lazy(() => import("./pages/data-process/DataProcessFeatureExtract"));
 const DataProcessQuality = lazy(() => import("./pages/data-process/DataProcessQuality"));
+const WorkflowCanvas = lazy(() => import("./pages/data-process/WorkflowCanvas"));
 
 const DataAnnotationTasks = lazy(() => import("./pages/data-annotation/DataAnnotationTasks"));
 const DataAnnotationTaskHall = lazy(() => import("./pages/data-annotation/DataAnnotationTaskHall"));
@@ -81,6 +82,7 @@ const App = () => (
               
               {/* 004 数据处理 */}
               <Route path="/data-process/workflows" element={<DataProcessWorkflows />} />
+              <Route path="/data-process/workflow-canvas" element={<WorkflowCanvas />} />
               <Route path="/data-process/templates" element={<DataProcessTemplates />} />
               <Route path="/data-process/template-store" element={<DataProcessTemplateStore />} />
               <Route path="/data-process/run-records" element={<DataProcessRunRecords />} />

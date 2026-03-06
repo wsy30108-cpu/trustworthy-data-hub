@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, Search, Play, Copy, Trash2, Eye, MoreHorizontal, Filter } from "lucide-react";
 
 const mockWorkflows = [
@@ -16,6 +17,7 @@ const statusColors: Record<string, string> = {
 };
 
 const DataProcessWorkflows = () => {
+  const navigate = useNavigate();
   const [searchText, setSearchText] = useState("");
 
   return (
@@ -29,7 +31,7 @@ const DataProcessWorkflows = () => {
           <button className="px-4 py-2 border rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50">
             基于模板新建
           </button>
-          <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-primary/90">
+          <button onClick={() => navigate("/data-process/workflow-canvas?name=新建工作流")} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-primary/90">
             <Plus className="w-4 h-4" /> 新建自定义工作流
           </button>
         </div>
@@ -81,7 +83,7 @@ const DataProcessWorkflows = () => {
                 <button className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="运行">
                   <Play className="w-4 h-4" />
                 </button>
-                <button className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="编辑画布">
+                <button onClick={() => navigate(`/data-process/workflow-canvas?name=${encodeURIComponent(wf.name)}`)} className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="编辑画布">
                   <Eye className="w-4 h-4" />
                 </button>
                 <button className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="复制">
