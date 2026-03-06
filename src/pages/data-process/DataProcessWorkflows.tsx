@@ -31,7 +31,7 @@ const DataProcessWorkflows = () => {
           <button className="px-4 py-2 border rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50">
             基于模板新建
           </button>
-          <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-primary/90">
+          <button onClick={() => navigate("/data-process/workflow-canvas?name=新建工作流")} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-primary/90">
             <Plus className="w-4 h-4" /> 新建自定义工作流
           </button>
         </div>
