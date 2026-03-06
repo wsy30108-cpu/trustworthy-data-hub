@@ -17,6 +17,7 @@ const statusColors: Record<string, string> = {
 };
 
 const DataProcessWorkflows = () => {
+  const navigate = useNavigate();
   const [searchText, setSearchText] = useState("");
 
   return (
