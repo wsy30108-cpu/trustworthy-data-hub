@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, Search, Play, Copy, Trash2, Eye, MoreHorizontal, Filter } from "lucide-react";
 
 const mockWorkflows = [
