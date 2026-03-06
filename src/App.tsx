@@ -30,6 +30,7 @@ const DataProcessOperators = lazy(() => import("./pages/data-process/DataProcess
 const DataProcessOperatorStore = lazy(() => import("./pages/data-process/DataProcessOperatorStore"));
 const DataProcessFeatureExtract = lazy(() => import("./pages/data-process/DataProcessFeatureExtract"));
 const DataProcessQuality = lazy(() => import("./pages/data-process/DataProcessQuality"));
+const WorkflowCanvas = lazy(() => import("./pages/data-process/WorkflowCanvas"));
 
 const DataAnnotationTasks = lazy(() => import("./pages/data-annotation/DataAnnotationTasks"));
 const DataAnnotationTaskHall = lazy(() => import("./pages/data-annotation/DataAnnotationTaskHall"));
