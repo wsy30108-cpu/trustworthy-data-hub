@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Database, Workflow, Tags, ShieldCheck, Zap, Globe, ChevronRight } from "lucide-react";
+import { ArrowRight, Database, Workflow, ShoppingBag, ShieldCheck, Zap, Globe, ChevronRight } from "lucide-react";
 import heroBg from "@/assets/hero-bg.jpg";
 
 const HomePage = () => {
