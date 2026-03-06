@@ -9,6 +9,14 @@ import NotFound from "./pages/NotFound";
 import { lazy, Suspense } from "react";
 
 const ConsoleDashboard = lazy(() => import("./pages/console/ConsoleDashboard"));
+const ConsoleSpaces = lazy(() => import("./pages/console/ConsoleSpaces"));
+const ConsoleOrganizations = lazy(() => import("./pages/console/ConsoleOrganizations"));
+const ConsoleMembers = lazy(() => import("./pages/console/ConsoleMembers"));
+const ConsoleRoles = lazy(() => import("./pages/console/ConsoleRoles"));
+const ConsoleSystem = lazy(() => import("./pages/console/ConsoleSystem"));
+const ConsoleStorage = lazy(() => import("./pages/console/ConsoleStorage"));
+const ConsoleDatasource = lazy(() => import("./pages/console/ConsoleDatasource"));
+const ConsoleCatalog = lazy(() => import("./pages/console/ConsoleCatalog"));
 const DataManagementDatasets = lazy(() => import("./pages/data-management/DataManagementDatasets"));
 const DataProcessWorkflows = lazy(() => import("./pages/data-process/DataProcessWorkflows"));
 const DataAnnotationTasks = lazy(() => import("./pages/data-annotation/DataAnnotationTasks"));
@@ -37,6 +45,14 @@ const App = () => (
             <Route element={<PlatformLayout />}>
               {/* 002 控制台 */}
               <Route path="/console/dashboard" element={<ConsoleDashboard />} />
+              <Route path="/console/spaces" element={<ConsoleSpaces />} />
+              <Route path="/console/organizations" element={<ConsoleOrganizations />} />
+              <Route path="/console/members" element={<ConsoleMembers />} />
+              <Route path="/console/roles" element={<ConsoleRoles />} />
+              <Route path="/console/system" element={<ConsoleSystem />} />
+              <Route path="/console/storage" element={<ConsoleStorage />} />
+              <Route path="/console/datasource" element={<ConsoleDatasource />} />
+              <Route path="/console/catalog" element={<ConsoleCatalog />} />
               <Route path="/console/*" element={<PlaceholderPage />} />
               
               {/* 003 数据管理 */}
