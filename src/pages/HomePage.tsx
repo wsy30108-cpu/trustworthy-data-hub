@@ -33,18 +33,29 @@ const HomePage = () => {
             <a href="#" className="text-sm text-muted-foreground hover:text-foreground">帮助文档</a>
           </nav>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate("/console/dashboard")}
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
-              登录
-            </button>
-            <button
-              onClick={() => navigate("/console/dashboard")}
-              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              立即体验
-            </button>
+            {isAuthenticated ? (
+              <button
+                onClick={() => navigate("/console/dashboard")}
+                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                进入平台
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => openAuthModal("login")}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  登录
+                </button>
+                <button
+                  onClick={() => openAuthModal("register")}
+                  className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  注册体验
+                </button>
+              </>
+            )}
           </div>
         </div>
       </header>

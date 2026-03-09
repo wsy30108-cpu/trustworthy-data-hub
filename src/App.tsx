@@ -4,6 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { PlatformLayout } from "@/components/layout/PlatformLayout";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthModal } from "@/components/AuthModal";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import HomePage from "./pages/HomePage";
 import NotFound from "./pages/NotFound";
 import { lazy, Suspense } from "react";
@@ -43,8 +46,6 @@ const DataServiceListing = lazy(() => import("./pages/data-service/DataServiceLi
 const DataServiceApproval = lazy(() => import("./pages/data-service/DataServiceApproval"));
 const DataServiceMyApplications = lazy(() => import("./pages/data-service/DataServiceMyApplications"));
 
-const PlaceholderPage = lazy(() => import("./pages/PlaceholderPage"));
-
 const queryClient = new QueryClient();
 
 const Loading = () => (
@@ -59,55 +60,61 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Suspense fallback={<Loading />}>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            
-            <Route element={<PlatformLayout />}>
-              {/* 002 控制台 */}
-              <Route path="/console/dashboard" element={<ConsoleDashboard />} />
-              <Route path="/console/spaces" element={<ConsoleSpaces />} />
-              <Route path="/console/organizations" element={<ConsoleOrganizations />} />
-              <Route path="/console/members" element={<ConsoleMembers />} />
-              <Route path="/console/roles" element={<ConsoleRoles />} />
-              <Route path="/console/system" element={<ConsoleSystem />} />
-              <Route path="/console/storage" element={<ConsoleStorage />} />
-              <Route path="/console/datasource" element={<ConsoleDatasource />} />
-              <Route path="/console/catalog" element={<ConsoleCatalog />} />
+        <AuthProvider>
+          <AuthModal />
+          <Suspense fallback={<Loading />}>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
               
-              {/* 003 数据管理 */}
-              <Route path="/data-management/datasets" element={<DataManagementDatasets />} />
-              <Route path="/data-management/file-search" element={<DataManagementFileSearch />} />
-              <Route path="/data-management/directories" element={<DataManagementDirectories />} />
+              {/* Protected routes */}
+              <Route element={<ProtectedRoute />}>
+                <Route element={<PlatformLayout />}>
+                  {/* 002 控制台 */}
+                  <Route path="/console/dashboard" element={<ConsoleDashboard />} />
+                  <Route path="/console/spaces" element={<ConsoleSpaces />} />
+                  <Route path="/console/organizations" element={<ConsoleOrganizations />} />
+                  <Route path="/console/members" element={<ConsoleMembers />} />
+                  <Route path="/console/roles" element={<ConsoleRoles />} />
+                  <Route path="/console/system" element={<ConsoleSystem />} />
+                  <Route path="/console/storage" element={<ConsoleStorage />} />
+                  <Route path="/console/datasource" element={<ConsoleDatasource />} />
+                  <Route path="/console/catalog" element={<ConsoleCatalog />} />
+                  
+                  {/* 003 数据管理 */}
+                  <Route path="/data-management/datasets" element={<DataManagementDatasets />} />
+                  <Route path="/data-management/file-search" element={<DataManagementFileSearch />} />
+                  <Route path="/data-management/directories" element={<DataManagementDirectories />} />
+                  
+                  {/* 004 数据处理 */}
+                  <Route path="/data-process/workflows" element={<DataProcessWorkflows />} />
+                  <Route path="/data-process/workflow-canvas" element={<WorkflowCanvas />} />
+                  <Route path="/data-process/templates" element={<DataProcessTemplates />} />
+                  <Route path="/data-process/template-store" element={<DataProcessTemplateStore />} />
+                  <Route path="/data-process/run-records" element={<DataProcessRunRecords />} />
+                  <Route path="/data-process/operators" element={<DataProcessOperators />} />
+                  <Route path="/data-process/operator-store" element={<DataProcessOperatorStore />} />
+                  <Route path="/data-process/feature-extract" element={<DataProcessFeatureExtract />} />
+                  <Route path="/data-process/quality" element={<DataProcessQuality />} />
+                  
+                  {/* 005 数据标注 */}
+                  <Route path="/data-annotation/tasks" element={<DataAnnotationTasks />} />
+                  <Route path="/data-annotation/task-hall" element={<DataAnnotationTaskHall />} />
+                  <Route path="/data-annotation/tools" element={<DataAnnotationTools />} />
+                  <Route path="/data-annotation/performance" element={<DataAnnotationPerformance />} />
+                  <Route path="/data-annotation/statistics" element={<DataAnnotationStatistics />} />
+                  
+                  {/* 006 数据服务 */}
+                  <Route path="/data-service/marketplace" element={<DataServiceMarketplace />} />
+                  <Route path="/data-service/listing" element={<DataServiceListing />} />
+                  <Route path="/data-service/approval" element={<DataServiceApproval />} />
+                  <Route path="/data-service/my-applications" element={<DataServiceMyApplications />} />
+                </Route>
+              </Route>
               
-              {/* 004 数据处理 */}
-              <Route path="/data-process/workflows" element={<DataProcessWorkflows />} />
-              <Route path="/data-process/workflow-canvas" element={<WorkflowCanvas />} />
-              <Route path="/data-process/templates" element={<DataProcessTemplates />} />
-              <Route path="/data-process/template-store" element={<DataProcessTemplateStore />} />
-              <Route path="/data-process/run-records" element={<DataProcessRunRecords />} />
-              <Route path="/data-process/operators" element={<DataProcessOperators />} />
-              <Route path="/data-process/operator-store" element={<DataProcessOperatorStore />} />
-              <Route path="/data-process/feature-extract" element={<DataProcessFeatureExtract />} />
-              <Route path="/data-process/quality" element={<DataProcessQuality />} />
-              
-              {/* 005 数据标注 */}
-              <Route path="/data-annotation/tasks" element={<DataAnnotationTasks />} />
-              <Route path="/data-annotation/task-hall" element={<DataAnnotationTaskHall />} />
-              <Route path="/data-annotation/tools" element={<DataAnnotationTools />} />
-              <Route path="/data-annotation/performance" element={<DataAnnotationPerformance />} />
-              <Route path="/data-annotation/statistics" element={<DataAnnotationStatistics />} />
-              
-              {/* 006 数据服务 */}
-              <Route path="/data-service/marketplace" element={<DataServiceMarketplace />} />
-              <Route path="/data-service/listing" element={<DataServiceListing />} />
-              <Route path="/data-service/approval" element={<DataServiceApproval />} />
-              <Route path="/data-service/my-applications" element={<DataServiceMyApplications />} />
-            </Route>
-            
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
