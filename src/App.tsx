@@ -14,6 +14,7 @@ import { lazy, Suspense } from "react";
 const ConsoleDashboard = lazy(() => import("./pages/console/ConsoleDashboard"));
 const ConsoleSpaces = lazy(() => import("./pages/console/ConsoleSpaces"));
 const ConsoleOrganizations = lazy(() => import("./pages/console/ConsoleOrganizations"));
+const ConsoleOrgMembers = lazy(() => import("./pages/console/ConsoleOrgMembers"));
 const ConsoleMembers = lazy(() => import("./pages/console/ConsoleMembers"));
 const ConsoleRoles = lazy(() => import("./pages/console/ConsoleRoles"));
 const ConsoleSystem = lazy(() => import("./pages/console/ConsoleSystem"));
@@ -73,6 +74,7 @@ const App = () => (
                   <Route path="/console/dashboard" element={<ConsoleDashboard />} />
                   <Route path="/console/spaces" element={<ConsoleSpaces />} />
                   <Route path="/console/organizations" element={<ConsoleOrganizations />} />
+                  <Route path="/console/organizations/:orgId/members" element={<ConsoleOrgMembers />} />
                   <Route path="/console/members" element={<ConsoleMembers />} />
                   <Route path="/console/roles" element={<ConsoleRoles />} />
                   <Route path="/console/system" element={<ConsoleSystem />} />
