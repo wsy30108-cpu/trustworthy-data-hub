@@ -164,7 +164,7 @@ const HomePage = () => {
                     ))}
                   </div>
                   <button
-                    onClick={() => navigate(item.route)}
+                    onClick={() => handleProtectedNav(item.route)}
                     className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
                   >
                     了解更多 <ChevronRight className="w-4 h-4" />
