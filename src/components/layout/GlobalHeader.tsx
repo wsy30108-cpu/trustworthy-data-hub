@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 export function GlobalHeader() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [showNotif, setShowNotif] = useState(false);
   const [showUser, setShowUser] = useState(false);
 
