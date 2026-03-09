@@ -1,11 +1,13 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { Bell, FileText, ChevronDown, LogOut, Settings, User } from "lucide-react";
-import { subPlatforms, mockUser } from "@/config/platform";
+import { subPlatforms } from "@/config/platform";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function GlobalHeader() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [showNotif, setShowNotif] = useState(false);
   const [showUser, setShowUser] = useState(false);
 
@@ -107,16 +109,16 @@ export function GlobalHeader() {
             className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted/50"
           >
             <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground text-xs font-medium">{mockUser.name[0]}</span>
+              <span className="text-primary-foreground text-xs font-medium">{user?.name?.[0] || "U"}</span>
             </div>
-            <span className="text-sm hidden md:inline">{mockUser.name}</span>
+            <span className="text-sm hidden md:inline">{user?.name || "用户"}</span>
             <ChevronDown className="w-3 h-3 text-muted-foreground" />
           </button>
           {showUser && (
             <div className="absolute right-0 top-full mt-2 w-48 bg-card border rounded-lg shadow-lg z-50 animate-fade-in">
               <div className="p-3 border-b">
-                <p className="text-sm font-medium">{mockUser.name}</p>
-                <p className="text-xs text-muted-foreground">{mockUser.role}</p>
+                <p className="text-sm font-medium">{user?.name || "用户"}</p>
+                <p className="text-xs text-muted-foreground">{user?.role || ""}</p>
               </div>
               <div className="p-1">
                 <button className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-muted/50">
@@ -126,7 +128,7 @@ export function GlobalHeader() {
                   <Settings className="w-4 h-4" /> 系统设置
                 </button>
                 <button
-                  onClick={() => navigate("/")}
+                  onClick={() => { logout(); navigate("/"); }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-muted/50 text-destructive"
                 >
                   <LogOut className="w-4 h-4" /> 退出登录

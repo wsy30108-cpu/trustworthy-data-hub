@@ -1,9 +1,19 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Database, Workflow, ShoppingBag, ShieldCheck, Zap, Globe, ChevronRight } from "lucide-react";
 import heroBg from "@/assets/hero-bg.jpg";
+import { useAuth } from "@/contexts/AuthContext";
 
 const HomePage = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, openAuthModal } = useAuth();
+
+  const handleProtectedNav = (route: string) => {
+    if (isAuthenticated) {
+      navigate(route);
+    } else {
+      openAuthModal("login");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-card">
@@ -23,18 +33,29 @@ const HomePage = () => {
             <a href="#" className="text-sm text-muted-foreground hover:text-foreground">帮助文档</a>
           </nav>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate("/console/dashboard")}
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
-              登录
-            </button>
-            <button
-              onClick={() => navigate("/console/dashboard")}
-              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              立即体验
-            </button>
+            {isAuthenticated ? (
+              <button
+                onClick={() => navigate("/console/dashboard")}
+                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                进入平台
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => openAuthModal("login")}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  登录
+                </button>
+                <button
+                  onClick={() => openAuthModal("register")}
+                  className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  注册体验
+                </button>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -60,7 +81,7 @@ const HomePage = () => {
           </p>
           <div className="flex items-center justify-center gap-4">
             <button
-              onClick={() => navigate("/data-management/datasets")}
+              onClick={() => handleProtectedNav("/data-management/datasets")}
               className="px-8 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium flex items-center gap-2"
             >
               立即体验 <ArrowRight className="w-4 h-4" />
@@ -143,7 +164,7 @@ const HomePage = () => {
                     ))}
                   </div>
                   <button
-                    onClick={() => navigate(item.route)}
+                    onClick={() => handleProtectedNav(item.route)}
                     className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
                   >
                     了解更多 <ChevronRight className="w-4 h-4" />
@@ -220,7 +241,7 @@ const HomePage = () => {
           <h2 className="text-3xl font-bold text-foreground mb-4">开始构建您的可信数据资产</h2>
           <p className="text-muted-foreground mb-8">立即注册，体验一站式数据管理与服务能力</p>
           <button
-            onClick={() => navigate("/data-management/datasets")}
+            onClick={() => handleProtectedNav("/data-management/datasets")}
             className="px-8 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
           >
             立即体验
