@@ -1,9 +1,19 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Database, Workflow, ShoppingBag, ShieldCheck, Zap, Globe, ChevronRight } from "lucide-react";
 import heroBg from "@/assets/hero-bg.jpg";
+import { useAuth } from "@/contexts/AuthContext";
 
 const HomePage = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, openAuthModal } = useAuth();
+
+  const handleProtectedNav = (route: string) => {
+    if (isAuthenticated) {
+      navigate(route);
+    } else {
+      openAuthModal("login");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-card">
