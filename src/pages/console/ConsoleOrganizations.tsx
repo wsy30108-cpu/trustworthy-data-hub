@@ -50,7 +50,7 @@ const ConsoleOrganizations = () => {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editingOrg, setEditingOrg] = useState<typeof mockOrgs[0] | null>(null);
-  const [showMembers, setShowMembers] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   // Form state
   const [form, setForm] = useState<OrgFormData>(emptyForm);
