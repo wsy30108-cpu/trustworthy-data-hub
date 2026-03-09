@@ -181,7 +181,7 @@ const ConsoleOrganizations = () => {
                 <td className="py-3 px-4 text-muted-foreground">{o.createdAt}</td>
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-1">
-                    <button onClick={() => setShowMembers(o.id)} className="p-1 rounded hover:bg-muted/50" title="查看成员"><Users className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => navigate(`/console/organizations/${o.id}/members`)} className="p-1 rounded hover:bg-muted/50" title="查看成员"><Users className="w-3.5 h-3.5" /></button>
                     <button onClick={() => openEdit(o)} className="p-1 rounded hover:bg-muted/50" title="编辑"><Edit2 className="w-3.5 h-3.5" /></button>
                     <button className="p-1 rounded hover:bg-muted/50 text-destructive" title="删除"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
