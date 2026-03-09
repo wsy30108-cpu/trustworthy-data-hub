@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, Search, Edit2, Trash2, Users } from "lucide-react";
 
 const mockOrgs = [
