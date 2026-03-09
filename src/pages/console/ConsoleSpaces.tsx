@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Plus, Search, MoreHorizontal, Eye, Edit2, Power, Trash2, Boxes } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type SpaceType = "all" | "org" | "team" | "personal";
 type SpaceStatus = "all" | "active" | "disabled";
@@ -17,13 +18,127 @@ const mockSpaces = [
 
 const typeMap: Record<string, SpaceType> = { "组织空间": "org", "团队空间": "team", "个人空间": "personal" };
 
+// Pinyin initial mapping for common Chinese characters (simplified)
+const pinyinMap: Record<string, string> = {
+  "大": "d", "模": "m", "型": "x", "研": "y", "发": "f", "组": "z",
+  "基": "j", "础": "c", "究": "j", "团": "t", "队": "d", "北": "b",
+  "京": "j", "院": "y", "计": "j", "算": "s", "机": "j", "视": "s",
+  "觉": "j", "实": "s", "验": "y", "室": "s", "张": "z", "明": "m",
+  "的": "d", "个": "g", "人": "r", "空": "k", "间": "j", "语": "y",
+  "音": "y", "识": "s", "别": "b", "数": "s", "据": "j", "标": "b",
+  "注": "z", "中": "z", "心": "x", "李": "l", "华": "h", "王": "w",
+  "芳": "f", "赵": "z", "强": "q", "孙": "s", "丽": "l", "周": "z",
+  "杰": "j", "服": "f", "务": "w", "公": "g", "司": "s", "清": "q",
+  "学": "x", "智": "z", "能": "n", "处": "c", "理": "l", "分": "f",
+  "析": "x", "工": "g", "程": "c", "平": "p", "台": "t", "测": "c",
+  "试": "s", "安": "a", "全": "q", "管": "g", "科": "k", "技": "j",
+  "信": "x", "息": "x", "通": "t", "讯": "x", "网": "w", "络": "l",
+  "系": "x", "统": "t", "设": "s", "备": "b", "运": "y", "维": "w",
+  "产": "c", "品": "p", "项": "x", "目": "m", "质": "z", "量": "l",
+  "保": "b", "障": "z", "内": "n", "容": "r", "编": "b", "辑": "j",
+  "审": "s", "核": "h", "存": "c", "储": "c", "文": "w", "件": "j",
+  "集": "j", "训": "x", "练": "l", "推": "t", "断": "d", "评": "p",
+  "估": "g", "优": "y", "化": "h", "部": "b", "署": "s", "监": "j",
+  "控": "k", "日": "r", "志": "z", "报": "b", "告": "g", "配": "p",
+  "置": "z", "规": "g", "则": "z", "策": "c", "略": "l", "权": "q",
+  "限": "x", "角": "j", "色": "s", "用": "y", "户": "h", "登": "d",
+  "录": "l", "创": "c", "建": "j", "新": "x", "增": "z", "删": "s",
+  "改": "g", "查": "c",
+};
+
+function toPinyinInitials(str: string): string {
+  let result = "";
+  for (const ch of str) {
+    if (/[a-zA-Z0-9_]/.test(ch)) {
+      result += ch.toLowerCase();
+    } else if (ch === " " || ch === " ") {
+      result += "-";
+    } else if (pinyinMap[ch]) {
+      result += pinyinMap[ch];
+    }
+    // skip other special chars
+  }
+  return result || "space";
+}
+
+function generateUniqueIdentifier(name: string, existingIds: string[]): string {
+  const base = toPinyinInitials(name);
+  if (!existingIds.includes(base)) return base;
+  let i = 1;
+  while (existingIds.includes(`${base}-${i}`)) i++;
+  return `${base}-${i}`;
+}
+
+const NAME_REGEX = /^[\u4e00-\u9fa5a-zA-Z0-9_]+$/;
+
 const ConsoleSpaces = () => {
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<SpaceType>("all");
   const [statusFilter, setStatusFilter] = useState<SpaceStatus>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [showDetail, setShowDetail] = useState<string | null>(null);
   const [actionMenu, setActionMenu] = useState<string | null>(null);
+
+  // Create form state
+  const [formName, setFormName] = useState("");
+  const [formDesc, setFormDesc] = useState("");
+  const [formType, setFormType] = useState("团队空间");
+  const [formStorage, setFormStorage] = useState("MinIO-主存储");
+  const [formNameTouched, setFormNameTouched] = useState(false);
+  const [formSubmitted, setFormSubmitted] = useState(false);
+
+  const existingIdentifiers = useMemo(() => mockSpaces.map(s => s.identifier), []);
+  const generatedIdentifier = useMemo(() => {
+    if (!formName.trim()) return "";
+    return generateUniqueIdentifier(formName.trim(), existingIdentifiers);
+  }, [formName, existingIdentifiers]);
+
+  const nameError = useMemo(() => {
+    const val = formName;
+    if (!val) return formNameTouched || formSubmitted ? "空间名称为必填项" : "";
+    if (!NAME_REGEX.test(val)) return "空间名称仅支持中英文、数字、下划线，长度为 2-30 个字符";
+    if (val.length < 2 || val.length > 30) return "空间名称仅支持中英文、数字、下划线，长度为 2-30 个字符";
+    return "";
+  }, [formName, formNameTouched, formSubmitted]);
+
+  const descCount = formDesc.length;
+  const descError = descCount > 300 ? "描述内容不能超过 300 个字符" : "";
+
+  const isFormValid = formName.trim().length >= 2 && formName.trim().length <= 30 && NAME_REGEX.test(formName) && descCount <= 300;
+
+  const handleNameChange = useCallback((val: string) => {
+    // Only allow valid characters, truncate at 30
+    const filtered = val.split("").filter(ch => /[\u4e00-\u9fa5a-zA-Z0-9_]/.test(ch)).join("");
+    setFormName(filtered.slice(0, 30));
+    if (!formNameTouched) setFormNameTouched(true);
+  }, [formNameTouched]);
+
+  const handleDescChange = useCallback((val: string) => {
+    setFormDesc(val.slice(0, 300));
+  }, []);
+
+  const resetForm = useCallback(() => {
+    setFormName("");
+    setFormDesc("");
+    setFormType("团队空间");
+    setFormStorage("MinIO-主存储");
+    setFormNameTouched(false);
+    setFormSubmitted(false);
+  }, []);
+
+  const handleCreate = useCallback(() => {
+    setFormSubmitted(true);
+    if (!isFormValid) return;
+    // Mock create success
+    resetForm();
+    setShowCreate(false);
+  }, [isFormValid, resetForm]);
+
+  const openCreate = useCallback(() => {
+    resetForm();
+    setShowCreate(true);
+  }, [resetForm]);
 
   const filtered = mockSpaces.filter(s => {
     if (search && !s.name.includes(search) && !s.identifier.includes(search)) return false;
@@ -34,6 +149,7 @@ const ConsoleSpaces = () => {
   });
 
   const detail = mockSpaces.find(s => s.id === showDetail);
+  const currentAdmin = user?.name || "超级管理员";
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -42,7 +158,7 @@ const ConsoleSpaces = () => {
           <h1 className="page-title">空间管理</h1>
           <p className="page-description">管理组织、团队和个人空间的全生命周期</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="px-4 py-2 bg-primary text-primary-foreground text-sm rounded-md hover:bg-primary/90 flex items-center gap-1.5">
+        <button onClick={openCreate} className="px-4 py-2 bg-primary text-primary-foreground text-sm rounded-md hover:bg-primary/90 flex items-center gap-1.5">
           <Plus className="w-4 h-4" /> 新增空间
         </button>
       </div>
@@ -145,38 +261,96 @@ const ConsoleSpaces = () => {
 
       {/* 创建空间弹窗 */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowCreate(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => { resetForm(); setShowCreate(false); }}>
           <div className="bg-card rounded-lg shadow-xl w-full max-w-lg p-6 animate-fade-in" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-semibold mb-4">新增空间</h2>
             <div className="space-y-4">
+              {/* 空间类型 */}
               <div>
                 <label className="text-sm font-medium mb-1 block">空间类型</label>
-                <select className="w-full px-3 py-2 text-sm border rounded-md bg-background"><option>团队空间</option></select>
+                <select value={formType} onChange={e => setFormType(e.target.value)} className="w-full px-3 py-2 text-sm border rounded-md bg-background">
+                  <option>团队空间</option>
+                  <option>组织空间</option>
+                  <option>个人空间</option>
+                </select>
               </div>
+
+              {/* 空间名称 */}
               <div>
-                <label className="text-sm font-medium mb-1 block">空间名称</label>
-                <input className="w-full px-3 py-2 text-sm border rounded-md bg-background" placeholder="输入空间名称" />
+                <label className="text-sm font-medium mb-1 block">
+                  空间名称 <span className="text-destructive">*</span>
+                </label>
+                <input
+                  value={formName}
+                  onChange={e => handleNameChange(e.target.value)}
+                  onBlur={() => setFormNameTouched(true)}
+                  className={`w-full px-3 py-2 text-sm border rounded-md bg-background ${nameError ? "border-destructive" : ""}`}
+                  placeholder="请输入空间名称，支持中英文、数字、下划线，长度为 2-30 个字符"
+                />
+                {nameError && <p className="text-xs text-destructive mt-1">{nameError}</p>}
               </div>
+
+              {/* 空间标识 */}
               <div>
                 <label className="text-sm font-medium mb-1 block">空间标识</label>
-                <input className="w-full px-3 py-2 text-sm border rounded-md bg-background" placeholder="英文标识，如 my-team" />
+                <input
+                  value={generatedIdentifier}
+                  readOnly
+                  disabled
+                  className="w-full px-3 py-2 text-sm border rounded-md bg-muted text-muted-foreground cursor-not-allowed"
+                  placeholder="系统自动生成，不可修改"
+                />
+                <p className="text-xs text-muted-foreground mt-1">基于空间名称自动生成，不可修改</p>
               </div>
+
+              {/* 描述 */}
               <div>
                 <label className="text-sm font-medium mb-1 block">描述</label>
-                <textarea className="w-full px-3 py-2 text-sm border rounded-md bg-background" rows={3} placeholder="空间用途描述" />
+                <textarea
+                  value={formDesc}
+                  onChange={e => handleDescChange(e.target.value)}
+                  className={`w-full px-3 py-2 text-sm border rounded-md bg-background resize-none ${descError ? "border-destructive" : ""}`}
+                  rows={3}
+                  placeholder="空间用途描述（选填）"
+                  maxLength={300}
+                />
+                <div className="flex items-center justify-between mt-1">
+                  {descError ? <p className="text-xs text-destructive">{descError}</p> : <span />}
+                  <span className={`text-xs ${descCount > 280 ? "text-destructive" : "text-muted-foreground"}`}>{descCount}/300</span>
+                </div>
               </div>
+
+              {/* 空间管理员 */}
               <div>
                 <label className="text-sm font-medium mb-1 block">空间管理员</label>
-                <select className="w-full px-3 py-2 text-sm border rounded-md bg-background"><option>张明</option><option>李华</option></select>
+                <input
+                  value={currentAdmin}
+                  readOnly
+                  disabled
+                  className="w-full px-3 py-2 text-sm border rounded-md bg-muted text-muted-foreground cursor-not-allowed"
+                  placeholder="默认为创建人，不可修改"
+                />
+                <p className="text-xs text-muted-foreground mt-1">默认为创建人，不可修改</p>
               </div>
+
+              {/* 默认存储 */}
               <div>
                 <label className="text-sm font-medium mb-1 block">默认存储</label>
-                <select className="w-full px-3 py-2 text-sm border rounded-md bg-background"><option>MinIO-主存储</option><option>OSS-备份存储</option></select>
+                <select value={formStorage} onChange={e => setFormStorage(e.target.value)} className="w-full px-3 py-2 text-sm border rounded-md bg-background">
+                  <option>MinIO-主存储</option>
+                  <option>OSS-备份存储</option>
+                </select>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm border rounded-md hover:bg-muted/50">取消</button>
-              <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90">创建</button>
+              <button onClick={() => { resetForm(); setShowCreate(false); }} className="px-4 py-2 text-sm border rounded-md hover:bg-muted/50">取消</button>
+              <button
+                onClick={handleCreate}
+                disabled={formSubmitted && !isFormValid}
+                className={`px-4 py-2 text-sm rounded-md ${isFormValid ? "bg-primary text-primary-foreground hover:bg-primary/90" : "bg-muted text-muted-foreground cursor-not-allowed"}`}
+              >
+                创建
+              </button>
             </div>
           </div>
         </div>
@@ -190,7 +364,6 @@ const ConsoleSpaces = () => {
               <h2 className="text-lg font-semibold">{detail.name}</h2>
               <span className={`status-tag ${detail.status === "启用" ? "status-tag-success" : "status-tag-error"}`}>{detail.status}</span>
             </div>
-            {/* 统计卡片 */}
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="p-4 rounded-lg border text-center">
                 <div className="text-xl font-bold">{detail.storage}</div>
@@ -205,7 +378,6 @@ const ConsoleSpaces = () => {
                 <div className="text-xs text-muted-foreground mt-1">空间成员</div>
               </div>
             </div>
-            {/* 基本信息 */}
             <div className="space-y-3 text-sm">
               <h3 className="font-medium text-foreground">基本信息</h3>
               {[
