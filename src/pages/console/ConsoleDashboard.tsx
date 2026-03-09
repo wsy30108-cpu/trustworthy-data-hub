@@ -1,5 +1,9 @@
 import { useState, useMemo } from "react";
-import { BarChart3, Users, Database, Building2, HardDrive, ListChecks, TrendingUp, TrendingDown, ArrowUpRight, Clock } from "lucide-react";
+import { BarChart3, Users, Database, Building2, HardDrive, ListChecks, TrendingUp, TrendingDown, ArrowUpRight, Clock, Calendar } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPie, Pie, Cell } from "recharts";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const statCards = [
   { title: "数据集总量", value: "12,847", change: "+12.3%", up: true, icon: Database },
@@ -10,7 +14,26 @@ const statCards = [
   { title: "进行中任务", value: "342", change: "-2.4%", up: false, icon: ListChecks },
 ];
 
-const trendData = ["数据集新增", "用户注册", "空间创建", "任务提交"];
+const trendLabels = ["数据集新增", "用户注册", "空间创建", "任务提交"];
+const trendColors = ["hsl(var(--primary))", "hsl(var(--success))", "hsl(var(--warning))", "hsl(var(--info))"];
+
+// Generate mock trend data
+function generateTrendData(days: number) {
+  const data = [];
+  const now = new Date(2026, 2, 6);
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    data.push({
+      date: `${d.getMonth() + 1}/${d.getDate()}`,
+      数据集新增: Math.floor(80 + Math.sin(i * 0.3) * 30 + Math.random() * 40),
+      用户注册: Math.floor(30 + Math.sin(i * 0.5 + 1) * 15 + Math.random() * 20),
+      空间创建: Math.floor(10 + Math.sin(i * 0.4 + 2) * 8 + Math.random() * 10),
+      任务提交: Math.floor(50 + Math.sin(i * 0.6 + 3) * 25 + Math.random() * 30),
+    });
+  }
+  return data;
+}
 
 type SpaceFilter = "all" | "org" | "team" | "personal";
 
@@ -24,7 +47,7 @@ const spaceDistribution = {
     { type: "AI大模型研究院", count: 18, datasets: 2100, size: "7.2TB", color: "hsl(var(--chart-1))", percent: 40 },
     { type: "NLP研究所", count: 12, datasets: 1534, size: "5.1TB", color: "hsl(var(--chart-2))", percent: 26.7 },
     { type: "计算机视觉中心", count: 9, datasets: 980, size: "4.0TB", color: "hsl(var(--chart-3))", percent: 20 },
-    { type: "其他机构", count: 6, datasets: 620, size: "2.2TB", color: "hsl(var(--chart-4))", percent: 13.3 },
+    { type: "其他机构", count: 6, datasets: 620, size: "4.0TB", color: "hsl(var(--chart-4))", percent: 13.3 },
   ],
   team: [
     { type: "大模型训练组", count: 32, datasets: 1560, size: "4.8TB", color: "hsl(var(--chart-1))", percent: 25 },
@@ -67,7 +90,9 @@ const rankingsFiltered: Record<string, typeof rankingsAll> = {
 const timeLabels: Record<string, string> = {
   "7": "近7天",
   "30": "近30天",
+  "90": "近90天",
   "year": "本年",
+  "custom": "自定义",
 };
 
 const spaceLabels: Record<SpaceFilter, string> = {
@@ -77,82 +102,94 @@ const spaceLabels: Record<SpaceFilter, string> = {
   personal: "个人空间",
 };
 
-// Simple SVG pie chart
-function PieChart({ data }: { data: { type: string; percent: number; color: string }[] }) {
-  let cumulativePercent = 0;
-  const slices = data.map((d) => {
-    const startAngle = cumulativePercent * 3.6;
-    cumulativePercent += d.percent;
-    const endAngle = cumulativePercent * 3.6;
-    const startRad = ((startAngle - 90) * Math.PI) / 180;
-    const endRad = ((endAngle - 90) * Math.PI) / 180;
-    const largeArc = endAngle - startAngle > 180 ? 1 : 0;
-    const x1 = 50 + 40 * Math.cos(startRad);
-    const y1 = 50 + 40 * Math.sin(startRad);
-    const x2 = 50 + 40 * Math.cos(endRad);
-    const y2 = 50 + 40 * Math.sin(endRad);
-    return (
-      <path
-        key={d.type}
-        d={`M50,50 L${x1},${y1} A40,40 0 ${largeArc},1 ${x2},${y2} Z`}
-        fill={d.color}
-        stroke="hsl(var(--card))"
-        strokeWidth="1"
-      />
-    );
-  });
+// Donut chart component
+function DonutChart({ data }: { data: { type: string; percent: number; color: string; count: number }[] }) {
+  const total = data.reduce((sum, d) => sum + d.count, 0);
   return (
-    <svg viewBox="0 0 100 100" className="w-36 h-36 mx-auto">
-      {slices}
-    </svg>
+    <div className="flex flex-col items-center">
+      <ResponsiveContainer width="100%" height={200}>
+        <RechartsPie>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            innerRadius={50}
+            outerRadius={80}
+            dataKey="count"
+            nameKey="type"
+            strokeWidth={2}
+            stroke="hsl(var(--card))"
+          >
+            {data.map((entry, i) => (
+              <Cell key={i} fill={entry.color} />
+            ))}
+          </Pie>
+          <Tooltip
+            formatter={(value: number, name: string) => [`${value}个`, name]}
+            contentStyle={{
+              backgroundColor: "hsl(var(--card))",
+              border: "1px solid hsl(var(--border))",
+              borderRadius: "8px",
+              fontSize: "12px",
+            }}
+          />
+        </RechartsPie>
+      </ResponsiveContainer>
+      <div className="text-center -mt-4 mb-2">
+        <span className="text-2xl font-bold text-foreground">{total}</span>
+        <span className="text-xs text-muted-foreground ml-1">总计</span>
+      </div>
+    </div>
   );
 }
 
 const ConsoleDashboard = () => {
   const [timeRange, setTimeRange] = useState("7");
   const [spaceFilter, setSpaceFilter] = useState<SpaceFilter>("all");
-  const [activeTrend, setActiveTrend] = useState(0);
+  const [activeTrend, setActiveTrend] = useState<number | null>(null); // null = show all
+  const [customStart, setCustomStart] = useState("2026-01-01");
+  const [customEnd, setCustomEnd] = useState("2026-03-06");
+  const [customOpen, setCustomOpen] = useState(false);
 
   const currentDistribution = spaceDistribution[spaceFilter] || spaceDistribution.all;
   const currentRankings = spaceFilter === "all" ? rankingsAll : (rankingsFiltered[spaceFilter] || rankingsAll);
-
   const distributionTitle = spaceFilter === "all" ? "空间分布" : `${spaceLabels[spaceFilter]}分布`;
+
+  const trendDays = timeRange === "year" ? 90 : timeRange === "custom" ? 30 : Number(timeRange);
+  const trendData = useMemo(() => generateTrendData(trendDays), [trendDays]);
+
+  const handleTimeChange = (value: string) => {
+    if (value === "custom") {
+      setCustomOpen(true);
+    } else {
+      setTimeRange(value);
+    }
+  };
+
+  const applyCustomRange = () => {
+    setTimeRange("custom");
+    setCustomOpen(false);
+  };
+
+  const currentTimeLabel = timeRange === "custom"
+    ? `${customStart} ~ ${customEnd}`
+    : timeLabels[timeRange];
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* 更新时间提示 */}
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Clock className="w-3.5 h-3.5" />
-        <span>数据更新时间：2026-03-06 14:30:00</span>
-        <span className="text-border mx-1">|</span>
-        <span>自动刷新间隔：5分钟</span>
-      </div>
-
+      {/* 标题行 + 更新时间 */}
       <div className="page-header">
-        <div>
-          <h1 className="page-title">控制台概览</h1>
-          <p className="page-description">平台运行状态和核心指标一览</p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="page-title">控制台概览</h1>
+            <p className="page-description">平台运行状态和核心指标一览</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value)}
-            className="px-3 py-1.5 text-sm border rounded-md bg-card"
-          >
-            <option value="7">近7天</option>
-            <option value="30">近30天</option>
-            <option value="year">本年</option>
-          </select>
-          <select
-            value={spaceFilter}
-            onChange={(e) => setSpaceFilter(e.target.value as SpaceFilter)}
-            className="px-3 py-1.5 text-sm border rounded-md bg-card"
-          >
-            <option value="all">全部空间</option>
-            <option value="org">组织空间</option>
-            <option value="team">团队空间</option>
-            <option value="personal">个人空间</option>
-          </select>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Clock className="w-3.5 h-3.5" />
+          <span>数据更新时间：2026-03-06 14:30:00</span>
+          <span className="text-border mx-1">|</span>
+          <span>自动刷新间隔：5分钟</span>
         </div>
       </div>
 
@@ -182,20 +219,85 @@ const ConsoleDashboard = () => {
         ))}
       </div>
 
-      {/* 分隔提示 */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <div className="h-px flex-1 bg-border" />
-        <span>以下数据受时间和空间筛选影响（当前：{timeLabels[timeRange]} · {spaceLabels[spaceFilter]}）</span>
-        <div className="h-px flex-1 bg-border" />
+      {/* 筛选下拉框 - 卡片下方 */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="h-px w-4 bg-border" />
+          <span>以下数据受筛选条件影响</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <select
+              value={timeRange === "custom" ? "custom" : timeRange}
+              onChange={(e) => handleTimeChange(e.target.value)}
+              className="px-3 py-1.5 text-sm border rounded-md bg-card text-foreground"
+            >
+              <option value="7">近7天</option>
+              <option value="30">近30天</option>
+              <option value="90">近90天</option>
+              <option value="year">本年</option>
+              <option value="custom">自定义时间范围</option>
+            </select>
+            {timeRange === "custom" && (
+              <Popover open={customOpen} onOpenChange={setCustomOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="text-xs gap-1.5">
+                    <Calendar className="w-3.5 h-3.5" />
+                    {customStart} ~ {customEnd}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-4" align="end">
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium">自定义时间范围</p>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="date"
+                        value={customStart}
+                        onChange={(e) => setCustomStart(e.target.value)}
+                        className="text-sm h-8"
+                      />
+                      <span className="text-muted-foreground text-sm">至</span>
+                      <Input
+                        type="date"
+                        value={customEnd}
+                        onChange={(e) => setCustomEnd(e.target.value)}
+                        className="text-sm h-8"
+                      />
+                    </div>
+                    <Button size="sm" onClick={applyCustomRange} className="w-full">确定</Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
+          <select
+            value={spaceFilter}
+            onChange={(e) => setSpaceFilter(e.target.value as SpaceFilter)}
+            className="px-3 py-1.5 text-sm border rounded-md bg-card text-foreground"
+          >
+            <option value="all">全部空间</option>
+            <option value="org">组织空间</option>
+            <option value="team">团队空间</option>
+            <option value="personal">个人空间</option>
+          </select>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* 趋势图 */}
+        {/* 数据趋势折线图 */}
         <div className="lg:col-span-2 rounded-lg border bg-card p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-medium">数据趋势</h3>
             <div className="flex gap-1">
-              {trendData.map((t, i) => (
+              <button
+                onClick={() => setActiveTrend(null)}
+                className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                  activeTrend === null ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/50"
+                }`}
+              >
+                全部
+              </button>
+              {trendLabels.map((t, i) => (
                 <button
                   key={i}
                   onClick={() => setActiveTrend(i)}
@@ -208,72 +310,69 @@ const ConsoleDashboard = () => {
               ))}
             </div>
           </div>
-          <div className="h-64 flex items-end gap-1 px-4">
-            {Array.from({ length: 30 }, (_, i) => {
-              const h = 30 + Math.sin(i * 0.5 + activeTrend) * 20 + Math.random() * 30;
-              return (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <div
-                    className="w-full rounded-t bg-primary/70 hover:bg-primary transition-colors cursor-pointer"
-                    style={{ height: `${h}%` }}
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={trendData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                tickLine={false}
+                axisLine={{ stroke: "hsl(var(--border))" }}
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                tickLine={false}
+                axisLine={false}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                  boxShadow: "0 4px 12px hsl(var(--foreground) / 0.1)",
+                }}
+              />
+              <Legend
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }}
+              />
+              {trendLabels.map((label, i) => (
+                (activeTrend === null || activeTrend === i) && (
+                  <Line
+                    key={label}
+                    type="monotone"
+                    dataKey={label}
+                    stroke={trendColors[i]}
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4, strokeWidth: 2 }}
                   />
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex justify-between mt-2 px-4">
-            <span className="text-[10px] text-muted-foreground">3月1日</span>
-            <span className="text-[10px] text-muted-foreground">3月15日</span>
-            <span className="text-[10px] text-muted-foreground">3月30日</span>
-          </div>
+                )
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
         </div>
 
-        {/* 空间分布 - 筛选时显示饼图 */}
+        {/* 空间分布 - 环形图 */}
         <div className="rounded-lg border bg-card p-5">
           <h3 className="text-sm font-medium mb-4">{distributionTitle}</h3>
-
-          {spaceFilter !== "all" ? (
-            /* 筛选时展示饼图 */
-            <div className="space-y-4">
-              <PieChart data={currentDistribution} />
-              <div className="space-y-2 mt-4">
-                {currentDistribution.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span>{item.type}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span>{item.count}个</span>
-                      <span>{item.percent.toFixed(1)}%</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            /* 默认展示条形分布 */
-            <div className="space-y-4">
-              {currentDistribution.map((item, i) => (
-                <div key={i} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span className="text-sm">{item.type}</span>
-                    </div>
-                    <span className="text-sm font-medium">{item.count}个</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>数据集: {item.datasets}</span>
-                    <span>{item.size}</span>
-                  </div>
-                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${item.percent}%`, backgroundColor: item.color }} />
-                  </div>
+          <DonutChart data={currentDistribution} />
+          <div className="space-y-2.5 mt-2">
+            {currentDistribution.map((item, i) => (
+              <div key={i} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                  <span className="truncate">{item.type}</span>
                 </div>
-              ))}
-            </div>
-          )}
+                <div className="flex items-center gap-3 text-xs text-muted-foreground flex-shrink-0">
+                  <span>{item.count}个</span>
+                  <span className="w-12 text-right">{item.percent.toFixed(1)}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
