@@ -293,22 +293,6 @@ const ConsoleOrganizations = () => {
         </div>
       )}
 
-      {showMembers && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowMembers(null)}>
-          <div className="bg-card rounded-lg shadow-xl w-full max-w-xl p-6 animate-fade-in" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold mb-4">{mockOrgs.find(o => o.id === showMembers)?.name} - 成员列表</h2>
-            <table className="w-full text-sm">
-              <thead><tr className="border-b"><th className="text-left py-2 px-3 text-xs text-muted-foreground">账号</th><th className="text-left py-2 px-3 text-xs text-muted-foreground">姓名</th><th className="text-left py-2 px-3 text-xs text-muted-foreground">角色</th></tr></thead>
-              <tbody>
-                {[{ acc: "zhangming", name: "张明", role: "空间管理员" }, { acc: "lihua", name: "李华", role: "数据开发" }, { acc: "wangfang", name: "王芳", role: "标注员" }].map((m, i) => (
-                  <tr key={i} className="border-b last:border-0"><td className="py-2 px-3 font-mono text-xs">{m.acc}</td><td className="py-2 px-3">{m.name}</td><td className="py-2 px-3"><span className="status-tag status-tag-info">{m.role}</span></td></tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="flex justify-end mt-4"><button onClick={() => setShowMembers(null)} className="px-4 py-2 text-sm border rounded-md hover:bg-muted/50">关闭</button></div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
