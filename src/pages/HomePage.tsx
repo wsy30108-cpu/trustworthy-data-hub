@@ -81,7 +81,7 @@ const HomePage = () => {
           </p>
           <div className="flex items-center justify-center gap-4">
             <button
-              onClick={() => navigate("/data-management/datasets")}
+              onClick={() => handleProtectedNav("/data-management/datasets")}
               className="px-8 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium flex items-center gap-2"
             >
               立即体验 <ArrowRight className="w-4 h-4" />
