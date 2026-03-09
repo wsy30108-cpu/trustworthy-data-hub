@@ -1,7 +1,8 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { Bell, FileText, ChevronDown, LogOut, Settings, User } from "lucide-react";
-import { subPlatforms, mockUser } from "@/config/platform";
+import { subPlatforms } from "@/config/platform";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function GlobalHeader() {
   const location = useLocation();

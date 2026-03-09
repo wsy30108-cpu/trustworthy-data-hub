@@ -241,7 +241,7 @@ const HomePage = () => {
           <h2 className="text-3xl font-bold text-foreground mb-4">开始构建您的可信数据资产</h2>
           <p className="text-muted-foreground mb-8">立即注册，体验一站式数据管理与服务能力</p>
           <button
-            onClick={() => navigate("/data-management/datasets")}
+            onClick={() => handleProtectedNav("/data-management/datasets")}
             className="px-8 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
           >
             立即体验
