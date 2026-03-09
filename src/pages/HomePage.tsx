@@ -223,7 +223,7 @@ const HomePage = () => {
             onClick={() => navigate("/data-management/datasets")}
             className="px-8 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
           >
-            免费开始使用
+            立即体验
           </button>
         </div>
       </section>
