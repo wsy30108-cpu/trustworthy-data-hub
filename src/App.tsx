@@ -14,6 +14,7 @@ import { lazy, Suspense } from "react";
 const ConsoleDashboard = lazy(() => import("./pages/console/ConsoleDashboard"));
 const ConsoleSpaces = lazy(() => import("./pages/console/ConsoleSpaces"));
 const ConsoleOrganizations = lazy(() => import("./pages/console/ConsoleOrganizations"));
+const ConsoleOrgMembers = lazy(() => import("./pages/console/ConsoleOrgMembers"));
 const ConsoleMembers = lazy(() => import("./pages/console/ConsoleMembers"));
 const ConsoleRoles = lazy(() => import("./pages/console/ConsoleRoles"));
 const ConsoleSystem = lazy(() => import("./pages/console/ConsoleSystem"));
