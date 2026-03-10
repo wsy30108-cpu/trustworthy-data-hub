@@ -9,6 +9,10 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import DatasetCreateForm, { type DatasetEditData } from "./DatasetCreateForm";
+import DatasetVersionList from "./DatasetVersionList";
+import DatasetVersionCreate from "./DatasetVersionCreate";
+import DatasetVersionDetail from "./DatasetVersionDetail";
+import DatasetImportConfig from "./DatasetImportConfig";
 
 /* ─── Types ─── */
 interface KVTag { key: string; value: string }
