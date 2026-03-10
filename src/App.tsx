@@ -18,6 +18,7 @@ const ConsoleOrgMembers = lazy(() => import("./pages/console/ConsoleOrgMembers")
 const ConsoleMembers = lazy(() => import("./pages/console/ConsoleMembers"));
 const ConsoleRoles = lazy(() => import("./pages/console/ConsoleRoles"));
 const ConsoleSystem = lazy(() => import("./pages/console/ConsoleSystem"));
+const ConsoleSystemPageEdit = lazy(() => import("./pages/console/ConsoleSystemPageEdit"));
 const ConsoleStorage = lazy(() => import("./pages/console/ConsoleStorage"));
 const ConsoleDatasource = lazy(() => import("./pages/console/ConsoleDatasource"));
 const ConsoleCatalog = lazy(() => import("./pages/console/ConsoleCatalog"));
