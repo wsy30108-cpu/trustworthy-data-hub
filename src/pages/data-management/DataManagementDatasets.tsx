@@ -9,6 +9,10 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import DatasetCreateForm, { type DatasetEditData } from "./DatasetCreateForm";
+import DatasetVersionList from "./DatasetVersionList";
+import DatasetVersionCreate from "./DatasetVersionCreate";
+import DatasetVersionDetail from "./DatasetVersionDetail";
+import DatasetImportConfig from "./DatasetImportConfig";
 
 /* ─── Types ─── */
 interface KVTag { key: string; value: string }
@@ -481,6 +485,13 @@ const DataManagementDatasets = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  // Sub-page navigation
+  type SubPage = "list" | "versionList" | "versionCreate" | "versionDetail" | "importConfig";
+  const [subPage, setSubPage] = useState<SubPage>("list");
+  const [currentDataset, setCurrentDataset] = useState<Dataset | null>(null);
+  const [currentVersion, setCurrentVersion] = useState<any>(null);
+  const [currentVersions, setCurrentVersions] = useState<any[]>([]);
+
   // Data states
   const [myDs, setMyDs] = useState<Dataset[]>(myDatasets);
   const [subDs, setSubDs] = useState<SubscribedDataset[]>(subscribedDatasets);
@@ -519,6 +530,56 @@ const DataManagementDatasets = () => {
     sysCatalogs: ["文本数据"], customCatalogs: [],
     version: ds.latestVersion, storageLocation: "系统默认存储", storageFormat: "Lance", versionDesc: "",
   });
+
+  const buildDatasetInfo = (ds: Dataset) => ({
+    id: ds.id, name: ds.name, modality: ds.modality, purpose: ds.purpose,
+    storageLocation: "系统默认存储", tags: ds.tags, scope: ds.scope,
+  });
+
+  // Sub-page routing
+  if (subPage === "versionList" && currentDataset) {
+    return (
+      <DatasetVersionList
+        dataset={buildDatasetInfo(currentDataset)}
+        onBack={() => { setSubPage("list"); setCurrentDataset(null); }}
+        onViewDetail={(ver, ds) => { setCurrentVersion(ver); setSubPage("versionDetail"); }}
+        onCreateVersion={(ds, versions) => { setCurrentVersions(versions); setSubPage("versionCreate"); }}
+      />
+    );
+  }
+
+  if (subPage === "versionCreate" && currentDataset) {
+    return (
+      <DatasetVersionCreate
+        dataset={buildDatasetInfo(currentDataset)}
+        existingVersions={currentVersions.map((v: any) => v.version)}
+        onBack={() => setSubPage("versionList")}
+        onCreated={() => setSubPage("versionList")}
+      />
+    );
+  }
+
+  if (subPage === "versionDetail" && currentDataset && currentVersion) {
+    return (
+      <DatasetVersionDetail
+        dataset={buildDatasetInfo(currentDataset)}
+        version={{ version: currentVersion.version, publishStatus: currentVersion.publishStatus }}
+        onBack={() => setSubPage("versionList")}
+        onUpload={() => setSubPage("importConfig")}
+      />
+    );
+  }
+
+  if (subPage === "importConfig" && currentDataset && currentVersion) {
+    return (
+      <DatasetImportConfig
+        dataset={{ id: currentDataset.id, name: currentDataset.name, modality: currentDataset.modality }}
+        version={{ version: currentVersion.version }}
+        onBack={() => setSubPage("versionDetail")}
+        onComplete={() => setSubPage("versionDetail")}
+      />
+    );
+  }
 
   // Create/Edit form
   if (showCreate || editTarget) {
@@ -564,7 +625,9 @@ const DataManagementDatasets = () => {
             <tbody>
               {items.map((ds) => (
                 <tr key={ds.id} className="border-b last:border-0 hover:bg-muted/20 group">
-                  <td className="py-3 px-3 font-medium text-foreground max-w-[200px] truncate">{ds.name}</td>
+                  <td className="py-3 px-3 font-medium max-w-[200px] truncate">
+                    <button className="text-primary hover:underline" onClick={() => { setCurrentDataset(ds); setSubPage("versionList"); }}>{ds.name}</button>
+                  </td>
                   <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
                   <td className="py-3 px-3"><span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span></td>
                   <td className="py-3 px-3">
