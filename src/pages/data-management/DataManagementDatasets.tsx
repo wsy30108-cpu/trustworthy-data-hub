@@ -1,19 +1,40 @@
 import { useState } from "react";
 import { Plus, Search, Filter, MoreHorizontal, Eye, Edit, Trash2, Share2, Upload, Tag } from "lucide-react";
+import DatasetCreateForm from "./DatasetCreateForm";
 
 const tabs = ["我的数据集", "我订购的数据集", "分享给我的数据集"];
 
-const mockDatasets = [
-  { id: "DS-001", name: "中文情感分析训练集", modality: "文本", purpose: "模型微调", type: "文本分类", scope: "空间全体", versions: 3, size: "2.4GB", files: 12350, tags: [{ k: "语言", v: "中文" }, { k: "领域", v: "金融" }], status: "活跃", creator: "张明", createdAt: "2026-02-15", updatedAt: "2026-03-01" },
-  { id: "DS-002", name: "医疗影像CT扫描数据集", modality: "图像", purpose: "预训练", type: "-", scope: "指定用户", versions: 5, size: "45.8GB", files: 50000, tags: [{ k: "领域", v: "医疗" }], status: "活跃", creator: "李芳", createdAt: "2026-01-20", updatedAt: "2026-02-28" },
-  { id: "DS-003", name: "多语种平行翻译语料", modality: "文本", purpose: "预训练", type: "机器翻译", scope: "所有者", versions: 2, size: "8.1GB", files: 2000000, tags: [{ k: "语言", v: "多语种" }], status: "活跃", creator: "王强", createdAt: "2026-02-01", updatedAt: "2026-03-03" },
-  { id: "DS-004", name: "智能客服对话语料", modality: "文本", purpose: "模型微调", type: "对话生成", scope: "空间全体", versions: 1, size: "1.2GB", files: 800000, tags: [{ k: "领域", v: "客服" }], status: "活跃", creator: "赵丽", createdAt: "2026-02-20", updatedAt: "2026-02-25" },
-  { id: "DS-005", name: "工业缺陷检测图像集", modality: "图像", purpose: "模型微调", type: "-", scope: "指定角色", versions: 4, size: "23.5GB", files: 35000, tags: [{ k: "领域", v: "工业" }, { k: "标注", v: "已标注" }], status: "归档", creator: "孙伟", createdAt: "2025-12-10", updatedAt: "2026-01-15" },
+const initialDatasets = [
+  { id: "DS-001", name: "中文情感分析训练集", modality: "文本", purpose: "模型微调", type: "文本分类", scope: "空间全体", versions: 3, size: "2.4GB", files: 12350, tags: [{ key: "语言", value: "中文" }, { key: "领域", value: "金融" }], status: "活跃", creator: "张明", createdAt: "2026-02-15", updatedAt: "2026-03-01" },
+  { id: "DS-002", name: "医疗影像CT扫描数据集", modality: "图像", purpose: "预训练", type: "-", scope: "指定用户", versions: 5, size: "45.8GB", files: 50000, tags: [{ key: "领域", value: "医疗" }], status: "活跃", creator: "李芳", createdAt: "2026-01-20", updatedAt: "2026-02-28" },
+  { id: "DS-003", name: "多语种平行翻译语料", modality: "文本", purpose: "预训练", type: "机器翻译", scope: "所有者", versions: 2, size: "8.1GB", files: 2000000, tags: [{ key: "语言", value: "多语种" }], status: "活跃", creator: "王强", createdAt: "2026-02-01", updatedAt: "2026-03-03" },
+  { id: "DS-004", name: "智能客服对话语料", modality: "文本", purpose: "模型微调", type: "对话生成", scope: "空间全体", versions: 1, size: "1.2GB", files: 800000, tags: [{ key: "领域", value: "客服" }], status: "活跃", creator: "赵丽", createdAt: "2026-02-20", updatedAt: "2026-02-25" },
+  { id: "DS-005", name: "工业缺陷检测图像集", modality: "图像", purpose: "模型微调", type: "-", scope: "指定角色", versions: 4, size: "23.5GB", files: 35000, tags: [{ key: "领域", value: "工业" }, { key: "标注", value: "已标注" }], status: "归档", creator: "孙伟", createdAt: "2025-12-10", updatedAt: "2026-01-15" },
 ];
 
 const DataManagementDatasets = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [searchText, setSearchText] = useState("");
+  const [datasets, setDatasets] = useState(initialDatasets);
+  const [showCreate, setShowCreate] = useState(false);
+
+  // Show create form (only from "我的数据集" tab)
+  if (showCreate) {
+    return (
+      <DatasetCreateForm
+        onBack={() => setShowCreate(false)}
+        onCreated={(ds) => {
+          setDatasets(prev => [ds, ...prev]);
+          setShowCreate(false);
+          setActiveTab(0);
+        }}
+      />
+    );
+  }
+
+  const filtered = datasets.filter(ds =>
+    !searchText || ds.name.toLowerCase().includes(searchText.toLowerCase()) || ds.id.toLowerCase().includes(searchText.toLowerCase())
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -22,9 +43,14 @@ const DataManagementDatasets = () => {
           <h1 className="page-title">数据集管理</h1>
           <p className="page-description">管理您的数据集、订购的数据集和分享给您的数据集</p>
         </div>
-        <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-primary/90">
-          <Plus className="w-4 h-4" /> 新增数据集
-        </button>
+        {activeTab === 0 && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-primary/90"
+          >
+            <Plus className="w-4 h-4" /> 新增数据集
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -92,7 +118,7 @@ const DataManagementDatasets = () => {
               </tr>
             </thead>
             <tbody>
-              {mockDatasets.map(ds => (
+              {filtered.map(ds => (
                 <tr key={ds.id} className="border-b last:border-0 hover:bg-muted/20 cursor-pointer">
                   <td className="py-3 px-4">
                     <div className="font-medium text-foreground">{ds.name}</div>
@@ -107,7 +133,7 @@ const DataManagementDatasets = () => {
                     <div className="flex gap-1 flex-wrap">
                       {ds.tags.map((t, i) => (
                         <span key={i} className="px-1.5 py-0.5 bg-muted rounded text-[10px] text-muted-foreground">
-                          {t.k}: {t.v}
+                          {t.key}: {t.value}
                         </span>
                       ))}
                     </div>
@@ -134,7 +160,7 @@ const DataManagementDatasets = () => {
         </div>
         {/* 分页 */}
         <div className="flex items-center justify-between px-4 py-3 border-t">
-          <span className="text-xs text-muted-foreground">共 {mockDatasets.length} 条数据</span>
+          <span className="text-xs text-muted-foreground">共 {filtered.length} 条数据</span>
           <div className="flex items-center gap-2">
             <select className="px-2 py-1 text-xs border rounded bg-card">
               <option>10条/页</option>
