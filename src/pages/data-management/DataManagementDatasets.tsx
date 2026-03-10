@@ -625,7 +625,9 @@ const DataManagementDatasets = () => {
             <tbody>
               {items.map((ds) => (
                 <tr key={ds.id} className="border-b last:border-0 hover:bg-muted/20 group">
-                  <td className="py-3 px-3 font-medium text-foreground max-w-[200px] truncate">{ds.name}</td>
+                  <td className="py-3 px-3 font-medium max-w-[200px] truncate">
+                    <button className="text-primary hover:underline" onClick={() => { setCurrentDataset(ds); setSubPage("versionList"); }}>{ds.name}</button>
+                  </td>
                   <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
                   <td className="py-3 px-3"><span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span></td>
                   <td className="py-3 px-3">
