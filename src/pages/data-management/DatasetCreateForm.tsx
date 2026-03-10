@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 const MODALITIES = ["文本", "图像", "语音", "视频", "表格", "跨模态"] as const;
 const TEXT_TYPES = ["通用文本", "文本 SFT", "文本 RLHF", "文本 DPO", "文本 KTO"] as const;
 const PURPOSES = ["模型微调", "预训练", "其他"] as const;
-const STORAGE_FORMATS = ["Lance", "Parquet", "CSV", "JSON", "TFRecord"] as const;
+const STORAGE_FORMATS = ["Lance", "Parquet", "CSV", "JSON"] as const;
 const STORAGE_LOCATIONS = ["系统默认存储", "高性能存储A", "冷存储B"] as const;
 const AUTH_SCOPES = ["数据集所有者", "空间内全体成员", "指定用户", "指定空间角色"] as const;
 const AUTH_PERMS = ["读数据集", "写数据集", "创建数据集版本"] as const;
