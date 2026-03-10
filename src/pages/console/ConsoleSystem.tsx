@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Save } from "lucide-react";
 
 const ConsoleSystem = () => {
+  const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
@@ -51,8 +53,11 @@ const ConsoleSystem = () => {
       <section className="rounded-lg border bg-card p-5">
         <h2 className="text-sm font-semibold mb-4">首页辅助链接</h2>
         <div className="grid gap-4 md:grid-cols-2">
-          {[["关于我们", "/about"], ["隐私政策", "/privacy"], ["服务条款", "/terms"], ["常见问题", "/faq"]].map(([label, val]) => (
-            <div key={label}><label className="text-sm text-muted-foreground mb-1 block">{label}</label><input defaultValue={val} className="w-full px-3 py-2 text-sm border rounded-md bg-background" /></div>
+          {[["关于我们", "about"], ["隐私政策", "privacy"], ["服务条款", "terms"], ["常见问题", "faq"]].map(([label, key]) => (
+            <div key={key} className="flex items-center justify-between px-3 py-2.5 border rounded-md bg-background">
+              <span className="text-sm">{label}</span>
+              <button onClick={() => navigate(`/console/system/page/${key}`)} className="text-xs text-primary hover:underline">编辑内容</button>
+            </div>
           ))}
         </div>
       </section>

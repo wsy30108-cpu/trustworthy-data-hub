@@ -18,6 +18,7 @@ const ConsoleOrgMembers = lazy(() => import("./pages/console/ConsoleOrgMembers")
 const ConsoleMembers = lazy(() => import("./pages/console/ConsoleMembers"));
 const ConsoleRoles = lazy(() => import("./pages/console/ConsoleRoles"));
 const ConsoleSystem = lazy(() => import("./pages/console/ConsoleSystem"));
+const ConsoleSystemPageEdit = lazy(() => import("./pages/console/ConsoleSystemPageEdit"));
 const ConsoleStorage = lazy(() => import("./pages/console/ConsoleStorage"));
 const ConsoleDatasource = lazy(() => import("./pages/console/ConsoleDatasource"));
 const ConsoleCatalog = lazy(() => import("./pages/console/ConsoleCatalog"));
@@ -78,6 +79,7 @@ const App = () => (
                   <Route path="/console/members" element={<ConsoleMembers />} />
                   <Route path="/console/roles" element={<ConsoleRoles />} />
                   <Route path="/console/system" element={<ConsoleSystem />} />
+                  <Route path="/console/system/page/:pageKey" element={<ConsoleSystemPageEdit />} />
                   <Route path="/console/storage" element={<ConsoleStorage />} />
                   <Route path="/console/datasource" element={<ConsoleDatasource />} />
                   <Route path="/console/catalog" element={<ConsoleCatalog />} />
