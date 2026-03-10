@@ -1,180 +1,663 @@
-import { useState } from "react";
-import { Plus, Search, Filter, MoreHorizontal, Eye, Edit, Trash2, Share2, Upload, Tag } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Plus, Search, RotateCcw, Edit, Trash2, Eye, Download, X, Tag, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Import } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 import DatasetCreateForm from "./DatasetCreateForm";
 
-const tabs = ["我的数据集", "我订购的数据集", "分享给我的数据集"];
+/* ─── Types ─── */
+interface KVTag { key: string; value: string }
+interface Dataset {
+  id: string; name: string; modality: string; purpose: string; type: string;
+  scope: string; versions: number; latestVersion: string; size: string; files: number;
+  tags: KVTag[]; status: string; creator: string; createdAt: string; updatedAt: string;
+}
+interface SubscribedDataset extends Dataset {
+  publisher: string; subscribedAt: string; authLevel: string;
+}
+interface SharedDataset extends Dataset {
+  sharer: string; sharedAt: string; authLevel: string;
+}
 
-const initialDatasets = [
-  { id: "DS-001", name: "中文情感分析训练集", modality: "文本", purpose: "模型微调", type: "文本分类", scope: "空间全体", versions: 3, size: "2.4GB", files: 12350, tags: [{ key: "语言", value: "中文" }, { key: "领域", value: "金融" }], status: "活跃", creator: "张明", createdAt: "2026-02-15", updatedAt: "2026-03-01" },
-  { id: "DS-002", name: "医疗影像CT扫描数据集", modality: "图像", purpose: "预训练", type: "-", scope: "指定用户", versions: 5, size: "45.8GB", files: 50000, tags: [{ key: "领域", value: "医疗" }], status: "活跃", creator: "李芳", createdAt: "2026-01-20", updatedAt: "2026-02-28" },
-  { id: "DS-003", name: "多语种平行翻译语料", modality: "文本", purpose: "预训练", type: "机器翻译", scope: "所有者", versions: 2, size: "8.1GB", files: 2000000, tags: [{ key: "语言", value: "多语种" }], status: "活跃", creator: "王强", createdAt: "2026-02-01", updatedAt: "2026-03-03" },
-  { id: "DS-004", name: "智能客服对话语料", modality: "文本", purpose: "模型微调", type: "对话生成", scope: "空间全体", versions: 1, size: "1.2GB", files: 800000, tags: [{ key: "领域", value: "客服" }], status: "活跃", creator: "赵丽", createdAt: "2026-02-20", updatedAt: "2026-02-25" },
-  { id: "DS-005", name: "工业缺陷检测图像集", modality: "图像", purpose: "模型微调", type: "-", scope: "指定角色", versions: 4, size: "23.5GB", files: 35000, tags: [{ key: "领域", value: "工业" }, { key: "标注", value: "已标注" }], status: "归档", creator: "孙伟", createdAt: "2025-12-10", updatedAt: "2026-01-15" },
+/* ─── Mock Data ─── */
+const myDatasets: Dataset[] = [
+  { id: "DS-001", name: "中文情感分析训练集", modality: "文本", purpose: "模型微调", type: "文本分类", scope: "空间内全体成员", versions: 3, latestVersion: "V3.0", size: "2.4GB", files: 12350, tags: [{ key: "语言", value: "中文" }, { key: "领域", value: "金融" }], status: "活跃", creator: "张明", createdAt: "2026-02-15", updatedAt: "2026-03-01" },
+  { id: "DS-002", name: "医疗影像CT扫描数据集", modality: "图像", purpose: "预训练", type: "-", scope: "指定用户", versions: 5, latestVersion: "V5.0", size: "45.8GB", files: 50000, tags: [{ key: "领域", value: "医疗" }], status: "活跃", creator: "李芳", createdAt: "2026-01-20", updatedAt: "2026-02-28" },
+  { id: "DS-003", name: "多语种平行翻译语料", modality: "文本", purpose: "预训练", type: "机器翻译", scope: "仅数据集所有者", versions: 2, latestVersion: "V2.0", size: "8.1GB", files: 2000000, tags: [{ key: "语言", value: "多语种" }], status: "活跃", creator: "王强", createdAt: "2026-02-01", updatedAt: "2026-03-03" },
+  { id: "DS-004", name: "智能客服对话语料", modality: "文本", purpose: "模型微调", type: "对话生成", scope: "空间内全体成员", versions: 1, latestVersion: "V1.0", size: "1.2GB", files: 800000, tags: [{ key: "领域", value: "客服" }], status: "活跃", creator: "赵丽", createdAt: "2026-02-20", updatedAt: "2026-02-25" },
+  { id: "DS-005", name: "工业缺陷检测图像集", modality: "图像", purpose: "模型微调", type: "-", scope: "指定空间角色", versions: 4, latestVersion: "V4.0", size: "23.5GB", files: 35000, tags: [{ key: "领域", value: "工业" }, { key: "标注", value: "已标注" }], status: "归档", creator: "孙伟", createdAt: "2025-12-10", updatedAt: "2026-01-15" },
+  { id: "DS-006", name: "语音识别标注数据集", modality: "语音", purpose: "模型微调", type: "-", scope: "空间内全体成员", versions: 2, latestVersion: "V2.0", size: "12.3GB", files: 85000, tags: [{ key: "语言", value: "中文" }, { key: "采样率", value: "16kHz" }], status: "活跃", creator: "张明", createdAt: "2026-01-05", updatedAt: "2026-02-18" },
+  { id: "DS-007", name: "跨模态图文对齐数据", modality: "跨模态", purpose: "预训练", type: "-", scope: "仅数据集所有者", versions: 1, latestVersion: "V1.0", size: "67.2GB", files: 120000, tags: [{ key: "类型", value: "图文对" }], status: "活跃", creator: "李芳", createdAt: "2026-03-01", updatedAt: "2026-03-08" },
 ];
 
-const DataManagementDatasets = () => {
-  const [activeTab, setActiveTab] = useState(0);
-  const [searchText, setSearchText] = useState("");
-  const [datasets, setDatasets] = useState(initialDatasets);
-  const [showCreate, setShowCreate] = useState(false);
+const subscribedDatasets: SubscribedDataset[] = [
+  { id: "DS-S001", name: "金融新闻语料库", modality: "文本", purpose: "预训练", type: "通用文本", scope: "只读", versions: 6, latestVersion: "V6.0", size: "15.2GB", files: 3200000, tags: [{ key: "领域", value: "金融" }, { key: "语言", value: "中文" }], status: "活跃", creator: "数据市场官方", createdAt: "2026-01-10", updatedAt: "2026-03-05", publisher: "数据市场官方", subscribedAt: "2026-02-01", authLevel: "只读" },
+  { id: "DS-S002", name: "开源医学影像数据集", modality: "图像", purpose: "模型微调", type: "-", scope: "可导入版本", versions: 3, latestVersion: "V3.0", size: "89.5GB", files: 75000, tags: [{ key: "领域", value: "医疗" }], status: "活跃", creator: "医疗AI实验室", createdAt: "2025-11-20", updatedAt: "2026-02-15", publisher: "医疗AI实验室", subscribedAt: "2026-01-15", authLevel: "可导入版本" },
+  { id: "DS-S003", name: "多语言翻译平行语料", modality: "文本", purpose: "预训练", type: "机器翻译", scope: "读写", versions: 8, latestVersion: "V8.0", size: "32.1GB", files: 5000000, tags: [{ key: "语言", value: "多语种" }], status: "活跃", creator: "NLP开放联盟", createdAt: "2025-10-01", updatedAt: "2026-03-02", publisher: "NLP开放联盟", subscribedAt: "2026-02-20", authLevel: "读写" },
+];
 
-  // Show create form (only from "我的数据集" tab)
+const sharedDatasets: SharedDataset[] = [
+  { id: "DS-H001", name: "内部标注训练集", modality: "文本", purpose: "模型微调", type: "文本 SFT", scope: "只读", versions: 2, latestVersion: "V2.0", size: "3.5GB", files: 45000, tags: [{ key: "部门", value: "AI中心" }], status: "活跃", creator: "王强", createdAt: "2026-01-25", updatedAt: "2026-03-01", sharer: "王强", sharedAt: "2026-02-10", authLevel: "只读" },
+  { id: "DS-H002", name: "产品图像分类数据集", modality: "图像", purpose: "模型微调", type: "-", scope: "可写", versions: 4, latestVersion: "V4.0", size: "18.7GB", files: 28000, tags: [{ key: "领域", value: "电商" }, { key: "标注", value: "已标注" }], status: "活跃", creator: "赵丽", createdAt: "2025-12-15", updatedAt: "2026-02-28", sharer: "赵丽 / 电商空间", sharedAt: "2026-01-20", authLevel: "可导入版本" },
+];
+
+/* ─── Constants ─── */
+const MODALITIES = ["文本", "图像", "语音", "视频", "表格", "跨模态"];
+const AUTH_SCOPES_MINE = ["仅数据集所有者", "指定用户", "指定空间角色", "空间内全体成员"];
+const AUTH_SCOPES_SUB = ["只读", "读写", "可导入版本"];
+const ALL_TAG_KEYS = ["语言", "领域", "标注", "采样率", "类型", "部门"];
+const ALL_TAG_VALUES = ["中文", "多语种", "金融", "医疗", "客服", "工业", "电商", "已标注", "16kHz", "图文对", "AI中心"];
+const PAGE_SIZES = [10, 20, 50];
+
+/* ─── Reusable: Multi-check dropdown ─── */
+function MultiCheckDropdown({ options, selected, onChange, placeholder, className }: {
+  options: string[]; selected: string[]; onChange: (v: string[]) => void; placeholder: string; className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", handler); return () => document.removeEventListener("mousedown", handler);
+  }, []);
+  const toggle = (v: string) => onChange(selected.includes(v) ? selected.filter(s => s !== v) : [...selected, v]);
+  return (
+    <div ref={ref} className={cn("relative", className)}>
+      <button type="button" onClick={() => setOpen(!open)}
+        className="w-full px-2.5 py-1.5 text-xs border rounded-md bg-card text-left flex items-center justify-between gap-1 min-h-[32px] hover:border-primary/50 transition-colors">
+        {selected.length ? (
+          <span className="text-foreground truncate">{selected.length}项已选</span>
+        ) : <span className="text-muted-foreground">{placeholder}</span>}
+        <span className="text-muted-foreground">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-full min-w-[140px] bg-popover border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {options.map(o => (
+            <label key={o} className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted/50 cursor-pointer text-xs">
+              <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} className="rounded accent-primary w-3 h-3" />{o}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Tag Hover Card ─── */
+function TagCell({ tags, onEdit }: { tags: KVTag[]; onEdit?: () => void }) {
+  const [hover, setHover] = useState(false);
+  if (!tags.length) return <span className="text-muted-foreground text-xs">—</span>;
+  return (
+    <div className="relative" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      <div className="flex items-center gap-1.5 cursor-default">
+        <span className="px-2 py-0.5 bg-accent text-accent-foreground rounded text-xs font-medium">{tags.length}</span>
+        {onEdit && (
+          <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-0.5 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity" title="编辑标签">
+            <Edit className="w-3 h-3 text-muted-foreground" />
+          </button>
+        )}
+      </div>
+      {hover && (
+        <div className="absolute z-40 left-0 top-full mt-1 bg-popover border rounded-lg shadow-lg p-3 min-w-[200px] max-w-[300px]">
+          <div className="text-xs font-medium text-foreground mb-2">数据集标签</div>
+          <div className="space-y-1">
+            {tags.map((t, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground font-medium min-w-[50px]">{t.key}:</span>
+                <span className="text-foreground">{t.value}</span>
+              </div>
+            ))}
+          </div>
+          {onEdit && (
+            <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="mt-2 text-xs text-primary hover:underline flex items-center gap-1">
+              <Edit className="w-3 h-3" />编辑标签
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Tag Editor Dialog ─── */
+function TagEditorDialog({ open, onClose, tags, onSave }: {
+  open: boolean; onClose: () => void; tags: KVTag[]; onSave: (t: KVTag[]) => void;
+}) {
+  const [draft, setDraft] = useState<KVTag[]>([]);
+  const { toast } = useToast();
+  useEffect(() => { if (open) setDraft(tags.map(t => ({ ...t }))); }, [open, tags]);
+  const add = () => {
+    if (draft.length >= 20) { toast({ title: "最多支持20个标签", variant: "destructive" }); return; }
+    setDraft([...draft, { key: "", value: "" }]);
+  };
+  const remove = (i: number) => setDraft(draft.filter((_, idx) => idx !== i));
+  const update = (i: number, f: "key" | "value", v: string) => { const n = [...draft]; n[i] = { ...n[i], [f]: v }; setDraft(n); };
+  const save = () => { onSave(draft.filter(t => t.key.trim() && t.value.trim())); onClose(); };
+
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>编辑数据集标签</DialogTitle></DialogHeader>
+        <div className="space-y-2 max-h-72 overflow-y-auto">
+          {draft.map((t, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Input placeholder="Key" value={t.key} onChange={e => update(i, "key", e.target.value)} className="flex-1 h-8 text-sm" />
+              <Input placeholder="Value" value={t.value} onChange={e => update(i, "value", e.target.value)} className="flex-1 h-8 text-sm" />
+              <button onClick={() => remove(i)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4 text-muted-foreground" /></button>
+            </div>
+          ))}
+          {draft.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">暂无标签</p>}
+        </div>
+        <Button variant="outline" size="sm" onClick={add} className="w-full gap-1"><Plus className="w-3 h-3" />添加标签</Button>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button onClick={save}>确定</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Import Version Dialog ─── */
+function ImportVersionDialog({ open, onClose, dsName, authLevel }: {
+  open: boolean; onClose: () => void; dsName: string; authLevel: string;
+}) {
+  const [version, setVersion] = useState("V1.0");
+  const [targetDs, setTargetDs] = useState("");
+  const [importMode, setImportMode] = useState<"copy" | "ref">("ref");
+  const { toast } = useToast();
+  const readOnly = authLevel === "只读";
+  const submit = () => {
+    toast({ title: `已将「${dsName}」${version} 以${importMode === "copy" ? "复制" : "引用"}方式导入` });
+    onClose();
+  };
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>导入版本 - {dsName}</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">选择源版本</label>
+            <select value={version} onChange={e => setVersion(e.target.value)} className="w-full px-3 py-2 text-sm border rounded-lg bg-card">
+              <option>V1.0</option><option>V2.0</option><option>V3.0</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">目标数据集</label>
+            <Input value={targetDs} onChange={e => setTargetDs(e.target.value)} placeholder="输入目标数据集名称" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">导入方式</label>
+            <div className="flex gap-3">
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="radio" checked={importMode === "ref"} onChange={() => setImportMode("ref")} className="accent-primary" />
+                引用导入<span className="text-xs text-muted-foreground">（节省存储）</span>
+              </label>
+              <label className={cn("flex items-center gap-1.5 text-sm", readOnly ? "opacity-40 cursor-not-allowed" : "cursor-pointer")}>
+                <input type="radio" checked={importMode === "copy"} onChange={() => !readOnly && setImportMode("copy")} disabled={readOnly} className="accent-primary" />
+                复制导入<span className="text-xs text-muted-foreground">（占用存储）</span>
+              </label>
+            </div>
+            {readOnly && <p className="text-xs text-warning">当前授权为"只读"，仅支持引用导入</p>}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button onClick={submit}>确认导入</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Confirm Dialog ─── */
+function ConfirmDialog({ open, onClose, onConfirm, title, desc }: {
+  open: boolean; onClose: () => void; onConfirm: () => void; title: string; desc: string;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">{desc}</p>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button variant="destructive" onClick={() => { onConfirm(); onClose(); }}>确认</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Pagination ─── */
+function Pagination({ total, page, pageSize, onPageChange, onPageSizeChange }: {
+  total: number; page: number; pageSize: number; onPageChange: (p: number) => void; onPageSizeChange: (s: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const [jumpInput, setJumpInput] = useState("");
+  const pages: number[] = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) pages.push(i);
+  }
+  const deduped: (number | "...")[] = [];
+  pages.forEach((p, idx) => {
+    if (idx > 0 && p - pages[idx - 1] > 1) deduped.push("...");
+    deduped.push(p);
+  });
+  const jump = () => {
+    const n = parseInt(jumpInput);
+    if (n >= 1 && n <= totalPages) { onPageChange(n); setJumpInput(""); }
+  };
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-t">
+      <span className="text-xs text-muted-foreground">共 {total} 条数据</span>
+      <div className="flex items-center gap-2">
+        <select value={pageSize} onChange={e => { onPageSizeChange(Number(e.target.value)); onPageChange(1); }}
+          className="px-2 py-1 text-xs border rounded bg-card">
+          {PAGE_SIZES.map(s => <option key={s} value={s}>{s}条/页</option>)}
+        </select>
+        <div className="flex gap-0.5">
+          <button disabled={page <= 1} onClick={() => onPageChange(1)} className="w-7 h-7 text-xs rounded border hover:bg-muted/50 disabled:opacity-30"><ChevronsLeft className="w-3 h-3 mx-auto" /></button>
+          <button disabled={page <= 1} onClick={() => onPageChange(page - 1)} className="w-7 h-7 text-xs rounded border hover:bg-muted/50 disabled:opacity-30"><ChevronLeft className="w-3 h-3 mx-auto" /></button>
+          {deduped.map((p, i) => p === "..." ? (
+            <span key={`e${i}`} className="w-7 h-7 flex items-center justify-center text-xs text-muted-foreground">…</span>
+          ) : (
+            <button key={p} onClick={() => onPageChange(p as number)}
+              className={cn("w-7 h-7 text-xs rounded border", p === page ? "bg-primary text-primary-foreground" : "hover:bg-muted/50 text-muted-foreground")}>{p}</button>
+          ))}
+          <button disabled={page >= totalPages} onClick={() => onPageChange(page + 1)} className="w-7 h-7 text-xs rounded border hover:bg-muted/50 disabled:opacity-30"><ChevronRight className="w-3 h-3 mx-auto" /></button>
+          <button disabled={page >= totalPages} onClick={() => onPageChange(totalPages)} className="w-7 h-7 text-xs rounded border hover:bg-muted/50 disabled:opacity-30"><ChevronsRight className="w-3 h-3 mx-auto" /></button>
+        </div>
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          跳至
+          <input value={jumpInput} onChange={e => setJumpInput(e.target.value.replace(/\D/g, ""))} onKeyDown={e => e.key === "Enter" && jump()}
+            className="w-10 h-7 text-center text-xs border rounded bg-card" />
+          页
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Date Range Picker ─── */
+function DateRangePicker({ from, to, onChange, placeholder }: {
+  from: Date | undefined; to: Date | undefined; onChange: (f: Date | undefined, t: Date | undefined) => void; placeholder: string;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button className="px-2.5 py-1.5 text-xs border rounded-md bg-card text-left min-w-[160px] hover:border-primary/50 transition-colors">
+          {from ? (
+            <span className="text-foreground">{format(from, "yyyy-MM-dd")} ~ {to ? format(to, "yyyy-MM-dd") : "..."}</span>
+          ) : <span className="text-muted-foreground">{placeholder}</span>}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar mode="range" selected={from && to ? { from, to } : undefined}
+          onSelect={(range) => onChange(range?.from, range?.to)}
+          numberOfMonths={2} className={cn("p-3 pointer-events-auto")} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ─── Filter Bar ─── */
+function FilterBar({ tab, filters, setFilters, onReset, onAdd }: {
+  tab: number; filters: any; setFilters: (f: any) => void; onReset: () => void; onAdd?: () => void;
+}) {
+  const timeLabel = tab === 0 ? "创建/更新时间" : tab === 1 ? "订购/更新时间" : "分享/更新时间";
+  const creatorLabel = tab === 0 ? "创建人" : tab === 1 ? "发布方" : "分享方";
+  const scopeOptions = tab === 0 ? AUTH_SCOPES_MINE : AUTH_SCOPES_SUB;
+  return (
+    <div className="rounded-lg border bg-card p-4 space-y-3">
+      <div className="flex flex-wrap items-end gap-3">
+        {/* Name search */}
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">数据集名称</label>
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <input value={filters.name} onChange={e => setFilters({ ...filters, name: e.target.value })}
+              placeholder="模糊搜索" className="w-[160px] pl-7 pr-2 py-1.5 text-xs border rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30" />
+          </div>
+        </div>
+        {/* Modality */}
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">模态</label>
+          <MultiCheckDropdown options={MODALITIES} selected={filters.modalities} onChange={v => setFilters({ ...filters, modalities: v })} placeholder="全部" className="w-[120px]" />
+        </div>
+        {/* Auth scope */}
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">授权范围</label>
+          <MultiCheckDropdown options={scopeOptions} selected={filters.scopes} onChange={v => setFilters({ ...filters, scopes: v })} placeholder="全部" className="w-[130px]" />
+        </div>
+        {/* Time */}
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">{timeLabel}</label>
+          <DateRangePicker from={filters.dateFrom} to={filters.dateTo}
+            onChange={(f, t) => setFilters({ ...filters, dateFrom: f, dateTo: t })} placeholder="选择时间范围" />
+        </div>
+        {/* Tag filter */}
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">标签筛选</label>
+          <div className="flex gap-1.5">
+            <select value={filters.tagKey} onChange={e => setFilters({ ...filters, tagKey: e.target.value })}
+              className="px-2 py-1.5 text-xs border rounded-md bg-card w-[90px]">
+              <option value="">标签名</option>
+              {ALL_TAG_KEYS.map(k => <option key={k}>{k}</option>)}
+            </select>
+            <select value={filters.tagValue} onChange={e => setFilters({ ...filters, tagValue: e.target.value })}
+              className="px-2 py-1.5 text-xs border rounded-md bg-card w-[90px]">
+              <option value="">标签值</option>
+              {ALL_TAG_VALUES.map(v => <option key={v}>{v}</option>)}
+            </select>
+          </div>
+        </div>
+        {/* Creator */}
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">{creatorLabel}</label>
+          <input value={filters.creator} onChange={e => setFilters({ ...filters, creator: e.target.value })}
+            placeholder="模糊搜索" className="w-[120px] px-2 py-1.5 text-xs border rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30" />
+        </div>
+        {/* Actions */}
+        <div className="flex gap-2 ml-auto self-end">
+          <Button variant="outline" size="sm" onClick={onReset} className="h-[32px] gap-1 text-xs"><RotateCcw className="w-3 h-3" />重置</Button>
+          {onAdd && <Button size="sm" onClick={onAdd} className="h-[32px] gap-1 text-xs"><Plus className="w-3 h-3" />新增数据集</Button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Empty State ─── */
+function EmptyState({ message, guide }: { message: string; guide: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+        <Search className="w-7 h-7 text-muted-foreground" />
+      </div>
+      <p className="text-sm font-medium text-foreground mb-1">{message}</p>
+      <p className="text-xs text-muted-foreground">{guide}</p>
+    </div>
+  );
+}
+
+/* ═══════════════ Main Component ═══════════════ */
+const defaultFilters = () => ({ name: "", modalities: [] as string[], scopes: [] as string[], dateFrom: undefined as Date | undefined, dateTo: undefined as Date | undefined, tagKey: "", tagValue: "", creator: "" });
+
+const DataManagementDatasets = () => {
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState(0);
+  const [showCreate, setShowCreate] = useState(false);
+  const [filters, setFilters] = useState(defaultFilters());
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Data states
+  const [myDs, setMyDs] = useState<Dataset[]>(myDatasets);
+  const [subDs, setSubDs] = useState<SubscribedDataset[]>(subscribedDatasets);
+  const [shareDs, setShareDs] = useState<SharedDataset[]>(sharedDatasets);
+
+  // Dialogs
+  const [tagEditTarget, setTagEditTarget] = useState<{ idx: number; tab: number } | null>(null);
+  const [importTarget, setImportTarget] = useState<{ name: string; authLevel: string } | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; desc: string; onConfirm: () => void } | null>(null);
+
+  const resetFilters = () => { setFilters(defaultFilters()); setPage(1); };
+
+  // Filter logic
+  const applyFilters = useCallback(<T extends { name: string; modality: string; scope: string; tags: KVTag[]; creator?: string; createdAt?: string; updatedAt?: string }>(data: T[]): T[] => {
+    return data.filter(d => {
+      if (filters.name && !d.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
+      if (filters.modalities.length && !filters.modalities.includes(d.modality)) return false;
+      if (filters.scopes.length && !filters.scopes.includes(d.scope)) return false;
+      if (filters.tagKey && !d.tags.some(t => t.key === filters.tagKey)) return false;
+      if (filters.tagValue && !d.tags.some(t => t.value === filters.tagValue)) return false;
+      if (filters.creator) {
+        const creatorField = (d as any).creator || (d as any).publisher || (d as any).sharer || "";
+        if (!creatorField.toLowerCase().includes(filters.creator.toLowerCase())) return false;
+      }
+      if (filters.dateFrom && d.createdAt && new Date(d.createdAt) < filters.dateFrom) return false;
+      if (filters.dateTo && d.updatedAt && new Date(d.updatedAt) > new Date(filters.dateTo.getTime() + 86400000)) return false;
+      return true;
+    });
+  }, [filters]);
+
+  // Create form
   if (showCreate) {
     return (
       <DatasetCreateForm
         onBack={() => setShowCreate(false)}
-        onCreated={(ds) => {
-          setDatasets(prev => [ds, ...prev]);
-          setShowCreate(false);
-          setActiveTab(0);
-        }}
+        onCreated={(ds: any) => { setMyDs(prev => [ds, ...prev]); setShowCreate(false); setActiveTab(0); }}
       />
     );
   }
 
-  const filtered = datasets.filter(ds =>
-    !searchText || ds.name.toLowerCase().includes(searchText.toLowerCase()) || ds.id.toLowerCase().includes(searchText.toLowerCase())
-  );
+  // Paginate helper
+  const paginate = <T,>(data: T[]) => {
+    const start = (page - 1) * pageSize;
+    return { items: data.slice(start, start + pageSize), total: data.length };
+  };
 
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">数据集管理</h1>
-          <p className="page-description">管理您的数据集、订购的数据集和分享给您的数据集</p>
+  const tabs = ["我的数据集", "我订购的数据集", "分享给我的数据集"];
+
+  const renderMyDatasets = () => {
+    const filtered = applyFilters(myDs);
+    const { items, total } = paginate(filtered);
+    return (
+      <>
+        <div className="rounded-lg border bg-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/30 border-b">
+                  {["数据集名称", "数据集ID", "模态", "数据集标签", "最新版本", "授权范围", "创建人", "创建时间", "更新时间", "操作"].map(h => (
+                    <th key={h} className="text-left py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((ds, idx) => (
+                  <tr key={ds.id} className="border-b last:border-0 hover:bg-muted/20 group">
+                    <td className="py-3 px-3 font-medium text-foreground max-w-[200px] truncate">{ds.name}</td>
+                    <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
+                    <td className="py-3 px-3"><span className="status-tag status-tag-info">{ds.modality}</span></td>
+                    <td className="py-3 px-3">
+                      <TagCell tags={ds.tags} onEdit={() => setTagEditTarget({ idx: myDs.indexOf(ds), tab: 0 })} />
+                    </td>
+                    <td className="py-3 px-3 text-xs text-muted-foreground">{ds.latestVersion}</td>
+                    <td className="py-3 px-3 text-xs text-muted-foreground">{ds.scope}</td>
+                    <td className="py-3 px-3 text-muted-foreground text-xs">{ds.creator}</td>
+                    <td className="py-3 px-3 text-muted-foreground text-xs">{ds.createdAt}</td>
+                    <td className="py-3 px-3 text-muted-foreground text-xs">{ds.updatedAt}</td>
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-1">
+                        <button className="p-1 rounded hover:bg-muted/50" title="编辑"><Edit className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        <button className="p-1 rounded hover:bg-muted/50" title="删除" onClick={() => setConfirmDialog({
+                          title: "删除数据集", desc: `确认删除「${ds.name}」吗？删除后数据将无法恢复。`,
+                          onConfirm: () => { setMyDs(prev => prev.filter(d => d.id !== ds.id)); toast({ title: "数据集已删除" }); }
+                        })}><Trash2 className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {items.length === 0 && (
+                  <tr><td colSpan={10}><EmptyState message="暂无数据集" guide="点击上方「新增数据集」按钮创建" /></td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <Pagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
         </div>
-        {activeTab === 0 && (
-          <button
-            onClick={() => setShowCreate(true)}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-primary/90"
-          >
-            <Plus className="w-4 h-4" /> 新增数据集
-          </button>
-        )}
-      </div>
+      </>
+    );
+  };
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 border-b">
-        {tabs.map((tab, i) => (
-          <button
-            key={i}
-            onClick={() => setActiveTab(i)}
-            className={`px-4 py-2.5 text-sm border-b-2 transition-colors ${
-              activeTab === i
-                ? "border-primary text-primary font-medium"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      {/* 筛选栏 */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            value={searchText}
-            onChange={e => setSearchText(e.target.value)}
-            placeholder="搜索数据集名称..."
-            className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-          />
-        </div>
-        <select className="px-3 py-2 text-sm border rounded-lg bg-card">
-          <option>全部模态</option>
-          <option>文本</option>
-          <option>图像</option>
-          <option>语音</option>
-          <option>视频</option>
-        </select>
-        <select className="px-3 py-2 text-sm border rounded-lg bg-card">
-          <option>全部状态</option>
-          <option>活跃</option>
-          <option>归档</option>
-        </select>
-        <button className="px-3 py-2 text-sm border rounded-lg bg-card text-muted-foreground hover:text-foreground flex items-center gap-1">
-          <Filter className="w-4 h-4" /> 更多筛选
-        </button>
-      </div>
-
-      {/* 数据表格 */}
+  const renderSubscribedDatasets = () => {
+    const filtered = applyFilters(subDs);
+    const { items, total } = paginate(filtered);
+    if (subDs.length === 0) {
+      return <div className="rounded-lg border bg-card"><EmptyState message="您还没有订购任何数据集" guide="前往「数据集市」或「数据集共享广场」浏览并订购数据集" /></div>;
+    }
+    return (
       <div className="rounded-lg border bg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-muted/30 border-b">
-                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">数据集名称</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">模态</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">数据用途</th>
-                <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">版本数</th>
-                <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">文件数</th>
-                <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">大小</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">标签</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">状态</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">创建人</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">更新时间</th>
-                <th className="text-center py-3 px-4 text-xs font-medium text-muted-foreground">操作</th>
+                {["数据集名称", "数据集ID", "模态", "数据集标签", "最新版本", "授权范围", "发布方", "订购时间", "更新时间", "操作"].map(h => (
+                  <th key={h} className="text-left py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map(ds => (
-                <tr key={ds.id} className="border-b last:border-0 hover:bg-muted/20 cursor-pointer">
-                  <td className="py-3 px-4">
-                    <div className="font-medium text-foreground">{ds.name}</div>
-                    <div className="text-xs text-muted-foreground">{ds.id}</div>
-                  </td>
-                  <td className="py-3 px-4"><span className="status-tag status-tag-info">{ds.modality}</span></td>
-                  <td className="py-3 px-4 text-muted-foreground">{ds.purpose}</td>
-                  <td className="py-3 px-4 text-right text-muted-foreground">{ds.versions}</td>
-                  <td className="py-3 px-4 text-right text-muted-foreground">{ds.files.toLocaleString()}</td>
-                  <td className="py-3 px-4 text-right text-muted-foreground">{ds.size}</td>
-                  <td className="py-3 px-4">
-                    <div className="flex gap-1 flex-wrap">
-                      {ds.tags.map((t, i) => (
-                        <span key={i} className="px-1.5 py-0.5 bg-muted rounded text-[10px] text-muted-foreground">
-                          {t.key}: {t.value}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`status-tag ${ds.status === "活跃" ? "status-tag-success" : "status-tag-default"}`}>
-                      {ds.status}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-muted-foreground">{ds.creator}</td>
-                  <td className="py-3 px-4 text-muted-foreground text-xs">{ds.updatedAt}</td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center justify-center gap-1">
-                      <button className="p-1 rounded hover:bg-muted/50" title="查看"><Eye className="w-4 h-4 text-muted-foreground" /></button>
-                      <button className="p-1 rounded hover:bg-muted/50" title="编辑"><Edit className="w-4 h-4 text-muted-foreground" /></button>
-                      <button className="p-1 rounded hover:bg-muted/50" title="分享"><Share2 className="w-4 h-4 text-muted-foreground" /></button>
-                      <button className="p-1 rounded hover:bg-muted/50" title="更多"><MoreHorizontal className="w-4 h-4 text-muted-foreground" /></button>
+              {items.map(ds => (
+                <tr key={ds.id} className="border-b last:border-0 hover:bg-muted/20 group">
+                  <td className="py-3 px-3 font-medium text-foreground max-w-[200px] truncate">{ds.name}</td>
+                  <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
+                  <td className="py-3 px-3"><span className="status-tag status-tag-info">{ds.modality}</span></td>
+                  <td className="py-3 px-3"><TagCell tags={ds.tags} /></td>
+                  <td className="py-3 px-3 text-xs text-muted-foreground">{ds.latestVersion}</td>
+                  <td className="py-3 px-3"><span className="px-1.5 py-0.5 rounded text-[10px] bg-accent text-accent-foreground">{ds.authLevel}</span></td>
+                  <td className="py-3 px-3 text-muted-foreground text-xs">{ds.publisher}</td>
+                  <td className="py-3 px-3 text-muted-foreground text-xs">{ds.subscribedAt}</td>
+                  <td className="py-3 px-3 text-muted-foreground text-xs">{ds.updatedAt}</td>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-1">
+                      <button className="p-1 rounded hover:bg-muted/50" title="查看详情"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                      <button className="p-1 rounded hover:bg-muted/50" title="导入版本"
+                        onClick={() => setImportTarget({ name: ds.name, authLevel: ds.authLevel })}><Download className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                      <button className="p-1 rounded hover:bg-muted/50" title="取消订购" onClick={() => setConfirmDialog({
+                        title: "取消订购", desc: `确认取消对「${ds.name}」的订购吗？取消后您将无法再查看和使用该数据集。`,
+                        onConfirm: () => { setSubDs(prev => prev.filter(d => d.id !== ds.id)); toast({ title: "已取消订购" }); }
+                      })}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
                     </div>
                   </td>
                 </tr>
               ))}
+              {items.length === 0 && (
+                <tr><td colSpan={10}><EmptyState message="无匹配结果" guide="请调整筛选条件重试" /></td></tr>
+              )}
             </tbody>
           </table>
         </div>
-        {/* 分页 */}
-        <div className="flex items-center justify-between px-4 py-3 border-t">
-          <span className="text-xs text-muted-foreground">共 {filtered.length} 条数据</span>
-          <div className="flex items-center gap-2">
-            <select className="px-2 py-1 text-xs border rounded bg-card">
-              <option>10条/页</option>
-              <option>20条/页</option>
-              <option>50条/页</option>
-            </select>
-            <div className="flex gap-1">
-              <button className="w-7 h-7 text-xs rounded border bg-primary text-primary-foreground">1</button>
-              <button className="w-7 h-7 text-xs rounded border hover:bg-muted/50 text-muted-foreground">2</button>
-              <button className="w-7 h-7 text-xs rounded border hover:bg-muted/50 text-muted-foreground">3</button>
-            </div>
-          </div>
+        <Pagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
+      </div>
+    );
+  };
+
+  const renderSharedDatasets = () => {
+    const filtered = applyFilters(shareDs);
+    const { items, total } = paginate(filtered);
+    if (shareDs.length === 0) {
+      return <div className="rounded-lg border bg-card"><EmptyState message="暂无分享给您的数据集" guide="联系同事或空间管理员，申请分享数据集" /></div>;
+    }
+    return (
+      <div className="rounded-lg border bg-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/30 border-b">
+                {["数据集名称", "数据集ID", "模态", "数据集标签", "最新版本", "授权范围", "分享方", "分享时间", "更新时间", "操作"].map(h => (
+                  <th key={h} className="text-left py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(ds => (
+                <tr key={ds.id} className="border-b last:border-0 hover:bg-muted/20 group">
+                  <td className="py-3 px-3 font-medium text-foreground max-w-[200px] truncate">{ds.name}</td>
+                  <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
+                  <td className="py-3 px-3"><span className="status-tag status-tag-info">{ds.modality}</span></td>
+                  <td className="py-3 px-3"><TagCell tags={ds.tags} /></td>
+                  <td className="py-3 px-3 text-xs text-muted-foreground">{ds.latestVersion}</td>
+                  <td className="py-3 px-3"><span className="px-1.5 py-0.5 rounded text-[10px] bg-accent text-accent-foreground">{ds.authLevel}</span></td>
+                  <td className="py-3 px-3 text-muted-foreground text-xs">{ds.sharer}</td>
+                  <td className="py-3 px-3 text-muted-foreground text-xs">{ds.sharedAt}</td>
+                  <td className="py-3 px-3 text-muted-foreground text-xs">{ds.updatedAt}</td>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-1">
+                      <button className="p-1 rounded hover:bg-muted/50" title="查看详情"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                      <button className="p-1 rounded hover:bg-muted/50" title="导入版本"
+                        onClick={() => setImportTarget({ name: ds.name, authLevel: ds.authLevel })}><Download className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                      <button className="p-1 rounded hover:bg-muted/50" title="取消接收" onClick={() => setConfirmDialog({
+                        title: "取消接收分享", desc: `确认取消接收「${ds.name}」的分享吗？取消后您将无法再查看和使用该数据集。`,
+                        onConfirm: () => { setShareDs(prev => prev.filter(d => d.id !== ds.id)); toast({ title: "已取消接收" }); }
+                      })}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {items.length === 0 && (
+                <tr><td colSpan={10}><EmptyState message="无匹配结果" guide="请调整筛选条件重试" /></td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <Pagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
+      </div>
+    );
+  };
+
+  // Get tags for tag editor
+  const getTagEditTags = (): KVTag[] => {
+    if (!tagEditTarget) return [];
+    if (tagEditTarget.tab === 0) return myDs[tagEditTarget.idx]?.tags || [];
+    return [];
+  };
+  const handleTagSave = (newTags: KVTag[]) => {
+    if (!tagEditTarget) return;
+    if (tagEditTarget.tab === 0) {
+      setMyDs(prev => prev.map((d, i) => i === tagEditTarget.idx ? { ...d, tags: newTags } : d));
+    }
+    setTagEditTarget(null);
+  };
+
+  return (
+    <div className="space-y-5 animate-fade-in">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">数据集管理</h1>
+          <p className="page-description">管理您的数据集、订购的数据集和分享给您的数据集</p>
         </div>
       </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b">
+        {tabs.map((tab, i) => (
+          <button key={i} onClick={() => { setActiveTab(i); setPage(1); resetFilters(); }}
+            className={cn("px-4 py-2.5 text-sm border-b-2 transition-colors",
+              activeTab === i ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground hover:text-foreground"
+            )}>{tab}</button>
+        ))}
+      </div>
+
+      {/* Filter Bar */}
+      <FilterBar tab={activeTab} filters={filters} setFilters={(f) => { setFilters(f); setPage(1); }}
+        onReset={resetFilters} onAdd={activeTab === 0 ? () => setShowCreate(true) : undefined} />
+
+      {/* Table */}
+      {activeTab === 0 && renderMyDatasets()}
+      {activeTab === 1 && renderSubscribedDatasets()}
+      {activeTab === 2 && renderSharedDatasets()}
+
+      {/* Tag Edit Dialog */}
+      <TagEditorDialog open={!!tagEditTarget} onClose={() => setTagEditTarget(null)}
+        tags={getTagEditTags()} onSave={handleTagSave} />
+
+      {/* Import Version Dialog */}
+      {importTarget && (
+        <ImportVersionDialog open={!!importTarget} onClose={() => setImportTarget(null)}
+          dsName={importTarget.name} authLevel={importTarget.authLevel} />
+      )}
+
+      {/* Confirm Dialog */}
+      {confirmDialog && (
+        <ConfirmDialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)}
+          title={confirmDialog.title} desc={confirmDialog.desc} onConfirm={confirmDialog.onConfirm} />
+      )}
     </div>
   );
 };
