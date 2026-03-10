@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Save } from "lucide-react";
 
 const ConsoleSystem = () => {
+  const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {

@@ -79,6 +79,7 @@ const App = () => (
                   <Route path="/console/members" element={<ConsoleMembers />} />
                   <Route path="/console/roles" element={<ConsoleRoles />} />
                   <Route path="/console/system" element={<ConsoleSystem />} />
+                  <Route path="/console/system/page/:pageKey" element={<ConsoleSystemPageEdit />} />
                   <Route path="/console/storage" element={<ConsoleStorage />} />
                   <Route path="/console/datasource" element={<ConsoleDatasource />} />
                   <Route path="/console/catalog" element={<ConsoleCatalog />} />
