@@ -37,27 +37,30 @@ function generateTrendData(days: number) {
 
 type SpaceFilter = "all" | "org" | "team" | "personal";
 
+// Colors for space distribution
+const SPACE_COLORS = {
+  org: { active: "#3b82f6", inactive: "#bfdbfe" },       // blue / light blue
+  team: { active: "#22c55e", inactive: "#bbf7d0" },      // green / light green
+  personal: { active: "#f97316", inactive: "#fed7aa" },   // orange / light orange
+};
+
 const spaceDistribution = {
   all: [
-    { type: "组织空间", count: 45, datasets: 5234, size: "18.5TB", color: "hsl(var(--chart-1))", percent: 17.6 },
-    { type: "团队空间", count: 128, datasets: 4892, size: "15.2TB", color: "hsl(var(--chart-2))", percent: 50 },
-    { type: "个人空间", count: 83, datasets: 2721, size: "11.5TB", color: "hsl(var(--chart-3))", percent: 32.4 },
+    { type: "组织空间", count: 45, datasets: 5234, size: "18.5TB", color: SPACE_COLORS.org.active, percent: 17.6 },
+    { type: "团队空间", count: 128, datasets: 4892, size: "15.2TB", color: SPACE_COLORS.team.active, percent: 50 },
+    { type: "个人空间", count: 83, datasets: 2721, size: "11.5TB", color: SPACE_COLORS.personal.active, percent: 32.4 },
   ],
   org: [
-    { type: "AI大模型研究院", count: 18, datasets: 2100, size: "7.2TB", color: "hsl(var(--chart-1))", percent: 40 },
-    { type: "NLP研究所", count: 12, datasets: 1534, size: "5.1TB", color: "hsl(var(--chart-2))", percent: 26.7 },
-    { type: "计算机视觉中心", count: 9, datasets: 980, size: "4.0TB", color: "hsl(var(--chart-3))", percent: 20 },
-    { type: "其他机构", count: 6, datasets: 620, size: "4.0TB", color: "hsl(var(--chart-4))", percent: 13.3 },
+    { type: "活跃组织空间", count: 34, datasets: 4200, size: "14.5TB", color: SPACE_COLORS.org.active, percent: 75.6 },
+    { type: "不活跃组织空间", count: 11, datasets: 1034, size: "4.0TB", color: SPACE_COLORS.org.inactive, percent: 24.4 },
   ],
   team: [
-    { type: "大模型训练组", count: 32, datasets: 1560, size: "4.8TB", color: "hsl(var(--chart-1))", percent: 25 },
-    { type: "数据标注中心", count: 28, datasets: 1230, size: "3.5TB", color: "hsl(var(--chart-2))", percent: 21.9 },
-    { type: "语音算法组", count: 24, datasets: 890, size: "2.9TB", color: "hsl(var(--chart-3))", percent: 18.8 },
-    { type: "其他团队", count: 44, datasets: 1212, size: "4.0TB", color: "hsl(var(--chart-4))", percent: 34.3 },
+    { type: "活跃团队空间", count: 96, datasets: 3800, size: "12.0TB", color: SPACE_COLORS.team.active, percent: 75.0 },
+    { type: "不活跃团队空间", count: 32, datasets: 1092, size: "3.2TB", color: SPACE_COLORS.team.inactive, percent: 25.0 },
   ],
   personal: [
-    { type: "活跃用户", count: 52, datasets: 1680, size: "6.2TB", color: "hsl(var(--chart-1))", percent: 62.7 },
-    { type: "低活跃用户", count: 31, datasets: 1041, size: "5.3TB", color: "hsl(var(--chart-3))", percent: 37.3 },
+    { type: "活跃个人空间", count: 52, datasets: 1680, size: "6.2TB", color: SPACE_COLORS.personal.active, percent: 62.7 },
+    { type: "不活跃个人空间", count: 31, datasets: 1041, size: "5.3TB", color: SPACE_COLORS.personal.inactive, percent: 37.3 },
   ],
 };
 
