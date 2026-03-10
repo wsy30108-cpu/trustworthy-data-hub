@@ -136,34 +136,45 @@ function Field({ label, required, children, error }: { label: string; required?:
 }
 
 /* ─── Main Form ─── */
-export default function DatasetCreateForm({ onBack, onCreated }: { onBack: () => void; onCreated: (ds: any) => void }) {
+export interface DatasetEditData {
+  id: string; name: string; desc: string; purpose: string; modality: string; textType: string;
+  dsTags: KVTag[]; scope: string; selectedUsers: string[]; selectedRoles: string[]; authPerms: string[];
+  sysCatalogs: string[]; customCatalogs: string[];
+  // read-only version fields
+  version?: string; storageLocation?: string; storageFormat?: string; versionDesc?: string;
+}
+
+export default function DatasetCreateForm({ onBack, onCreated, editData }: {
+  onBack: () => void; onCreated: (ds: any) => void; editData?: DatasetEditData;
+}) {
   const { toast } = useToast();
+  const isEdit = !!editData;
 
   // Section 1 – basic info
-  const [name, setName] = useState("");
-  const [desc, setDesc] = useState("");
-  const [purpose, setPurpose] = useState<string>("模型微调");
-  const [modality, setModality] = useState("");
-  const [textType, setTextType] = useState("");
-  const [dsTags, setDsTags] = useState<KVTag[]>([]);
+  const [name, setName] = useState(editData?.name || "");
+  const [desc, setDesc] = useState(editData?.desc || "");
+  const [purpose, setPurpose] = useState<string>(editData?.purpose || "模型微调");
+  const [modality, setModality] = useState(editData?.modality || "");
+  const [textType, setTextType] = useState(editData?.textType || "");
+  const [dsTags, setDsTags] = useState<KVTag[]>(editData?.dsTags || []);
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
 
-  // Section 2 – version info
-  const [versionDesc, setVersionDesc] = useState("");
-  const [storageLocation, setStorageLocation] = useState("系统默认存储");
-  const [storageFormat, setStorageFormat] = useState("Lance");
+  // Section 2 – version info (read-only in edit mode)
+  const [versionDesc, setVersionDesc] = useState(editData?.versionDesc || "");
+  const [storageLocation, setStorageLocation] = useState(editData?.storageLocation || "系统默认存储");
+  const [storageFormat, setStorageFormat] = useState(editData?.storageFormat || "Lance");
   const [verTags, setVerTags] = useState<KVTag[]>([]);
   const [verTagDialogOpen, setVerTagDialogOpen] = useState(false);
 
   // Section 3 – permissions
-  const [authScope, setAuthScope] = useState("数据集所有者");
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
-  const [authPerms, setAuthPerms] = useState<string[]>(["读数据集"]);
+  const [authScope, setAuthScope] = useState(editData?.scope || "数据集所有者");
+  const [selectedUsers, setSelectedUsers] = useState<string[]>(editData?.selectedUsers || []);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(editData?.selectedRoles || []);
+  const [authPerms, setAuthPerms] = useState<string[]>(editData?.authPerms || ["读数据集"]);
 
   // Section 4 – catalog
-  const [sysCatalogs, setSysCatalogs] = useState<string[]>([]);
-  const [customCatalogs, setCustomCatalogs] = useState<string[]>([]);
+  const [sysCatalogs, setSysCatalogs] = useState<string[]>(editData?.sysCatalogs || []);
+  const [customCatalogs, setCustomCatalogs] = useState<string[]>(editData?.customCatalogs || []);
 
   // errors
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -182,19 +193,20 @@ export default function DatasetCreateForm({ onBack, onCreated }: { onBack: () =>
 
   const handleSubmit = () => {
     if (!validate()) { toast({ title: "请检查表单填写", variant: "destructive" }); return; }
-    const newDs = {
-      id: `DS-${String(Date.now()).slice(-3)}`,
-      name, modality, purpose,
+    const ds = {
+      id: isEdit ? editData!.id : `DS-${String(Date.now()).slice(-3)}`,
+      name, modality, purpose, desc,
       type: modality === "文本" ? textType : "-",
       scope: authScope,
-      versions: 1, size: "0B", files: 0,
+      versions: 1, latestVersion: isEdit ? (editData!.version || "V1.0") : "V1.0",
+      size: "0B", files: 0,
       tags: dsTags, status: "活跃",
       creator: "当前用户",
-      createdAt: new Date().toISOString().slice(0, 10),
+      createdAt: isEdit ? undefined : new Date().toISOString().slice(0, 10),
       updatedAt: new Date().toISOString().slice(0, 10),
     };
-    onCreated(newDs);
-    toast({ title: "数据集创建成功" });
+    onCreated(ds);
+    toast({ title: isEdit ? "数据集更新成功" : "数据集创建成功" });
   };
 
   return (
@@ -203,8 +215,8 @@ export default function DatasetCreateForm({ onBack, onCreated }: { onBack: () =>
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-muted"><ArrowLeft className="w-5 h-5 text-muted-foreground" /></button>
         <div>
-          <h1 className="text-lg font-semibold text-foreground">新增数据集</h1>
-          <p className="text-xs text-muted-foreground">填写数据集基本信息、版本、权限和目录配置</p>
+          <h1 className="text-lg font-semibold text-foreground">{isEdit ? "编辑数据集" : "新增数据集"}</h1>
+          <p className="text-xs text-muted-foreground">{isEdit ? "修改数据集基本信息、权限和目录配置" : "填写数据集基本信息、版本、权限和目录配置"}</p>
         </div>
       </div>
 
@@ -262,13 +274,17 @@ export default function DatasetCreateForm({ onBack, onCreated }: { onBack: () =>
 
       {/* Section 2: Version Info */}
       <Section title="二、数据集版本信息">
+        {isEdit && (
+          <p className="text-xs text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">版本信息在编辑模式下不可修改</p>
+        )}
         <div className="grid grid-cols-2 gap-4">
           <Field label="数据集版本">
-            <Input value="V1.0" disabled className="bg-muted/50" />
+            <Input value={isEdit ? (editData!.version || "V1.0") : "V1.0"} disabled className="bg-muted/50" />
           </Field>
           <Field label="存储位置">
-            <select value={storageLocation} onChange={e => setStorageLocation(e.target.value)}
-              className="w-full px-3 py-2 text-sm border rounded-lg bg-card">
+            <select value={storageLocation} onChange={e => !isEdit && setStorageLocation(e.target.value)}
+              disabled={isEdit}
+              className={cn("w-full px-3 py-2 text-sm border rounded-lg bg-card", isEdit && "opacity-60 cursor-not-allowed bg-muted/50")}>
               {STORAGE_LOCATIONS.map(l => <option key={l}>{l}</option>)}
             </select>
           </Field>
@@ -277,8 +293,8 @@ export default function DatasetCreateForm({ onBack, onCreated }: { onBack: () =>
           <Field label="存储格式">
             <div className="flex gap-3">
               {STORAGE_FORMATS.map(f => (
-                <label key={f} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                  <input type="radio" name="storageFormat" checked={storageFormat === f} onChange={() => setStorageFormat(f)} className="accent-primary" />{f}
+                <label key={f} className={cn("flex items-center gap-1.5 text-sm", isEdit ? "opacity-60 cursor-not-allowed" : "cursor-pointer")}>
+                  <input type="radio" name="storageFormat" checked={storageFormat === f} onChange={() => !isEdit && setStorageFormat(f)} disabled={isEdit} className="accent-primary" />{f}
                 </label>
               ))}
             </div>
@@ -286,20 +302,23 @@ export default function DatasetCreateForm({ onBack, onCreated }: { onBack: () =>
         </div>
         <Field label="版本描述">
           <div className="relative">
-            <Textarea value={versionDesc} onChange={e => setVersionDesc(e.target.value.slice(0, 1024))} placeholder="选填，0-1024字" rows={3} />
+            <Textarea value={versionDesc} onChange={e => !isEdit && setVersionDesc(e.target.value.slice(0, 1024))} placeholder="选填，0-1024字" rows={3}
+              disabled={isEdit} className={cn(isEdit && "opacity-60 cursor-not-allowed bg-muted/50")} />
             <span className="absolute bottom-2 right-3 text-[10px] text-muted-foreground">{versionDesc.length}/1024</span>
           </div>
         </Field>
-        <Field label="数据集版本标签">
-          <div className="flex items-center gap-2 flex-wrap">
-            {verTags.map((t, i) => (
-              <span key={i} className="px-2 py-0.5 bg-muted rounded text-xs text-muted-foreground">{t.key}: {t.value}</span>
-            ))}
-            <Button variant="outline" size="sm" onClick={() => setVerTagDialogOpen(true)} className="gap-1 h-7 text-xs">
-              <Tag className="w-3 h-3" />管理标签{verTags.length > 0 && ` (${verTags.length})`}
-            </Button>
-          </div>
-        </Field>
+        {!isEdit && (
+          <Field label="数据集版本标签">
+            <div className="flex items-center gap-2 flex-wrap">
+              {verTags.map((t, i) => (
+                <span key={i} className="px-2 py-0.5 bg-muted rounded text-xs text-muted-foreground">{t.key}: {t.value}</span>
+              ))}
+              <Button variant="outline" size="sm" onClick={() => setVerTagDialogOpen(true)} className="gap-1 h-7 text-xs">
+                <Tag className="w-3 h-3" />管理标签{verTags.length > 0 && ` (${verTags.length})`}
+              </Button>
+            </div>
+          </Field>
+        )}
       </Section>
 
       {/* Section 3: Permissions */}
@@ -365,12 +384,12 @@ export default function DatasetCreateForm({ onBack, onCreated }: { onBack: () =>
       {/* Actions */}
       <div className="flex items-center justify-end gap-3 pb-6">
         <Button variant="outline" onClick={onBack}>取消</Button>
-        <Button onClick={handleSubmit}>创建数据集</Button>
+        <Button onClick={handleSubmit}>{isEdit ? "保存修改" : "创建数据集"}</Button>
       </div>
 
       {/* Tag Dialogs */}
       <TagEditorDialog open={tagDialogOpen} onClose={() => setTagDialogOpen(false)} tags={dsTags} onSave={setDsTags} title="数据集标签编辑" />
-      <TagEditorDialog open={verTagDialogOpen} onClose={() => setVerTagDialogOpen(false)} tags={verTags} onSave={setVerTags} title="版本标签编辑" />
+      {!isEdit && <TagEditorDialog open={verTagDialogOpen} onClose={() => setVerTagDialogOpen(false)} tags={verTags} onSave={setVerTags} title="版本标签编辑" />}
     </div>
   );
 }
