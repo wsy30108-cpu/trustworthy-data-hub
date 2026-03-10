@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Plus, Search, RotateCcw, Edit, Trash2, Eye, Download, X, Tag, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Import } from "lucide-react";
+import { Plus, Search, RotateCcw, Edit, Trash2, Eye, Download, X, Tag, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, ChevronUp, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -8,7 +8,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import DatasetCreateForm from "./DatasetCreateForm";
+import DatasetCreateForm, { type DatasetEditData } from "./DatasetCreateForm";
 
 /* ─── Types ─── */
 interface KVTag { key: string; value: string }
@@ -16,6 +16,7 @@ interface Dataset {
   id: string; name: string; modality: string; purpose: string; type: string;
   scope: string; versions: number; latestVersion: string; size: string; files: number;
   tags: KVTag[]; status: string; creator: string; createdAt: string; updatedAt: string;
+  desc?: string;
 }
 interface SubscribedDataset extends Dataset {
   publisher: string; subscribedAt: string; authLevel: string;
@@ -54,7 +55,7 @@ const ALL_TAG_KEYS = ["语言", "领域", "标注", "采样率", "类型", "部�
 const ALL_TAG_VALUES = ["中文", "多语种", "金融", "医疗", "客服", "工业", "电商", "已标注", "16kHz", "图文对", "AI中心"];
 const PAGE_SIZES = [10, 20, 50];
 
-/* ─── Reusable: Multi-check dropdown ─── */
+/* ─── Multi-check dropdown ─── */
 function MultiCheckDropdown({ options, selected, onChange, placeholder, className }: {
   options: string[]; selected: string[]; onChange: (v: string[]) => void; placeholder: string; className?: string;
 }) {
@@ -68,17 +69,17 @@ function MultiCheckDropdown({ options, selected, onChange, placeholder, classNam
   return (
     <div ref={ref} className={cn("relative", className)}>
       <button type="button" onClick={() => setOpen(!open)}
-        className="w-full px-2.5 py-1.5 text-xs border rounded-md bg-card text-left flex items-center justify-between gap-1 min-h-[32px] hover:border-primary/50 transition-colors">
+        className="w-full h-9 px-3 text-sm border rounded-md bg-muted/30 text-left flex items-center justify-between gap-1 hover:border-primary/50 transition-colors">
         {selected.length ? (
           <span className="text-foreground truncate">{selected.length}项已选</span>
         ) : <span className="text-muted-foreground">{placeholder}</span>}
-        <span className="text-muted-foreground">▾</span>
+        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
       </button>
       {open && (
         <div className="absolute z-30 mt-1 w-full min-w-[140px] bg-popover border rounded-lg shadow-lg max-h-48 overflow-y-auto">
           {options.map(o => (
-            <label key={o} className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted/50 cursor-pointer text-xs">
-              <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} className="rounded accent-primary w-3 h-3" />{o}
+            <label key={o} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm">
+              <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} className="rounded accent-primary w-3.5 h-3.5" />{o}
             </label>
           ))}
         </div>
@@ -202,7 +203,7 @@ function ImportVersionDialog({ open, onClose, dsName, authLevel }: {
                 复制导入<span className="text-xs text-muted-foreground">（占用存储）</span>
               </label>
             </div>
-            {readOnly && <p className="text-xs text-warning">当前授权为"只读"，仅支持引用导入</p>}
+            {readOnly && <p className="text-xs text-destructive">当前授权为"只读"，仅支持引用导入</p>}
           </div>
         </div>
         <DialogFooter>
@@ -233,7 +234,7 @@ function ConfirmDialog({ open, onClose, onConfirm, title, desc }: {
 }
 
 /* ─── Pagination ─── */
-function Pagination({ total, page, pageSize, onPageChange, onPageSizeChange }: {
+function PaginationBar({ total, page, pageSize, onPageChange, onPageSizeChange }: {
   total: number; page: number; pageSize: number; onPageChange: (p: number) => void; onPageSizeChange: (s: number) => void;
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -289,7 +290,8 @@ function DateRangePicker({ from, to, onChange, placeholder }: {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="px-2.5 py-1.5 text-xs border rounded-md bg-card text-left min-w-[160px] hover:border-primary/50 transition-colors">
+        <button className="h-9 px-3 text-sm border rounded-md bg-muted/30 text-left flex items-center gap-2 min-w-[200px] hover:border-primary/50 transition-colors">
+          <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           {from ? (
             <span className="text-foreground">{format(from, "yyyy-MM-dd")} ~ {to ? format(to, "yyyy-MM-dd") : "..."}</span>
           ) : <span className="text-muted-foreground">{placeholder}</span>}
@@ -304,82 +306,165 @@ function DateRangePicker({ from, to, onChange, placeholder }: {
   );
 }
 
-/* ─── Filter Bar ─── */
-function FilterBar({ tab, filters, setFilters, onReset, onAdd }: {
-  tab: number; filters: any; setFilters: (f: any) => void; onReset: () => void; onAdd?: () => void;
+/* ─── Active Filter Tags ─── */
+function ActiveFilterTags({ filters, onRemove, onClear }: {
+  filters: ReturnType<typeof defaultFilters>;
+  onRemove: (key: string, value?: string) => void;
+  onClear: () => void;
 }) {
+  const chips: { label: string; key: string; value?: string }[] = [];
+  filters.modalities.forEach(m => chips.push({ label: `模态=${m}`, key: "modalities", value: m }));
+  filters.scopes.forEach(s => chips.push({ label: `授权范围=${s}`, key: "scopes", value: s }));
+  if (filters.dateFrom) chips.push({ label: `开始时间=${format(filters.dateFrom, "yyyy-MM-dd")}`, key: "dateFrom" });
+  if (filters.dateTo) chips.push({ label: `结束时间=${format(filters.dateTo, "yyyy-MM-dd")}`, key: "dateTo" });
+  if (filters.tagKey) chips.push({ label: `标签名=${filters.tagKey}`, key: "tagKey" });
+  if (filters.tagValue) chips.push({ label: `标签值=${filters.tagValue}`, key: "tagValue" });
+  if (filters.creator) chips.push({ label: `创建人=${filters.creator}`, key: "creator" });
+
+  if (chips.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs text-muted-foreground">已选筛选条件：</span>
+      {chips.map((c, i) => (
+        <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-xs">
+          {c.label}
+          <button onClick={() => onRemove(c.key, c.value)} className="hover:bg-primary/20 rounded p-0.5">
+            <X className="w-3 h-3" />
+          </button>
+        </span>
+      ))}
+      <button onClick={onClear} className="text-xs text-destructive hover:underline flex items-center gap-0.5">
+        <X className="w-3 h-3" />清空
+      </button>
+    </div>
+  );
+}
+
+/* ─── Filter Bar (redesigned) ─── */
+function FilterBar({ tab, filters, setFilters, onReset, onAdd }: {
+  tab: number; filters: ReturnType<typeof defaultFilters>; setFilters: (f: ReturnType<typeof defaultFilters>) => void; onReset: () => void; onAdd?: () => void;
+}) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const timeLabel = tab === 0 ? "创建/更新时间" : tab === 1 ? "订购/更新时间" : "分享/更新时间";
   const creatorLabel = tab === 0 ? "创建人" : tab === 1 ? "发布方" : "分享方";
   const scopeOptions = tab === 0 ? AUTH_SCOPES_MINE : AUTH_SCOPES_SUB;
+
+  const hasActiveFilters = filters.modalities.length > 0 || filters.scopes.length > 0 ||
+    filters.dateFrom || filters.dateTo || filters.tagKey || filters.tagValue || filters.creator || filters.name;
+
+  const handleRemoveFilter = (key: string, value?: string) => {
+    const next = { ...filters };
+    if (key === "modalities" && value) next.modalities = next.modalities.filter(m => m !== value);
+    else if (key === "scopes" && value) next.scopes = next.scopes.filter(s => s !== value);
+    else if (key === "dateFrom") next.dateFrom = undefined;
+    else if (key === "dateTo") next.dateTo = undefined;
+    else if (key === "tagKey") next.tagKey = "";
+    else if (key === "tagValue") next.tagValue = "";
+    else if (key === "creator") next.creator = "";
+    setFilters(next);
+  };
+
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3">
-      <div className="flex flex-wrap items-end gap-3">
-        {/* Name search */}
-        <div className="space-y-1">
-          <label className="text-[11px] text-muted-foreground">数据集名称</label>
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+    <div className="space-y-3">
+      <div className="rounded-lg border bg-card p-4 space-y-3">
+        {/* Primary row: search + basic filters */}
+        <div className="flex items-center gap-3">
+          {/* Search - wider */}
+          <div className="relative flex-1 max-w-[320px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input value={filters.name} onChange={e => setFilters({ ...filters, name: e.target.value })}
-              placeholder="模糊搜索" className="w-[160px] pl-7 pr-2 py-1.5 text-xs border rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30" />
+              placeholder="模糊搜索数据集名称..."
+              className="w-full h-9 pl-9 pr-3 text-sm border rounded-md bg-muted/30 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all" />
           </div>
-        </div>
-        {/* Modality */}
-        <div className="space-y-1">
-          <label className="text-[11px] text-muted-foreground">模态</label>
-          <MultiCheckDropdown options={MODALITIES} selected={filters.modalities} onChange={v => setFilters({ ...filters, modalities: v })} placeholder="全部" className="w-[120px]" />
-        </div>
-        {/* Auth scope */}
-        <div className="space-y-1">
-          <label className="text-[11px] text-muted-foreground">授权范围</label>
-          <MultiCheckDropdown options={scopeOptions} selected={filters.scopes} onChange={v => setFilters({ ...filters, scopes: v })} placeholder="全部" className="w-[130px]" />
-        </div>
-        {/* Time */}
-        <div className="space-y-1">
-          <label className="text-[11px] text-muted-foreground">{timeLabel}</label>
+
+          {/* Modality */}
+          <MultiCheckDropdown options={MODALITIES} selected={filters.modalities}
+            onChange={v => setFilters({ ...filters, modalities: v })} placeholder="模态 ∨ 全部" className="w-[140px]" />
+
+          {/* Auth scope */}
+          <MultiCheckDropdown options={scopeOptions} selected={filters.scopes}
+            onChange={v => setFilters({ ...filters, scopes: v })} placeholder="授权范围 ∨ 全部" className="w-[160px]" />
+
+          {/* Time */}
           <DateRangePicker from={filters.dateFrom} to={filters.dateTo}
-            onChange={(f, t) => setFilters({ ...filters, dateFrom: f, dateTo: t })} placeholder="选择时间范围" />
+            onChange={(f, t) => setFilters({ ...filters, dateFrom: f, dateTo: t })} placeholder={timeLabel} />
+
+          {/* Advanced toggle */}
+          <button onClick={() => setShowAdvanced(!showAdvanced)}
+            className={cn("h-9 px-3 text-sm border rounded-md flex items-center gap-1.5 transition-colors",
+              showAdvanced ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/30 text-muted-foreground hover:text-foreground hover:border-primary/30")}>
+            <Filter className="w-3.5 h-3.5" />
+            高级筛选
+            {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
         </div>
-        {/* Tag filter */}
-        <div className="space-y-1">
-          <label className="text-[11px] text-muted-foreground">标签筛选</label>
-          <div className="flex gap-1.5">
-            <select value={filters.tagKey} onChange={e => setFilters({ ...filters, tagKey: e.target.value })}
-              className="px-2 py-1.5 text-xs border rounded-md bg-card w-[90px]">
-              <option value="">标签名</option>
-              {ALL_TAG_KEYS.map(k => <option key={k}>{k}</option>)}
-            </select>
-            <select value={filters.tagValue} onChange={e => setFilters({ ...filters, tagValue: e.target.value })}
-              className="px-2 py-1.5 text-xs border rounded-md bg-card w-[90px]">
-              <option value="">标签值</option>
-              {ALL_TAG_VALUES.map(v => <option key={v}>{v}</option>)}
-            </select>
+
+        {/* Advanced filters row */}
+        {showAdvanced && (
+          <div className="flex items-center gap-3 pt-2 border-t border-dashed">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">标签名</span>
+              <select value={filters.tagKey} onChange={e => setFilters({ ...filters, tagKey: e.target.value })}
+                className="h-9 px-3 text-sm border rounded-md bg-muted/30 w-[120px]">
+                <option value="">全部</option>
+                {ALL_TAG_KEYS.map(k => <option key={k}>{k}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">标签值</span>
+              <select value={filters.tagValue} onChange={e => setFilters({ ...filters, tagValue: e.target.value })}
+                className="h-9 px-3 text-sm border rounded-md bg-muted/30 w-[120px]">
+                <option value="">全部</option>
+                {ALL_TAG_VALUES.map(v => <option key={v}>{v}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">{creatorLabel}</span>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <input value={filters.creator} onChange={e => setFilters({ ...filters, creator: e.target.value })}
+                  placeholder="模糊搜索"
+                  className="h-9 w-[140px] pl-8 pr-3 text-sm border rounded-md bg-muted/30 focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+            </div>
           </div>
-        </div>
-        {/* Creator */}
-        <div className="space-y-1">
-          <label className="text-[11px] text-muted-foreground">{creatorLabel}</label>
-          <input value={filters.creator} onChange={e => setFilters({ ...filters, creator: e.target.value })}
-            placeholder="模糊搜索" className="w-[120px] px-2 py-1.5 text-xs border rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30" />
-        </div>
-        {/* Actions */}
-        <div className="flex gap-2 ml-auto self-end">
-          <Button variant="outline" size="sm" onClick={onReset} className="h-[32px] gap-1 text-xs"><RotateCcw className="w-3 h-3" />重置</Button>
-          {onAdd && <Button size="sm" onClick={onAdd} className="h-[32px] gap-1 text-xs"><Plus className="w-3 h-3" />新增数据集</Button>}
+        )}
+
+        {/* Actions row */}
+        <div className="flex items-center justify-between pt-1">
+          <Button variant="outline" size="sm" onClick={onReset}
+            className={cn("h-8 gap-1.5 text-xs", !hasActiveFilters && "opacity-50")} disabled={!hasActiveFilters}>
+            <RotateCcw className="w-3 h-3" />重置
+          </Button>
+          {onAdd && (
+            <Button size="sm" onClick={onAdd} className="h-8 gap-1.5 text-xs">
+              <Plus className="w-3.5 h-3.5" />新增数据集
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Active filter tags */}
+      <ActiveFilterTags filters={filters} onRemove={handleRemoveFilter} onClear={onReset} />
     </div>
   );
 }
 
 /* ─── Empty State ─── */
-function EmptyState({ message, guide }: { message: string; guide: string }) {
+function EmptyState({ message, guide, onReset }: { message: string; guide: string; onReset?: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
         <Search className="w-7 h-7 text-muted-foreground" />
       </div>
       <p className="text-sm font-medium text-foreground mb-1">{message}</p>
-      <p className="text-xs text-muted-foreground">{guide}</p>
+      <p className="text-xs text-muted-foreground mb-3">{guide}</p>
+      {onReset && (
+        <Button variant="outline" size="sm" onClick={onReset} className="gap-1.5 text-xs">
+          <RotateCcw className="w-3 h-3" />重置筛选
+        </Button>
+      )}
     </div>
   );
 }
@@ -391,6 +476,7 @@ const DataManagementDatasets = () => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
+  const [editTarget, setEditTarget] = useState<Dataset | null>(null);
   const [filters, setFilters] = useState(defaultFilters());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -425,12 +511,29 @@ const DataManagementDatasets = () => {
     });
   }, [filters]);
 
-  // Create form
-  if (showCreate) {
+  // Build edit data from dataset
+  const buildEditData = (ds: Dataset): DatasetEditData => ({
+    id: ds.id, name: ds.name, desc: ds.desc || "", purpose: ds.purpose, modality: ds.modality,
+    textType: ds.type !== "-" ? ds.type : "", dsTags: ds.tags, scope: ds.scope,
+    selectedUsers: [], selectedRoles: [], authPerms: ["读数据集"],
+    sysCatalogs: ["文本数据"], customCatalogs: [],
+    version: ds.latestVersion, storageLocation: "系统默认存储", storageFormat: "Lance", versionDesc: "",
+  });
+
+  // Create/Edit form
+  if (showCreate || editTarget) {
     return (
       <DatasetCreateForm
-        onBack={() => setShowCreate(false)}
-        onCreated={(ds: any) => { setMyDs(prev => [ds, ...prev]); setShowCreate(false); setActiveTab(0); }}
+        onBack={() => { setShowCreate(false); setEditTarget(null); }}
+        onCreated={(ds: any) => {
+          if (editTarget) {
+            setMyDs(prev => prev.map(d => d.id === editTarget.id ? { ...d, ...ds, createdAt: d.createdAt } : d));
+          } else {
+            setMyDs(prev => [ds, ...prev]);
+          }
+          setShowCreate(false); setEditTarget(null); setActiveTab(0);
+        }}
+        editData={editTarget ? buildEditData(editTarget) : undefined}
       />
     );
   }
@@ -446,52 +549,58 @@ const DataManagementDatasets = () => {
   const renderMyDatasets = () => {
     const filtered = applyFilters(myDs);
     const { items, total } = paginate(filtered);
+    const noFiltersActive = !filters.name && !filters.modalities.length && !filters.scopes.length && !filters.dateFrom && !filters.tagKey && !filters.tagValue && !filters.creator;
     return (
-      <>
-        <div className="rounded-lg border bg-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted/30 border-b">
-                  {["数据集名称", "数据集ID", "模态", "数据集标签", "最新版本", "授权范围", "创建人", "创建时间", "更新时间", "操作"].map(h => (
-                    <th key={h} className="text-left py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((ds, idx) => (
-                  <tr key={ds.id} className="border-b last:border-0 hover:bg-muted/20 group">
-                    <td className="py-3 px-3 font-medium text-foreground max-w-[200px] truncate">{ds.name}</td>
-                    <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
-                    <td className="py-3 px-3"><span className="status-tag status-tag-info">{ds.modality}</span></td>
-                    <td className="py-3 px-3">
-                      <TagCell tags={ds.tags} onEdit={() => setTagEditTarget({ idx: myDs.indexOf(ds), tab: 0 })} />
-                    </td>
-                    <td className="py-3 px-3 text-xs text-muted-foreground">{ds.latestVersion}</td>
-                    <td className="py-3 px-3 text-xs text-muted-foreground">{ds.scope}</td>
-                    <td className="py-3 px-3 text-muted-foreground text-xs">{ds.creator}</td>
-                    <td className="py-3 px-3 text-muted-foreground text-xs">{ds.createdAt}</td>
-                    <td className="py-3 px-3 text-muted-foreground text-xs">{ds.updatedAt}</td>
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-1">
-                        <button className="p-1 rounded hover:bg-muted/50" title="编辑"><Edit className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        <button className="p-1 rounded hover:bg-muted/50" title="删除" onClick={() => setConfirmDialog({
-                          title: "删除数据集", desc: `确认删除「${ds.name}」吗？删除后数据将无法恢复。`,
-                          onConfirm: () => { setMyDs(prev => prev.filter(d => d.id !== ds.id)); toast({ title: "数据集已删除" }); }
-                        })}><Trash2 className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                      </div>
-                    </td>
-                  </tr>
+      <div className="rounded-lg border bg-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/30 border-b">
+                {["数据集名称", "数据集ID", "模态", "数据集标签", "最新版本", "授权范围", "创建人", "创建时间", "更新时间", "操作"].map(h => (
+                  <th key={h} className="text-left py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                 ))}
-                {items.length === 0 && (
-                  <tr><td colSpan={10}><EmptyState message="暂无数据集" guide="点击上方「新增数据集」按钮创建" /></td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <Pagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((ds) => (
+                <tr key={ds.id} className="border-b last:border-0 hover:bg-muted/20 group">
+                  <td className="py-3 px-3 font-medium text-foreground max-w-[200px] truncate">{ds.name}</td>
+                  <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
+                  <td className="py-3 px-3"><span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span></td>
+                  <td className="py-3 px-3">
+                    <TagCell tags={ds.tags} onEdit={() => setTagEditTarget({ idx: myDs.indexOf(ds), tab: 0 })} />
+                  </td>
+                  <td className="py-3 px-3 text-xs text-muted-foreground">{ds.latestVersion}</td>
+                  <td className="py-3 px-3 text-xs text-muted-foreground">{ds.scope}</td>
+                  <td className="py-3 px-3 text-muted-foreground text-xs">{ds.creator}</td>
+                  <td className="py-3 px-3 text-muted-foreground text-xs">{ds.createdAt}</td>
+                  <td className="py-3 px-3 text-muted-foreground text-xs">{ds.updatedAt}</td>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-1">
+                      <button className="p-1 rounded hover:bg-muted/50" title="编辑" onClick={() => setEditTarget(ds)}>
+                        <Edit className="w-3.5 h-3.5 text-muted-foreground" />
+                      </button>
+                      <button className="p-1 rounded hover:bg-muted/50" title="删除" onClick={() => setConfirmDialog({
+                        title: "删除数据集", desc: `确认删除「${ds.name}」吗？删除后数据将无法恢复。`,
+                        onConfirm: () => { setMyDs(prev => prev.filter(d => d.id !== ds.id)); toast({ title: "数据集已删除" }); }
+                      })}><Trash2 className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {items.length === 0 && (
+                <tr><td colSpan={10}>
+                  <EmptyState
+                    message={noFiltersActive ? "暂无数据集" : "无匹配结果"}
+                    guide={noFiltersActive ? "点击上方「新增数据集」按钮创建" : "请调整筛选条件重试"}
+                    onReset={noFiltersActive ? undefined : resetFilters} />
+                </td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
-      </>
+        {total > 0 && <PaginationBar total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
+      </div>
     );
   };
 
@@ -517,7 +626,7 @@ const DataManagementDatasets = () => {
                 <tr key={ds.id} className="border-b last:border-0 hover:bg-muted/20 group">
                   <td className="py-3 px-3 font-medium text-foreground max-w-[200px] truncate">{ds.name}</td>
                   <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
-                  <td className="py-3 px-3"><span className="status-tag status-tag-info">{ds.modality}</span></td>
+                  <td className="py-3 px-3"><span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span></td>
                   <td className="py-3 px-3"><TagCell tags={ds.tags} /></td>
                   <td className="py-3 px-3 text-xs text-muted-foreground">{ds.latestVersion}</td>
                   <td className="py-3 px-3"><span className="px-1.5 py-0.5 rounded text-[10px] bg-accent text-accent-foreground">{ds.authLevel}</span></td>
@@ -538,12 +647,12 @@ const DataManagementDatasets = () => {
                 </tr>
               ))}
               {items.length === 0 && (
-                <tr><td colSpan={10}><EmptyState message="无匹配结果" guide="请调整筛选条件重试" /></td></tr>
+                <tr><td colSpan={10}><EmptyState message="无匹配结果" guide="请调整筛选条件重试" onReset={resetFilters} /></td></tr>
               )}
             </tbody>
           </table>
         </div>
-        <Pagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
+        {total > 0 && <PaginationBar total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
       </div>
     );
   };
@@ -570,7 +679,7 @@ const DataManagementDatasets = () => {
                 <tr key={ds.id} className="border-b last:border-0 hover:bg-muted/20 group">
                   <td className="py-3 px-3 font-medium text-foreground max-w-[200px] truncate">{ds.name}</td>
                   <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
-                  <td className="py-3 px-3"><span className="status-tag status-tag-info">{ds.modality}</span></td>
+                  <td className="py-3 px-3"><span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span></td>
                   <td className="py-3 px-3"><TagCell tags={ds.tags} /></td>
                   <td className="py-3 px-3 text-xs text-muted-foreground">{ds.latestVersion}</td>
                   <td className="py-3 px-3"><span className="px-1.5 py-0.5 rounded text-[10px] bg-accent text-accent-foreground">{ds.authLevel}</span></td>
@@ -591,17 +700,17 @@ const DataManagementDatasets = () => {
                 </tr>
               ))}
               {items.length === 0 && (
-                <tr><td colSpan={10}><EmptyState message="无匹配结果" guide="请调整筛选条件重试" /></td></tr>
+                <tr><td colSpan={10}><EmptyState message="无匹配结果" guide="请调整筛选条件重试" onReset={resetFilters} /></td></tr>
               )}
             </tbody>
           </table>
         </div>
-        <Pagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
+        {total > 0 && <PaginationBar total={total} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
       </div>
     );
   };
 
-  // Get tags for tag editor
+  // Tag editor
   const getTagEditTags = (): KVTag[] => {
     if (!tagEditTarget) return [];
     if (tagEditTarget.tab === 0) return myDs[tagEditTarget.idx]?.tags || [];
