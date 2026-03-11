@@ -12,6 +12,7 @@ export function GlobalSidebar() {
   const [wsSearch, setWsSearch] = useState("");
 
   const activePlatform = subPlatforms.find(p => location.pathname.startsWith(p.routePrefix));
+  const isConsole = activePlatform?.id === "007" || location.pathname.startsWith("/console");
   const menuItems = activePlatform ? platformMenus[activePlatform.id] || [] : [];
 
   const filteredWorkspaces = mockWorkspaces.filter(ws =>
