@@ -250,7 +250,7 @@ const ConsoleSpaces = () => {
                         <>
                           <div className="fixed inset-0 z-40" onClick={() => setActionMenu(null)} />
                           <div className="absolute right-0 top-full mt-1 w-32 bg-card border rounded-lg shadow-lg z-50 p-1">
-                            <button onClick={() => { setShowDetail(s.id); setActionMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded hover:bg-muted/50"><Eye className="w-3 h-3" />查看详情</button>
+                            <button onClick={() => { setShowDetail(s); setActionMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded hover:bg-muted/50"><Eye className="w-3 h-3" />查看详情</button>
                             <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded hover:bg-muted/50"><Edit2 className="w-3 h-3" />编辑</button>
                             <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded hover:bg-muted/50"><Power className="w-3 h-3" />{s.status === "启用" ? "停用" : "启用"}</button>
                             <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded hover:bg-muted/50 text-destructive"><Trash2 className="w-3 h-3" />删除</button>
