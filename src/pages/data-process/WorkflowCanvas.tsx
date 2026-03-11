@@ -1340,7 +1340,7 @@ const WorkflowCanvas = () => {
                 /* Dataset output */
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[10px] text-muted-foreground">输出方式</label>
+                    <label className="text-[10px] text-muted-foreground">输出类型</label>
                     <div className="flex gap-2 mt-1">
                       <button onClick={() => setOutputTargetType("new")}
                         className={`flex-1 px-2 py-1.5 text-xs rounded-md border ${outputTargetType === "new" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted/50"}`}>
@@ -1383,6 +1383,31 @@ const WorkflowCanvas = () => {
                           </select>
                         </div>
                       )}
+
+                      {/* 输出方式 */}
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">输出方式</label>
+                        <div className="flex gap-2 mt-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button onClick={() => setOutputWriteMode("append")}
+                                className={`flex-1 px-2 py-1.5 text-xs rounded-md border ${outputWriteMode === "append" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted/50"}`}>
+                                追加输出
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[220px]">直接写入当前数据集的版本，不做任何处理（如去重等）</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button onClick={() => setOutputWriteMode("clear")}
+                                className={`flex-1 px-2 py-1.5 text-xs rounded-md border ${outputWriteMode === "clear" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted/50"}`}>
+                                清空后输出
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[220px]">清空当前数据集版本所有数据后输出</TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </div>
                     </>
                   )}
                 </div>
