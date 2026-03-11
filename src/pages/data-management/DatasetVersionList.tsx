@@ -412,7 +412,19 @@ export default function DatasetVersionList({ dataset, permissions, onBack, onVie
         </button>
         <div className="flex-1">
           <h1 className="text-lg font-semibold text-foreground">{dataset.name}</h1>
-          <p className="text-xs text-muted-foreground">数据集版本管理</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-muted-foreground">数据集版本管理</p>
+            {!isMine && (
+              <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium",
+                perms.source === 'subscribed' ? "bg-accent text-accent-foreground" : "bg-primary/10 text-primary"
+              )}>
+                {perms.source === 'subscribed' ? '订购' : '分享'}
+                {perms.canWrite && ' · 可写'}
+                {perms.canCreateVersion && ' · 可建版本'}
+                {!perms.canWrite && !perms.canCreateVersion && ' · 只读'}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
