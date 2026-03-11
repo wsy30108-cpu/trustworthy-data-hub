@@ -1184,8 +1184,33 @@ const WorkflowCanvas = () => {
     if (debugTimerRef.current) { clearInterval(debugTimerRef.current); debugTimerRef.current = null; }
     setShowLogPanel(false);
     setLogNodeId(null);
+    setPanelMode("default");
     toast.info("调试已停止");
   }, []);
+
+  /* ─── Submit run instance ─── */
+  const submitRunInstance = useCallback(() => {
+    const now = new Date();
+    const snapshotVersion = `SNAP-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}-${String(now.getHours()).padStart(2,"0")}${String(now.getMinutes()).padStart(2,"0")}${String(now.getSeconds()).padStart(2,"0")}`;
+    const instance: WorkflowInstance = {
+      id: `inst-${Date.now()}`,
+      snapshotVersion,
+      createdAt: now.toISOString(),
+      status: "pending",
+      nodes: JSON.parse(JSON.stringify(nodes)),
+      connections: JSON.parse(JSON.stringify(connections)),
+      config: { maxParallel: wfMaxParallel, timeout: wfTimeout, failStrategy: wfFailStrategy, retryMax: wfRetryMax, retryInterval: wfRetryInterval },
+    };
+    setWorkflowInstances(prev => [instance, ...prev]);
+    setPanelMode("default");
+    toast.success(`实例 ${snapshotVersion} 已提交运行`);
+  }, [nodes, connections, wfMaxParallel, wfTimeout, wfFailStrategy, wfRetryMax, wfRetryInterval]);
+
+  /* ─── Submit debug with params ─── */
+  const submitDebugRun = useCallback(() => {
+    setPanelMode("default");
+    startDebug();
+  }, [startDebug]);
 
   /* ─── Workflow Validation ─── */
   const validateWorkflow = useCallback((): boolean => {
