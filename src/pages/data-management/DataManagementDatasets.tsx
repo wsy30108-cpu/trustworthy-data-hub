@@ -692,10 +692,40 @@ const DataManagementDatasets = () => {
   });
 
   // Sub-page routing
+  // Build permissions for version list based on source tab
+  const buildVersionPermissions = () => {
+    if (activeTab === 1) {
+      // Subscribed dataset
+      const sds = currentDataset as SubscribedDataset;
+      return {
+        source: 'subscribed' as const,
+        canRead: true,
+        canWrite: sds?.authLevel === "读写",
+        canCreateVersion: false,
+        visibleVersions: sds?.subscribedVersions,
+      };
+    }
+    if (activeTab === 2) {
+      // Shared dataset
+      const shds = currentDataset as SharedDataset;
+      const perms = shds?.authPerms || [];
+      return {
+        source: 'shared' as const,
+        canRead: perms.includes("读数据集"),
+        canWrite: perms.includes("写数据集"),
+        canCreateVersion: perms.includes("创建数据集版本"),
+        visibleVersions: shds?.sharedVersions,
+      };
+    }
+    return { source: 'mine' as const, canRead: true, canWrite: true, canCreateVersion: true };
+  };
+
   if (subPage === "versionList" && currentDataset) {
+    const perms = buildVersionPermissions();
     return (
       <DatasetVersionList
         dataset={buildDatasetInfo(currentDataset)}
+        permissions={perms}
         onBack={() => { setSubPage("list"); setCurrentDataset(null); }}
         onViewDetail={(ver, ds) => { setCurrentVersion(ver); setSubPage("versionDetail"); }}
         onCreateVersion={(ds, versions) => { setCurrentVersions(versions); setSubPage("versionCreate"); }}
