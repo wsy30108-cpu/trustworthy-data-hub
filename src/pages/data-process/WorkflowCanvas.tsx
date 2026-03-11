@@ -6,7 +6,8 @@ import {
   X, PanelLeftClose, PanelLeftOpen, Search, Plus, Minus,
   Type, Image, Mic, Video, Layers, Database, FileOutput, Wrench,
   AlertTriangle, CheckCircle2, HelpCircle, Eye, Upload, Map,
-  PanelRightClose, PanelRightOpen, Code2, LayoutGrid, AlignHorizontalDistributeCenter, Info
+  PanelRightClose, PanelRightOpen, Code2, LayoutGrid, AlignHorizontalDistributeCenter, Info,
+  Bug, Square, Clock, Activity, Terminal, Loader2
 } from "lucide-react";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
