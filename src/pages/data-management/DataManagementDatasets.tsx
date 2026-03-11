@@ -43,14 +43,14 @@ const myDatasets: Dataset[] = [
 ];
 
 const subscribedDatasets: SubscribedDataset[] = [
-  { id: "DS-S001", name: "金融新闻语料库", modality: "文本", purpose: "预训练", type: "通用文本", scope: "只读", versions: 6, latestVersion: "V6.0", size: "15.2GB", files: 3200000, tags: [{ key: "领域", value: "金融" }, { key: "语言", value: "中文" }], status: "活跃", creator: "数据市场官方", createdAt: "2026-01-10", updatedAt: "2026-03-05", publisher: "数据市场官方", subscribedAt: "2026-02-01", authLevel: "只读" },
-  { id: "DS-S002", name: "开源医学影像数据集", modality: "图像", purpose: "模型微调", type: "-", scope: "可导入版本", versions: 3, latestVersion: "V3.0", size: "89.5GB", files: 75000, tags: [{ key: "领域", value: "医疗" }], status: "活跃", creator: "医疗AI实验室", createdAt: "2025-11-20", updatedAt: "2026-02-15", publisher: "医疗AI实验室", subscribedAt: "2026-01-15", authLevel: "可导入版本" },
-  { id: "DS-S003", name: "多语言翻译平行语料", modality: "文本", purpose: "预训练", type: "机器翻译", scope: "读写", versions: 8, latestVersion: "V8.0", size: "32.1GB", files: 5000000, tags: [{ key: "语言", value: "多语种" }], status: "活跃", creator: "NLP开放联盟", createdAt: "2025-10-01", updatedAt: "2026-03-02", publisher: "NLP开放联盟", subscribedAt: "2026-02-20", authLevel: "读写" },
+  { id: "DS-S001", name: "金融新闻语料库", modality: "文本", purpose: "预训练", type: "通用文本", scope: "只读", versions: 6, latestVersion: "V6.0", size: "15.2GB", files: 3200000, tags: [{ key: "领域", value: "金融" }, { key: "语言", value: "中文" }], status: "活跃", creator: "数据市场官方", createdAt: "2026-01-10", updatedAt: "2026-03-05", publisher: "数据市场官方", subscribedAt: "2026-02-01", authLevel: "只读", subscribedVersions: ["V3.0", "V2.0"] },
+  { id: "DS-S002", name: "开源医学影像数据集", modality: "图像", purpose: "模型微调", type: "-", scope: "读写", versions: 3, latestVersion: "V3.0", size: "89.5GB", files: 75000, tags: [{ key: "领域", value: "医疗" }], status: "活跃", creator: "医疗AI实验室", createdAt: "2025-11-20", updatedAt: "2026-02-15", publisher: "医疗AI实验室", subscribedAt: "2026-01-15", authLevel: "读写", subscribedVersions: ["V3.0", "V1.0"] },
+  { id: "DS-S003", name: "多语言翻译平行语料", modality: "文本", purpose: "预训练", type: "机器翻译", scope: "只读", versions: 8, latestVersion: "V8.0", size: "32.1GB", files: 5000000, tags: [{ key: "语言", value: "多语种" }], status: "活跃", creator: "NLP开放联盟", createdAt: "2025-10-01", updatedAt: "2026-03-02", publisher: "NLP开放联盟", subscribedAt: "2026-02-20", authLevel: "只读", subscribedVersions: ["V2.0"] },
 ];
 
 const sharedDatasets: SharedDataset[] = [
-  { id: "DS-H001", name: "内部标注训练集", modality: "文本", purpose: "模型微调", type: "文本 SFT", scope: "只读", versions: 2, latestVersion: "V2.0", size: "3.5GB", files: 45000, tags: [{ key: "部门", value: "AI中心" }], status: "活跃", creator: "王强", createdAt: "2026-01-25", updatedAt: "2026-03-01", sharer: "王强", sharedAt: "2026-02-10", authLevel: "只读" },
-  { id: "DS-H002", name: "产品图像分类数据集", modality: "图像", purpose: "模型微调", type: "-", scope: "可写", versions: 4, latestVersion: "V4.0", size: "18.7GB", files: 28000, tags: [{ key: "领域", value: "电商" }, { key: "标注", value: "已标注" }], status: "活跃", creator: "赵丽", createdAt: "2025-12-15", updatedAt: "2026-02-28", sharer: "赵丽 / 电商空间", sharedAt: "2026-01-20", authLevel: "可导入版本" },
+  { id: "DS-H001", name: "内部标注训练集", modality: "文本", purpose: "模型微调", type: "文本 SFT", scope: "只读", versions: 2, latestVersion: "V2.0", size: "3.5GB", files: 45000, tags: [{ key: "部门", value: "AI中心" }], status: "活跃", creator: "王强", createdAt: "2026-01-25", updatedAt: "2026-03-01", sharer: "王强", sharedAt: "2026-02-10", authPerms: ["读数据集"], sharedVersions: ["V2.0"] },
+  { id: "DS-H002", name: "产品图像分类数据集", modality: "图像", purpose: "模型微调", type: "-", scope: "可写", versions: 4, latestVersion: "V4.0", size: "18.7GB", files: 28000, tags: [{ key: "领域", value: "电商" }, { key: "标注", value: "已标注" }], status: "活跃", creator: "赵丽", createdAt: "2025-12-15", updatedAt: "2026-02-28", sharer: "赵丽 / 电商空间", sharedAt: "2026-01-20", authPerms: ["读数据集", "写数据集", "创建数据集版本"], sharedVersions: ["V3.0", "V2.0", "V1.0"] },
 ];
 
 /* ─── Constants ─── */
