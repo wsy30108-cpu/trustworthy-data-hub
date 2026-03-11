@@ -2146,6 +2146,40 @@ const WorkflowCanvas = () => {
                 </svg>
               </div>
             )}
+
+            {/* ─── Debug Log Panel ─── */}
+            {debugMode && showLogPanel && logNodeId && (
+              <div className="absolute bottom-0 left-0 right-0 bg-card border-t shadow-lg animate-fade-in" style={{ height: 200 }}>
+                <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-xs font-medium text-foreground">
+                      {nodes.find(n => n.id === logNodeId)?.label || logNodeId} — 实时日志
+                    </span>
+                    {debugNodeStates[logNodeId]?.status === "running" && (
+                      <Loader2 className="w-3 h-3 text-primary animate-spin" />
+                    )}
+                    {debugNodeStates[logNodeId]?.status === "done" && (
+                      <CheckCircle2 className="w-3 h-3" style={{ color: "hsl(142 71% 45%)" }} />
+                    )}
+                  </div>
+                  <button onClick={() => setShowLogPanel(false)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="overflow-y-auto p-3 font-mono text-[11px] text-foreground/80 space-y-0.5" style={{ height: 160 }}>
+                  {(debugLogs[logNodeId] || []).length === 0 ? (
+                    <p className="text-muted-foreground">等待执行...</p>
+                  ) : (
+                    (debugLogs[logNodeId] || []).map((line, i) => (
+                      <div key={i} className="leading-relaxed">
+                        <span className="text-muted-foreground">{line}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
           )}
 
