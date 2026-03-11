@@ -1925,6 +1925,12 @@ const WorkflowCanvas = () => {
 
             {/* Nodes & connections layer */}
             <svg ref={svgRef} className="absolute inset-0 w-full h-full" style={{ overflow: "visible" }}>
+              {/* Flow animation defs */}
+              <defs>
+                <marker id="flowDot" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="4" markerHeight="4">
+                  <circle cx="3" cy="3" r="3" fill="hsl(var(--primary))" />
+                </marker>
+              </defs>
               <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
                 {/* Connections */}
                 {connections.map(conn => {
