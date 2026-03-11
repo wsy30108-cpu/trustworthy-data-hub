@@ -56,7 +56,7 @@ const sharedDatasets: SharedDataset[] = [
 /* ─── Constants ─── */
 const MODALITIES = ["文本", "图像", "语音", "视频", "表格", "跨模态"];
 const AUTH_SCOPES_MINE = ["仅数据集所有者", "指定用户", "指定空间角色", "空间内全体成员"];
-const AUTH_SCOPES_SUB = ["只读", "读写", "可导入版本"];
+const AUTH_SCOPES_SUB = ["只读", "读写"];
 
 // Tag tree structure: key -> values[]
 const TAG_TREE: Record<string, string[]> = {
