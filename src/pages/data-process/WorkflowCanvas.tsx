@@ -638,27 +638,15 @@ const WorkflowCanvas = () => {
   const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [viewMode, setViewMode] = useState<"visual" | "json">("visual");
 
-  // Accordion state
-  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(["文本"]));
-  const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
+  // Input sampling mode
+  const [inputSamplingMode, setInputSamplingMode] = useState<"all" | "ratio" | "count">("all");
+  const [inputSampleCount, setInputSampleCount] = useState(1000);
 
-  // Workflow global config
-  const [wfDesc, setWfDesc] = useState("");
-  const [wfMaxParallel, setWfMaxParallel] = useState(4);
-  const [wfTimeout, setWfTimeout] = useState(3600);
-  const [wfFailStrategy, setWfFailStrategy] = useState<"stop" | "skip" | "retry">("stop");
-  const [wfRetryMax, setWfRetryMax] = useState(3);
-  const [wfRetryInterval, setWfRetryInterval] = useState(60);
-
-  // Input/Output node config
-  const [inputSourceType, setInputSourceType] = useState<"dataset" | "file">("dataset");
-  const [inputDataset, setInputDataset] = useState("");
-  const [inputVersion, setInputVersion] = useState("");
-  const [inputSampleRatio, setInputSampleRatio] = useState(100);
-  const [outputTargetType, setOutputTargetType] = useState<"new" | "append">("new");
-  const [outputDataset, setOutputDataset] = useState("");
-  const [outputVersion, setOutputVersion] = useState("");
+  // Output write mode
+  const [outputWriteMode, setOutputWriteMode] = useState<"append" | "clear">("append");
   const [outputFormat, setOutputFormat] = useState("jsonl");
   const [outputNewName, setOutputNewName] = useState("");
 
