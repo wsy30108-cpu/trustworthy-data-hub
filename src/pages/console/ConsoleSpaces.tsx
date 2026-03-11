@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { Plus, Search, MoreHorizontal, Eye, Edit2, Power, Trash2, Boxes } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import ConsoleSpaceDetail from "./ConsoleSpaceDetail";
 
 type SpaceType = "all" | "org" | "team" | "personal";
 type SpaceStatus = "all" | "active" | "disabled";
