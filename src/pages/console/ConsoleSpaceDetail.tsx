@@ -317,6 +317,11 @@ function SpaceInfoTab({ space, onUpdate }: { space: SpaceData; onUpdate: (s: Spa
 }
 
 /* ═══════════════ Tab 2: Permissions ═══════════════ */
+interface AddCandidate {
+  id: string; name: string; account: string; dept?: string; source: "org" | "search";
+  selectedRoles: string[];
+}
+
 function PermissionsTab({ space }: { space: SpaceData }) {
   const { toast } = useToast();
   const [members, setMembers] = useState<SpaceMember[]>(MOCK_MEMBERS);
@@ -326,25 +331,83 @@ function PermissionsTab({ space }: { space: SpaceData }) {
   const [roleTarget, setRoleTarget] = useState<SpaceMember | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; desc: string; onConfirm: () => void } | null>(null);
 
-  // Add member form
-  const [addName, setAddName] = useState("");
-  const [addAccount, setAddAccount] = useState("");
-  const [addRole, setAddRole] = useState(SPACE_ROLES[1]);
+  // Role edit (multi)
+  const [editRoles, setEditRoles] = useState<string[]>([]);
 
-  // Role edit
-  const [editRole, setEditRole] = useState("");
+  // Add member state
+  const [addSearch, setAddSearch] = useState("");
+  const [addAccountSearch, setAddAccountSearch] = useState("");
+  const [candidates, setCandidates] = useState<AddCandidate[]>([]);
+  const [foundExtUser, setFoundExtUser] = useState<{ name: string; account: string } | null>(null);
 
   const filtered = members.filter(m => {
     if (search && !m.name.includes(search) && !m.account.includes(search)) return false;
-    if (roleFilter !== "all" && m.role !== roleFilter) return false;
+    if (roleFilter !== "all" && !m.roles.includes(roleFilter)) return false;
     return true;
   });
 
-  const handleAdd = () => {
-    if (!addName.trim() || !addAccount.trim()) { toast({ title: "请填写完整信息", variant: "destructive" }); return; }
-    setMembers(prev => [...prev, { id: `m${Date.now()}`, name: addName, account: addAccount, role: addRole, joinedAt: new Date().toISOString().slice(0, 10), status: "启用" }]);
-    toast({ title: `成员「${addName}」已添加` });
-    setAddName(""); setAddAccount(""); setShowAdd(false);
+  // Org members not already in space
+  const availableOrgMembers = MOCK_ORG_MEMBERS.filter(
+    om => !members.some(m => m.account === om.account) && !candidates.some(c => c.account === om.account)
+  );
+  const filteredOrgMembers = availableOrgMembers.filter(
+    om => !addSearch || om.name.includes(addSearch) || om.account.includes(addSearch) || (om.dept && om.dept.includes(addSearch))
+  );
+
+  const toggleCandidate = (om: typeof MOCK_ORG_MEMBERS[0]) => {
+    setCandidates(prev => {
+      const exists = prev.find(c => c.account === om.account);
+      if (exists) return prev.filter(c => c.account !== om.account);
+      return [...prev, { id: om.id, name: om.name, account: om.account, dept: om.dept, source: "org", selectedRoles: [SPACE_ROLES[1]] }];
+    });
+  };
+
+  const setCandidateRoles = (account: string, roles: string[]) => {
+    setCandidates(prev => prev.map(c => c.account === account ? { ...c, selectedRoles: roles } : c));
+  };
+
+  const toggleCandidateRole = (account: string, role: string) => {
+    setCandidates(prev => prev.map(c => {
+      if (c.account !== account) return c;
+      const has = c.selectedRoles.includes(role);
+      const newRoles = has ? c.selectedRoles.filter(r => r !== role) : [...c.selectedRoles, role];
+      return { ...c, selectedRoles: newRoles.length > 0 ? newRoles : c.selectedRoles };
+    }));
+  };
+
+  const handleSearchExtUser = () => {
+    if (!addAccountSearch.trim()) return;
+    // Check if already in space
+    if (members.some(m => m.account === addAccountSearch.trim())) {
+      toast({ title: "该用户已在空间中", variant: "destructive" }); return;
+    }
+    if (candidates.some(c => c.account === addAccountSearch.trim())) {
+      toast({ title: "该用户已在待添加列表中", variant: "destructive" }); return;
+    }
+    // Mock: simulate finding a user
+    const mockFound = { name: `用户_${addAccountSearch.trim()}`, account: addAccountSearch.trim() };
+    setFoundExtUser(mockFound);
+  };
+
+  const addExtUser = () => {
+    if (!foundExtUser) return;
+    setCandidates(prev => [...prev, {
+      id: `ext_${Date.now()}`, name: foundExtUser.name, account: foundExtUser.account,
+      source: "search", selectedRoles: [SPACE_ROLES[1]],
+    }]);
+    setFoundExtUser(null);
+    setAddAccountSearch("");
+  };
+
+  const handleAddConfirm = () => {
+    if (candidates.length === 0) { toast({ title: "请先选择要添加的成员", variant: "destructive" }); return; }
+    const newMembers: SpaceMember[] = candidates.map(c => ({
+      id: c.id, name: c.name, account: c.account, roles: c.selectedRoles,
+      joinedAt: new Date().toISOString().slice(0, 10), status: "启用" as const,
+    }));
+    setMembers(prev => [...prev, ...newMembers]);
+    toast({ title: `已添加 ${candidates.length} 名成员` });
+    setCandidates([]); setShowAdd(false); setAddSearch(""); setAddAccountSearch(""); setFoundExtUser(null);
   };
 
   const handleRemove = (m: SpaceMember) => {
@@ -356,9 +419,9 @@ function PermissionsTab({ space }: { space: SpaceData }) {
   };
 
   const handleRoleSave = () => {
-    if (!roleTarget || !editRole) return;
-    setMembers(prev => prev.map(m => m.id === roleTarget.id ? { ...m, role: editRole } : m));
-    toast({ title: `「${roleTarget.name}」角色已更新为「${editRole}」` });
+    if (!roleTarget || editRoles.length === 0) return;
+    setMembers(prev => prev.map(m => m.id === roleTarget.id ? { ...m, roles: editRoles } : m));
+    toast({ title: `「${roleTarget.name}」角色已更新` });
     setRoleTarget(null);
   };
 
@@ -385,10 +448,10 @@ function PermissionsTab({ space }: { space: SpaceData }) {
 
       {/* Role stats */}
       <div className="flex gap-3 flex-wrap">
-        {SPACE_ROLES.filter(r => members.some(m => m.role === r)).map(r => (
+        {SPACE_ROLES.filter(r => members.some(m => m.roles.includes(r))).map(r => (
           <div key={r} className="px-3 py-1.5 rounded-lg border bg-card text-xs">
             <span className="text-muted-foreground">{r}</span>
-            <span className="ml-2 font-semibold text-foreground">{members.filter(m => m.role === r).length}</span>
+            <span className="ml-2 font-semibold text-foreground">{members.filter(m => m.roles.includes(r)).length}</span>
           </div>
         ))}
       </div>
@@ -408,7 +471,13 @@ function PermissionsTab({ space }: { space: SpaceData }) {
               <tr key={m.id} className="border-b last:border-0 hover:bg-muted/20">
                 <td className="py-3 px-4 font-medium">{m.name}</td>
                 <td className="py-3 px-4 text-muted-foreground text-xs font-mono">{m.account}</td>
-                <td className="py-3 px-4"><span className="px-1.5 py-0.5 rounded text-[10px] bg-primary/10 text-primary font-medium">{m.role}</span></td>
+                <td className="py-3 px-4">
+                  <div className="flex flex-wrap gap-1">
+                    {m.roles.map(r => (
+                      <span key={r} className="px-1.5 py-0.5 rounded text-[10px] bg-primary/10 text-primary font-medium">{r}</span>
+                    ))}
+                  </div>
+                </td>
                 <td className="py-3 px-4 text-muted-foreground text-xs">{m.joinedAt}</td>
                 <td className="py-3 px-4">
                   <span className={cn("px-2 py-0.5 rounded text-xs font-medium",
@@ -417,7 +486,7 @@ function PermissionsTab({ space }: { space: SpaceData }) {
                 </td>
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-1">
-                    <button className="p-1 rounded hover:bg-muted/50" title="编辑角色" onClick={() => { setRoleTarget(m); setEditRole(m.role); }}>
+                    <button className="p-1 rounded hover:bg-muted/50" title="编辑角色" onClick={() => { setRoleTarget(m); setEditRoles([...m.roles]); }}>
                       <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
                     </button>
                     <button className="p-1 rounded hover:bg-muted/50" title="移除" onClick={() => handleRemove(m)}>
@@ -434,41 +503,124 @@ function PermissionsTab({ space }: { space: SpaceData }) {
         </table>
       </div>
 
-      {/* Add Member Dialog */}
-      <Dialog open={showAdd} onOpenChange={v => !v && setShowAdd(false)}>
-        <DialogContent className="max-w-sm">
+      {/* ── Add Member Dialog (enhanced) ── */}
+      <Dialog open={showAdd} onOpenChange={v => { if (!v) { setShowAdd(false); setCandidates([]); setAddSearch(""); setAddAccountSearch(""); setFoundExtUser(null); } }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader><DialogTitle>新增空间成员</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">姓名 <span className="text-destructive">*</span></label>
-              <Input value={addName} onChange={e => setAddName(e.target.value)} placeholder="成员姓名" />
+          <div className="flex-1 overflow-hidden flex flex-col gap-4 min-h-0">
+            {/* Section 1: Select from org */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-foreground">从组织成员中选择</h4>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input value={addSearch} onChange={e => setAddSearch(e.target.value)} placeholder="搜索姓名、账号或部门..."
+                  className="w-full h-9 pl-9 pr-3 text-sm border rounded-md bg-muted/30 focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+              <div className="max-h-40 overflow-y-auto border rounded-md divide-y">
+                {filteredOrgMembers.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">无可选成员</p>
+                )}
+                {filteredOrgMembers.map(om => {
+                  const isSelected = candidates.some(c => c.account === om.account);
+                  return (
+                    <button key={om.id} onClick={() => toggleCandidate(om)}
+                      className={cn("w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-muted/30 transition-colors",
+                        isSelected && "bg-primary/5")}>
+                      <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0",
+                        isSelected ? "bg-primary border-primary" : "border-muted-foreground/30")}>
+                        {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium">{om.name}</span>
+                        <span className="text-xs text-muted-foreground ml-2 font-mono">{om.account}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">{om.dept}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">账号 <span className="text-destructive">*</span></label>
-              <Input value={addAccount} onChange={e => setAddAccount(e.target.value)} placeholder="成员账号" />
+
+            {/* Section 2: Search by account (cross-org) */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-foreground">按账号精确查找（跨组织）</h4>
+              <div className="flex gap-2">
+                <Input value={addAccountSearch} onChange={e => { setAddAccountSearch(e.target.value); setFoundExtUser(null); }}
+                  placeholder="输入用户账号精确查找..." className="h-9 text-sm flex-1" />
+                <Button variant="outline" size="sm" className="h-9 gap-1 text-xs" onClick={handleSearchExtUser}>
+                  <UserSearch className="w-3.5 h-3.5" />查找
+                </Button>
+              </div>
+              {foundExtUser && (
+                <div className="flex items-center gap-3 px-3 py-2 border rounded-md bg-muted/20">
+                  <div className="flex-1">
+                    <span className="text-sm font-medium">{foundExtUser.name}</span>
+                    <span className="text-xs text-muted-foreground ml-2 font-mono">{foundExtUser.account}</span>
+                    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-accent text-accent-foreground">跨组织</span>
+                  </div>
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={addExtUser}>
+                    <Plus className="w-3 h-3 mr-1" />添加
+                  </Button>
+                </div>
+              )}
             </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">角色</label>
-              <select value={addRole} onChange={e => setAddRole(e.target.value)} className="w-full h-9 px-3 text-sm border rounded-md bg-card">
-                {SPACE_ROLES.map(r => <option key={r}>{r}</option>)}
-              </select>
-            </div>
+
+            {/* Section 3: Selected candidates with per-user role config */}
+            {candidates.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-foreground">已选成员 ({candidates.length})</h4>
+                <div className="max-h-48 overflow-y-auto border rounded-md divide-y">
+                  {candidates.map(c => (
+                    <div key={c.account} className="px-3 py-2.5 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{c.name}</span>
+                        <span className="text-xs text-muted-foreground font-mono">{c.account}</span>
+                        {c.source === "search" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent text-accent-foreground">跨组织</span>}
+                        <div className="flex-1" />
+                        <button onClick={() => setCandidates(prev => prev.filter(x => x.account !== c.account))}
+                          className="p-1 rounded hover:bg-muted/50">
+                          <X className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {SPACE_ROLES.map(r => (
+                          <button key={r} onClick={() => toggleCandidateRole(c.account, r)}
+                            className={cn("px-2 py-0.5 rounded text-[11px] border transition-colors",
+                              c.selectedRoles.includes(r)
+                                ? "bg-primary/10 border-primary/30 text-primary font-medium"
+                                : "bg-muted/30 border-transparent text-muted-foreground hover:border-muted-foreground/30"
+                            )}>{r}</button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdd(false)}>取消</Button>
-            <Button onClick={handleAdd}>确认添加</Button>
+          <DialogFooter className="mt-2">
+            <Button variant="outline" onClick={() => { setShowAdd(false); setCandidates([]); }}>取消</Button>
+            <Button onClick={handleAddConfirm} disabled={candidates.length === 0}>
+              确认添加 ({candidates.length})
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Role Edit Dialog */}
+      {/* Role Edit Dialog (multi-role) */}
       <Dialog open={!!roleTarget} onOpenChange={v => !v && setRoleTarget(null)}>
         <DialogContent className="max-w-xs">
           <DialogHeader><DialogTitle>编辑角色 - {roleTarget?.name}</DialogTitle></DialogHeader>
           <div className="space-y-2">
             {SPACE_ROLES.map(r => (
               <label key={r} className="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-muted/50 cursor-pointer text-sm">
-                <input type="radio" checked={editRole === r} onChange={() => setEditRole(r)} className="accent-primary" />{r}
+                <input type="checkbox" checked={editRoles.includes(r)}
+                  onChange={() => {
+                    const has = editRoles.includes(r);
+                    const next = has ? editRoles.filter(x => x !== r) : [...editRoles, r];
+                    if (next.length > 0) setEditRoles(next);
+                  }}
+                  className="accent-primary" />{r}
               </label>
             ))}
           </div>
