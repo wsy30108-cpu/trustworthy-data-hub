@@ -1958,17 +1958,17 @@ const WorkflowCanvas = () => {
               </>
             )}
             <div className="w-px h-5 bg-border mx-1" />
-            <button className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted/50 text-muted-foreground flex items-center gap-1.5" disabled={debugMode}><Save className="w-3.5 h-3.5" /> 保存</button>
+            <button onClick={() => { toast.success("工作流已保存"); }} className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted/50 text-muted-foreground flex items-center gap-1.5" disabled={debugMode}><Save className="w-3.5 h-3.5" /> 保存</button>
             {debugMode ? (
               <button onClick={stopDebug} className="px-3 py-1.5 text-xs bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 flex items-center gap-1.5">
                 <Square className="w-3.5 h-3.5" /> 停止调试
               </button>
             ) : (
               <>
-                <button onClick={() => { if (validateWorkflow()) startDebug(); }} className="px-3 py-1.5 text-xs border border-primary text-primary rounded-md hover:bg-primary/10 flex items-center gap-1.5">
+                <button onClick={() => { if (validateWorkflow()) { setPanelMode("debugConfig"); setRightPanelCollapsed(false); } }} className="px-3 py-1.5 text-xs border border-primary text-primary rounded-md hover:bg-primary/10 flex items-center gap-1.5">
                   <Bug className="w-3.5 h-3.5" /> 调试
                 </button>
-                <button onClick={() => { if (validateWorkflow()) toast.success("校验通过，提交运行"); }} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> 运行</button>
+                <button onClick={() => { if (validateWorkflow()) { setPanelMode("runSubmit"); setRightPanelCollapsed(false); } }} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> 运行</button>
               </>
             )}
           </div>
