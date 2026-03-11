@@ -658,9 +658,10 @@ const DataManagementDatasets = () => {
       if (filters.scopes.length && !filters.scopes.includes(d.scope)) return false;
       // Tag tree filter: selectedTags are "key:value" pairs
       if (filters.selectedTags.length > 0) {
+        const dTags = d.tags || [];
         const match = filters.selectedTags.some(st => {
           const [tk, tv] = st.split(":");
-          return d.tags.some(t => t.key === tk && t.value === tv);
+          return dTags.some(t => t.key === tk && t.value === tv);
         });
         if (!match) return false;
       }
