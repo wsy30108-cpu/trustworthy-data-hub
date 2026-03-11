@@ -666,8 +666,6 @@ const WorkflowCanvas = () => {
   const [outputFormat, setOutputFormat] = useState("jsonl");
   const [outputNewName, setOutputNewName] = useState("");
   const [outputWriteMode, setOutputWriteMode] = useState<"append" | "clear">("append");
-  const [outputFormat, setOutputFormat] = useState("jsonl");
-  const [outputNewName, setOutputNewName] = useState("");
 
   // Minimap drag
   const [minimapDragging, setMinimapDragging] = useState(false);
