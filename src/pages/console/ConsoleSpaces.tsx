@@ -77,6 +77,7 @@ const ConsoleSpaces = () => {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<SpaceType>("all");
   const [statusFilter, setStatusFilter] = useState<SpaceStatus>("all");
+  const [showCreate, setShowCreate] = useState(false);
   const [showDetail, setShowDetail] = useState<typeof mockSpaces[0] | null>(null);
   const [actionMenu, setActionMenu] = useState<string | null>(null);
 
