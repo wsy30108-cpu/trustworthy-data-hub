@@ -365,7 +365,12 @@ export default function DatasetVersionList({ dataset, permissions, onBack, onVie
   const perms: VersionPermissions = permissions || { source: 'mine', canRead: true, canWrite: true, canCreateVersion: true };
   const isMine = perms.source === 'mine';
   const { toast } = useToast();
-  const [versions, setVersions] = useState<DatasetVersion[]>(MOCK_VERSIONS);
+  const [versions, setVersions] = useState<DatasetVersion[]>(() => {
+    if (perms.visibleVersions) {
+      return MOCK_VERSIONS.filter(v => perms.visibleVersions!.includes(v.version));
+    }
+    return MOCK_VERSIONS;
+  });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
