@@ -51,10 +51,8 @@ export const platformMenus: Record<string, MenuItem[]> = {
   "004": [
     { id: "workflows", label: "工作流", icon: Workflow, route: "/data-process/workflows" },
     { id: "templates", label: "模板列表", icon: BookOpen, route: "/data-process/templates" },
-    { id: "template-store", label: "模板商店", icon: Store, route: "/data-process/template-store" },
     { id: "run-records", label: "运行记录", icon: Play, route: "/data-process/run-records" },
     { id: "operators", label: "算子管理", icon: Boxes, route: "/data-process/operators" },
-    { id: "operator-store", label: "算子商店", icon: Store, route: "/data-process/operator-store" },
     { id: "feature-extract", label: "特征抽取", icon: Sparkles, route: "/data-process/feature-extract" },
     { id: "quality", label: "质量评估", icon: GaugeCircle, route: "/data-process/quality" },
   ],

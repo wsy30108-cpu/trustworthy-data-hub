@@ -29,10 +29,8 @@ const DataManagementDirectories = lazy(() => import("./pages/data-management/Dat
 
 const DataProcessWorkflows = lazy(() => import("./pages/data-process/DataProcessWorkflows"));
 const DataProcessTemplates = lazy(() => import("./pages/data-process/DataProcessTemplates"));
-const DataProcessTemplateStore = lazy(() => import("./pages/data-process/DataProcessTemplateStore"));
 const DataProcessRunRecords = lazy(() => import("./pages/data-process/DataProcessRunRecords"));
 const DataProcessOperators = lazy(() => import("./pages/data-process/DataProcessOperators"));
-const DataProcessOperatorStore = lazy(() => import("./pages/data-process/DataProcessOperatorStore"));
 const DataProcessFeatureExtract = lazy(() => import("./pages/data-process/DataProcessFeatureExtract"));
 const DataProcessQuality = lazy(() => import("./pages/data-process/DataProcessQuality"));
 const WorkflowCanvas = lazy(() => import("./pages/data-process/WorkflowCanvas"));
@@ -93,10 +91,8 @@ const App = () => (
                   <Route path="/data-process/workflows" element={<DataProcessWorkflows />} />
                   <Route path="/data-process/workflow-canvas" element={<WorkflowCanvas />} />
                   <Route path="/data-process/templates" element={<DataProcessTemplates />} />
-                  <Route path="/data-process/template-store" element={<DataProcessTemplateStore />} />
                   <Route path="/data-process/run-records" element={<DataProcessRunRecords />} />
                   <Route path="/data-process/operators" element={<DataProcessOperators />} />
-                  <Route path="/data-process/operator-store" element={<DataProcessOperatorStore />} />
                   <Route path="/data-process/feature-extract" element={<DataProcessFeatureExtract />} />
                   <Route path="/data-process/quality" element={<DataProcessQuality />} />
                   
