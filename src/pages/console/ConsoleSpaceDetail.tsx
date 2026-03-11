@@ -57,13 +57,13 @@ interface MigrationDetail {
 
 /* ─── Mock Data ─── */
 const MOCK_MEMBERS: SpaceMember[] = [
-  { id: "m1", name: "张明", account: "zhangming", role: "空间管理员", joinedAt: "2025-08-12", status: "启用" },
-  { id: "m2", name: "李华", account: "lihua", role: "数据工程师", joinedAt: "2025-09-01", status: "启用" },
-  { id: "m3", name: "王芳", account: "wangfang", role: "标注员", joinedAt: "2025-09-15", status: "启用" },
-  { id: "m4", name: "赵强", account: "zhaoqiang", role: "质检员", joinedAt: "2025-10-01", status: "启用" },
-  { id: "m5", name: "孙丽", account: "sunli", role: "标注员", joinedAt: "2025-10-20", status: "停用" },
-  { id: "m6", name: "周杰", account: "zhoujie", role: "数据工程师", joinedAt: "2025-11-05", status: "启用" },
-  { id: "m7", name: "陈伟", account: "chenwei", role: "验收员", joinedAt: "2025-12-01", status: "启用" },
+  { id: "m1", name: "张明", account: "zhangming", roles: ["空间管理员"], joinedAt: "2025-08-12", status: "启用" },
+  { id: "m2", name: "李华", account: "lihua", roles: ["数据工程师"], joinedAt: "2025-09-01", status: "启用" },
+  { id: "m3", name: "王芳", account: "wangfang", roles: ["标注员"], joinedAt: "2025-09-15", status: "启用" },
+  { id: "m4", name: "赵强", account: "zhaoqiang", roles: ["质检员"], joinedAt: "2025-10-01", status: "启用" },
+  { id: "m5", name: "孙丽", account: "sunli", roles: ["标注员"], joinedAt: "2025-10-20", status: "停用" },
+  { id: "m6", name: "周杰", account: "zhoujie", roles: ["数据工程师"], joinedAt: "2025-11-05", status: "启用" },
+  { id: "m7", name: "陈伟", account: "chenwei", roles: ["验收员"], joinedAt: "2025-12-01", status: "启用" },
 ];
 
 const SPACE_ROLES = ["空间管理员", "数据工程师", "标注员", "质检员", "验收员", "仲裁员", "观察员"];
