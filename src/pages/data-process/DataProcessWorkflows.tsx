@@ -53,11 +53,11 @@ const statusColors: Record<WorkflowStatus, string> = {
 
 /* ─── Mock templates for "from template" ─── */
 const mockTemplates = [
-  { id: "T-001", name: "通用文本清洗模板", category: "文本处理", operators: 6 },
-  { id: "T-002", name: "图像增强标准模板", category: "图像处理", operators: 4 },
-  { id: "T-003", name: "多模态数据预处理", category: "多模态处理", operators: 8 },
-  { id: "T-004", name: "语音降噪管线", category: "语音处理", operators: 5 },
-  { id: "T-005", name: "表格数据ETL模板", category: "表格处理", operators: 7 },
+  { id: "T-001", name: "通用文本清洗模板", category: "文本处理", operators: 6, desc: "适用于大规模文本数据的清洗与标准化，包含去重、分词、格式化等步骤", creator: "张三" },
+  { id: "T-002", name: "图像增强标准模板", category: "图像处理", operators: 4, desc: "对图像进行亮度调整、对比度增强、噪声去除等预处理操作", creator: "李四" },
+  { id: "T-003", name: "多模态数据预处理", category: "多模态处理", operators: 8, desc: "支持文本、图像、音频等多种模态数据的统一预处理流程", creator: "王五" },
+  { id: "T-004", name: "语音降噪管线", category: "语音处理", operators: 5, desc: "针对语音数据进行降噪、分段、特征提取等处理", creator: "赵六" },
+  { id: "T-005", name: "表格数据ETL模板", category: "表格处理", operators: 7, desc: "实现表格数据的抽取、转换、加载全流程自动化处理", creator: "张三" },
 ];
 
 /* ─── Mock datasets ─── */
@@ -381,12 +381,13 @@ const DataProcessWorkflows = () => {
               </div>
               <div className="max-h-64 overflow-y-auto space-y-1">
                 {filteredTemplates.map(t => (
-                  <button key={t.id} onClick={() => { setShowNewDialog(false); navigate(`/data-process/workflow-canvas?name=${encodeURIComponent(t.name)}&template=${t.id}`); }} className="w-full text-left p-3 rounded-lg hover:bg-muted/50 transition-colors flex items-center justify-between">
-                    <div>
+                  <button key={t.id} onClick={() => { setShowNewDialog(false); navigate(`/data-process/workflow-canvas?name=${encodeURIComponent(t.name)}&template=${t.id}`); }} className="w-full text-left p-3 rounded-lg hover:bg-muted/50 transition-colors flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm">{t.name}</div>
-                      <div className="text-xs text-muted-foreground">{t.category} · {t.operators} 个算子</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{t.category} · {t.operators} 个算子 · 创建人：{t.creator}</div>
+                      {t.desc && <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.desc}</div>}
                     </div>
-                    <ChevronDown className="w-4 h-4 text-muted-foreground -rotate-90" />
+                    <ChevronDown className="w-4 h-4 text-muted-foreground -rotate-90 shrink-0" />
                   </button>
                 ))}
                 {filteredTemplates.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">无匹配模板</p>}
