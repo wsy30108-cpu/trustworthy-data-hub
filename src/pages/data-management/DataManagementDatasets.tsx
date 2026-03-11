@@ -942,7 +942,17 @@ const DataManagementDatasets = () => {
                   <td className="py-3 px-3"><span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span></td>
                   <td className="py-3 px-3"><TagCell tags={ds.tags} /></td>
                   <td className="py-3 px-3 text-xs text-muted-foreground">{ds.latestVersion}</td>
-                  <td className="py-3 px-3"><span className="px-1.5 py-0.5 rounded text-[10px] bg-accent text-accent-foreground">{ds.authLevel}</span></td>
+                  <td className="py-3 px-3">
+                    <div className="flex flex-wrap gap-1">
+                      {ds.authPerms.map(p => (
+                        <span key={p} className={cn("px-1.5 py-0.5 rounded text-[10px]",
+                          p === "创建数据集版本" ? "bg-primary/10 text-primary" :
+                          p === "写数据集" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                          "bg-accent text-accent-foreground"
+                        )}>{p}</span>
+                      ))}
+                    </div>
+                  </td>
                   <td className="py-3 px-3 text-muted-foreground text-xs">{ds.sharer}</td>
                   <td className="py-3 px-3 text-muted-foreground text-xs">{ds.sharedAt}</td>
                   <td className="py-3 px-3 text-muted-foreground text-xs">{ds.updatedAt}</td>
