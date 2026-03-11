@@ -1720,7 +1720,20 @@ const WorkflowCanvas = () => {
             )}
           </div>
 
-          {/* ─── Center: Canvas ─── */}
+          {/* ─── Center: Canvas or JSON ─── */}
+          {viewMode === "json" ? (
+            <div className="flex-1 relative overflow-hidden bg-background">
+              <div className="absolute top-3 left-3 text-xs text-muted-foreground flex items-center gap-1.5">
+                <Code2 className="w-3.5 h-3.5" /> JSON 源码视图
+              </div>
+              <textarea
+                value={workflowJson}
+                readOnly
+                className="w-full h-full pt-10 px-4 pb-4 text-xs font-mono bg-background text-foreground resize-none focus:outline-none"
+                style={{ tabSize: 2 }}
+              />
+            </div>
+          ) : (
           <div
             ref={canvasRef}
             className="flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing"
