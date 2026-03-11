@@ -59,6 +59,14 @@ interface Connection {
   compatible?: boolean;
 }
 
+interface ValidationError {
+  id: string;
+  type: "error" | "warning";
+  message: string;
+  nodeIds?: string[];
+  connectionIds?: string[];
+}
+
 interface Operator {
   type: string;
   label: string;
