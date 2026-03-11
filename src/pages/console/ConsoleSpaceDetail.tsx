@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { ArrowLeft, Edit, Save, X, Plus, Trash2, Search, Eye, ShieldCheck, UserPlus, Power, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, HardDrive, Check, Loader2, AlertTriangle, ExternalLink, Settings, Star, TestTube2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { ArrowLeft, Edit, Save, X, Plus, Trash2, Search, Eye, ShieldCheck, UserPlus, Power, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, HardDrive, Check, Loader2, AlertTriangle, ExternalLink, Settings, Star, TestTube2, ChevronDown, UserSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -9,13 +9,33 @@ import { useToast } from "@/hooks/use-toast";
 /* ─── Types ─── */
 interface SpaceData {
   id: string; name: string; identifier: string; type: string; org: string;
-  admin: string; members: number; storage: string; status: string; createdAt: string;
+  admin: string; admins?: string[]; members: number; storage: string; status: string; createdAt: string;
   desc?: string; updatedAt?: string; updatedBy?: string; storageLocation?: string;
 }
 
 interface SpaceMember {
-  id: string; name: string; account: string; role: string; joinedAt: string; status: "启用" | "停用";
+  id: string; name: string; account: string; roles: string[]; joinedAt: string; status: "启用" | "停用";
 }
+
+/* ─── Mock Org Members (same org candidates) ─── */
+const CURRENT_USER = "张明";
+const MOCK_ORG_MEMBERS = [
+  { id: "om1", name: "张明", account: "zhangming", dept: "数据平台部" },
+  { id: "om2", name: "李华", account: "lihua", dept: "数据平台部" },
+  { id: "om3", name: "王芳", account: "wangfang", dept: "AI标注组" },
+  { id: "om4", name: "赵强", account: "zhaoqiang", dept: "质量管理部" },
+  { id: "om5", name: "孙丽", account: "sunli", dept: "AI标注组" },
+  { id: "om6", name: "周杰", account: "zhoujie", dept: "数据平台部" },
+  { id: "om7", name: "陈伟", account: "chenwei", dept: "项目验收组" },
+  { id: "om8", name: "吴刚", account: "wugang", dept: "数据平台部" },
+  { id: "om9", name: "刘洋", account: "liuyang", dept: "AI标注组" },
+  { id: "om10", name: "黄敏", account: "huangmin", dept: "质量管理部" },
+  { id: "om11", name: "许涛", account: "xutao", dept: "运维支持组" },
+  { id: "om12", name: "何静", account: "hejing", dept: "数据平台部" },
+];
+
+/* ─── All admin candidates ─── */
+const ALL_ADMIN_CANDIDATES = MOCK_ORG_MEMBERS.map(m => m.name);
 
 interface SpaceTask {
   id: string; name: string; type: "数据处理" | "标注" | "清洗" | "特征提取" | "评测";
