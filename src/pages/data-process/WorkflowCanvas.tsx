@@ -1,17 +1,38 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Play, Save, Undo2, Redo2, ZoomIn, ZoomOut, Maximize2,
   Trash2, Boxes, Settings2, ChevronDown, ChevronRight,
-  X, PanelLeftClose, PanelLeftOpen, Search,
-  Type, Image, Mic, Video, Layers, Database, FileOutput, Wrench
+  X, PanelLeftClose, PanelLeftOpen, Search, Plus, Minus,
+  Type, Image, Mic, Video, Layers, Database, FileOutput, Wrench,
+  AlertTriangle, CheckCircle2, HelpCircle, Eye, Upload, Map
 } from "lucide-react";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 /* ─── Types ─── */
 interface Position { x: number; y: number }
+
+type ParamType = "string" | "integer" | "float" | "boolean" | "enum" | "enum_multi" | "range" | "file" | "regex" | "keyvalue";
+
+interface ParamDef {
+  key: string;
+  label: string;
+  type: ParamType;
+  default?: any;
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: string[];
+  required?: boolean;
+  description?: string;
+}
+
 interface CanvasNode {
   id: string;
   type: string;
@@ -22,10 +43,19 @@ interface CanvasNode {
   y: number;
   inputs: string[];
   outputs: string[];
-  config?: Record<string, string>;
+  config: Record<string, any>;
   description?: string;
+  dataType?: string; // data type for port compatibility
 }
-interface Connection { id: string; from: string; fromPort: string; to: string; toPort: string }
+
+interface Connection {
+  id: string;
+  from: string;
+  fromPort: string;
+  to: string;
+  toPort: string;
+  compatible?: boolean;
+}
 
 interface Operator {
   type: string;
@@ -33,6 +63,7 @@ interface Operator {
   description: string;
   inputs: string[];
   outputs: string[];
+  dataType?: string;
 }
 
 interface OperatorTypeGroup {
@@ -46,6 +77,131 @@ interface OperatorCategory {
   icon: typeof Type;
   types: OperatorTypeGroup[];
 }
+
+/* ─── Port data types for compatibility checking ─── */
+const portDataTypes: Record<string, string> = {
+  data: "text",
+  images: "image",
+  audio: "audio",
+  video: "video",
+  rejected: "text",
+};
+
+const typeCompatibility: Record<string, string[]> = {
+  text: ["text"],
+  image: ["image"],
+  audio: ["audio"],
+  video: ["video", "image"], // video can produce images (frame extraction)
+};
+
+const isTypeCompatible = (outputPort: string, inputPort: string): boolean => {
+  const outType = portDataTypes[outputPort] || "text";
+  const inType = portDataTypes[inputPort] || "text";
+  return (typeCompatibility[outType] || [outType]).includes(inType) || outType === inType;
+};
+
+/* ─── Operator parameter definitions (mock) ─── */
+const operatorParams: Record<string, ParamDef[]> = {
+  // Groupers
+  key_value_grouper: [
+    { key: "group_key", label: "分组键", type: "string", required: true, description: "指定用于分组的键名" },
+    { key: "batch_size", label: "批大小", type: "integer", default: 1000, min: 1, max: 100000 },
+  ],
+  naive_grouper: [
+    { key: "batch_size", label: "批大小", type: "integer", default: 1000, min: 1, max: 100000 },
+  ],
+  // Dedup
+  doc_dedup: [
+    { key: "doc_key", label: "文档键", type: "string", default: "text" },
+    { key: "lowercase", label: "忽略大小写", type: "boolean", default: true },
+  ],
+  doc_minhash_dedup: [
+    { key: "threshold", label: "相似度阈值", type: "float", default: 0.7, min: 0, max: 1, step: 0.05 },
+    { key: "num_perm", label: "排列数", type: "integer", default: 256, min: 64, max: 1024 },
+    { key: "ngram_size", label: "N-gram大小", type: "integer", default: 5, min: 1, max: 20 },
+  ],
+  doc_simhash_dedup: [
+    { key: "threshold", label: "海明距离阈值", type: "integer", default: 3, min: 0, max: 64 },
+    { key: "num_blocks", label: "分块数", type: "integer", default: 6, min: 1, max: 16 },
+  ],
+  // Mappers
+  chinese_convert_mapper: [
+    { key: "mode", label: "转换模式", type: "enum", options: ["s2t", "t2s", "s2tw", "tw2s", "s2jp", "jp2s"], default: "s2t" },
+  ],
+  content_replace_mapper: [
+    { key: "pattern", label: "正则表达式", type: "regex", required: true, description: "匹配模式" },
+    { key: "replacement", label: "替换内容", type: "string", default: "" },
+  ],
+  text_chunk_mapper: [
+    { key: "max_len", label: "最大长度", type: "integer", default: 512, min: 1, max: 10000 },
+    { key: "overlap", label: "重叠长度", type: "integer", default: 50, min: 0, max: 1000 },
+    { key: "split_by", label: "切分方式", type: "enum", options: ["sentence", "paragraph", "token"], default: "sentence" },
+  ],
+  sentence_split_mapper: [
+    { key: "lang", label: "语言", type: "enum", options: ["zh", "en", "auto"], default: "auto" },
+  ],
+  // Filters
+  text_length_filter: [
+    { key: "min_len", label: "最小长度", type: "integer", default: 10, min: 0 },
+    { key: "max_len", label: "最大长度", type: "integer", default: 10000, min: 0 },
+  ],
+  word_num_filter: [
+    { key: "min_num", label: "最小词数", type: "integer", default: 5, min: 0 },
+    { key: "max_num", label: "最大词数", type: "integer", default: 5000, min: 0 },
+  ],
+  token_num_filter: [
+    { key: "min_num", label: "最小Token数", type: "integer", default: 10, min: 0 },
+    { key: "max_num", label: "最大Token数", type: "integer", default: 4096, min: 0 },
+    { key: "model", label: "分词模型", type: "enum", options: ["gpt2", "bert-base", "llama"], default: "gpt2" },
+  ],
+  alphanumeric_filter: [
+    { key: "min_ratio", label: "最小比率", type: "float", default: 0.0, min: 0, max: 1, step: 0.01 },
+    { key: "max_ratio", label: "最大比率", type: "float", default: 1.0, min: 0, max: 1, step: 0.01 },
+  ],
+  special_char_filter: [
+    { key: "min_ratio", label: "最小比率", type: "float", default: 0.0, min: 0, max: 1, step: 0.01 },
+    { key: "max_ratio", label: "最大比率", type: "float", default: 0.25, min: 0, max: 1, step: 0.01 },
+  ],
+  lang_id_score_filter: [
+    { key: "lang", label: "目标语言", type: "enum", options: ["zh", "en", "ja", "ko", "fr", "de"], default: "zh" },
+    { key: "min_score", label: "最低置信度", type: "float", default: 0.5, min: 0, max: 1, step: 0.05 },
+  ],
+  // Selectors
+  random_selector: [
+    { key: "ratio", label: "采样比例", type: "float", default: 0.1, min: 0, max: 1, step: 0.01 },
+  ],
+  topk_selector: [
+    { key: "field", label: "排序字段", type: "string", required: true },
+    { key: "k", label: "Top K", type: "integer", default: 100, min: 1 },
+    { key: "reverse", label: "降序排列", type: "boolean", default: true },
+  ],
+  // Image
+  image_blur_mapper: [
+    { key: "blur_type", label: "模糊类型", type: "enum", options: ["gaussian", "box", "median"], default: "gaussian" },
+    { key: "radius", label: "模糊半径", type: "integer", default: 5, min: 1, max: 50 },
+    { key: "prob", label: "执行概率", type: "float", default: 1.0, min: 0, max: 1, step: 0.1 },
+  ],
+  image_aspect_ratio_filter: [
+    { key: "min_ratio", label: "最小宽高比", type: "float", default: 0.5, min: 0, max: 10, step: 0.1 },
+    { key: "max_ratio", label: "最大宽高比", type: "float", default: 2.0, min: 0, max: 10, step: 0.1 },
+  ],
+  // Video
+  video_duration_filter: [
+    { key: "min_duration", label: "最短时长(秒)", type: "float", default: 1, min: 0, step: 0.5 },
+    { key: "max_duration", label: "最长时长(秒)", type: "float", default: 300, min: 0, step: 0.5 },
+  ],
+  // Audio
+  audio_duration_filter: [
+    { key: "min_duration", label: "最短时长(秒)", type: "float", default: 0.5, min: 0, step: 0.1 },
+    { key: "max_duration", label: "最长时长(秒)", type: "float", default: 600, min: 0, step: 0.5 },
+  ],
+};
+
+// Default params for operators not explicitly listed
+const defaultOperatorParams: ParamDef[] = [
+  { key: "batch_size", label: "批大小", type: "integer", default: 1000, min: 1, max: 100000 },
+  { key: "num_proc", label: "并行度", type: "integer", default: 4, min: 1, max: 64 },
+];
 
 /* ─── Complete Operator Catalog ─── */
 const operatorCatalog: OperatorCategory[] = [
@@ -301,6 +457,162 @@ const catColors: Record<string, string> = {
   "自定义节点": "hsl(30 70% 50%)",
 };
 
+/* ─── Mock datasets ─── */
+const mockDatasets = [
+  { id: "ds1", name: "文本清洗数据集", versions: [{ id: "v1", name: "v1.0" }, { id: "v2", name: "v1.1" }, { id: "v3", name: "v2.0" }] },
+  { id: "ds2", name: "对话语料数据集", versions: [{ id: "v1", name: "v1.0" }, { id: "v2", name: "v2.0" }] },
+  { id: "ds3", name: "图像标注数据集", versions: [{ id: "v1", name: "v1.0" }] },
+  { id: "ds4", name: "音频转写数据集", versions: [{ id: "v1", name: "v1.0" }, { id: "v2", name: "v1.1" }] },
+];
+
+/* ─── Param Form Renderer ─── */
+const ParamFormField = ({ param, value, onChange }: { param: ParamDef; value: any; onChange: (v: any) => void }) => {
+  switch (param.type) {
+    case "string":
+      return (
+        <div>
+          <label className="text-[10px] text-muted-foreground">{param.label}{param.required && <span className="text-destructive ml-0.5">*</span>}</label>
+          {param.description && <p className="text-[9px] text-muted-foreground/70">{param.description}</p>}
+          <input value={value ?? param.default ?? ""} onChange={e => onChange(e.target.value)}
+            className="w-full mt-0.5 px-2 py-1 text-xs border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+        </div>
+      );
+    case "integer":
+      return (
+        <div>
+          <label className="text-[10px] text-muted-foreground">{param.label}</label>
+          <div className="flex items-center gap-1 mt-0.5">
+            <button onClick={() => onChange(Math.max(param.min ?? -Infinity, (value ?? param.default ?? 0) - (param.step ?? 1)))}
+              className="p-0.5 border rounded hover:bg-muted/50"><Minus className="w-3 h-3" /></button>
+            <input type="number" value={value ?? param.default ?? 0}
+              onChange={e => onChange(parseInt(e.target.value) || 0)}
+              min={param.min} max={param.max}
+              className="flex-1 px-2 py-1 text-xs border rounded bg-background text-center focus:outline-none focus:ring-1 focus:ring-primary/30" />
+            <button onClick={() => onChange(Math.min(param.max ?? Infinity, (value ?? param.default ?? 0) + (param.step ?? 1)))}
+              className="p-0.5 border rounded hover:bg-muted/50"><Plus className="w-3 h-3" /></button>
+          </div>
+        </div>
+      );
+    case "float":
+      return (
+        <div>
+          <label className="text-[10px] text-muted-foreground">{param.label}</label>
+          <div className="flex items-center gap-2 mt-1">
+            <Slider
+              value={[value ?? param.default ?? 0]}
+              min={param.min ?? 0}
+              max={param.max ?? 1}
+              step={param.step ?? 0.01}
+              onValueChange={([v]) => onChange(v)}
+              className="flex-1"
+            />
+            <input type="number" value={value ?? param.default ?? 0}
+              onChange={e => onChange(parseFloat(e.target.value) || 0)}
+              step={param.step ?? 0.01} min={param.min} max={param.max}
+              className="w-16 px-1.5 py-1 text-xs border rounded bg-background text-center focus:outline-none focus:ring-1 focus:ring-primary/30" />
+          </div>
+        </div>
+      );
+    case "boolean":
+      return (
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] text-muted-foreground">{param.label}</label>
+          <Switch checked={value ?? param.default ?? false} onCheckedChange={onChange} />
+        </div>
+      );
+    case "enum":
+      return (
+        <div>
+          <label className="text-[10px] text-muted-foreground">{param.label}</label>
+          <select value={value ?? param.default ?? ""}
+            onChange={e => onChange(e.target.value)}
+            className="w-full mt-0.5 px-2 py-1 text-xs border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary/30">
+            {param.options?.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+      );
+    case "enum_multi":
+      return (
+        <div>
+          <label className="text-[10px] text-muted-foreground">{param.label}</label>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {param.options?.map(o => {
+              const selected = (value || []).includes(o);
+              return (
+                <button key={o} onClick={() => {
+                  const arr = value || [];
+                  onChange(selected ? arr.filter((x: string) => x !== o) : [...arr, o]);
+                }}
+                  className={`px-1.5 py-0.5 text-[10px] rounded border ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border hover:bg-muted/50"}`}>
+                  {o}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    case "range":
+      return (
+        <div>
+          <label className="text-[10px] text-muted-foreground">{param.label}</label>
+          <div className="flex items-center gap-2 mt-1">
+            <input type="number" placeholder="最小" value={value?.[0] ?? param.min ?? 0}
+              onChange={e => onChange([parseFloat(e.target.value), value?.[1] ?? param.max ?? 100])}
+              className="flex-1 px-1.5 py-1 text-xs border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+            <span className="text-[10px] text-muted-foreground">~</span>
+            <input type="number" placeholder="最大" value={value?.[1] ?? param.max ?? 100}
+              onChange={e => onChange([value?.[0] ?? param.min ?? 0, parseFloat(e.target.value)])}
+              className="flex-1 px-1.5 py-1 text-xs border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+          </div>
+        </div>
+      );
+    case "regex":
+      return (
+        <div>
+          <label className="text-[10px] text-muted-foreground">{param.label}{param.required && <span className="text-destructive ml-0.5">*</span>}</label>
+          {param.description && <p className="text-[9px] text-muted-foreground/70">{param.description}</p>}
+          <input value={value ?? param.default ?? ""} onChange={e => onChange(e.target.value)}
+            className="w-full mt-0.5 px-2 py-1 text-xs border rounded bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary/30"
+            placeholder="/pattern/" />
+        </div>
+      );
+    case "keyvalue":
+      return (
+        <div>
+          <label className="text-[10px] text-muted-foreground">{param.label}</label>
+          <div className="mt-1 space-y-1">
+            {(value || [{ key: "", value: "" }]).map((kv: { key: string; value: string }, i: number) => (
+              <div key={i} className="flex items-center gap-1">
+                <input placeholder="键" value={kv.key}
+                  onChange={e => { const arr = [...(value || [{ key: "", value: "" }])]; arr[i] = { ...arr[i], key: e.target.value }; onChange(arr); }}
+                  className="flex-1 px-1.5 py-1 text-xs border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+                <input placeholder="值" value={kv.value}
+                  onChange={e => { const arr = [...(value || [{ key: "", value: "" }])]; arr[i] = { ...arr[i], value: e.target.value }; onChange(arr); }}
+                  className="flex-1 px-1.5 py-1 text-xs border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+                <button onClick={() => { const arr = [...(value || [])]; arr.splice(i, 1); onChange(arr.length ? arr : [{ key: "", value: "" }]); }}
+                  className="p-0.5 text-muted-foreground hover:text-destructive"><X className="w-3 h-3" /></button>
+              </div>
+            ))}
+            <button onClick={() => onChange([...(value || []), { key: "", value: "" }])}
+              className="text-[10px] text-primary hover:underline flex items-center gap-0.5"><Plus className="w-3 h-3" />添加</button>
+          </div>
+        </div>
+      );
+    case "file":
+      return (
+        <div>
+          <label className="text-[10px] text-muted-foreground">{param.label}</label>
+          <div className="mt-0.5 border rounded px-2 py-2 flex items-center gap-2 bg-background">
+            <Upload className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">{value ? "已上传" : "点击上传文件"}</span>
+          </div>
+        </div>
+      );
+    default:
+      return null;
+  }
+};
+
 /* ─── Component ─── */
 const WorkflowCanvas = () => {
   const navigate = useNavigate();
@@ -324,10 +636,33 @@ const WorkflowCanvas = () => {
   const [operatorSearch, setOperatorSearch] = useState("");
   const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [showMinimap, setShowMinimap] = useState(true);
 
-  // Accordion state: expanded categories and operator types
+  // Accordion state
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(["文本"]));
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
+
+  // Workflow global config
+  const [wfDesc, setWfDesc] = useState("");
+  const [wfMaxParallel, setWfMaxParallel] = useState(4);
+  const [wfTimeout, setWfTimeout] = useState(3600);
+  const [wfFailStrategy, setWfFailStrategy] = useState<"stop" | "skip" | "retry">("stop");
+  const [wfRetryMax, setWfRetryMax] = useState(3);
+  const [wfRetryInterval, setWfRetryInterval] = useState(60);
+
+  // Input/Output node config
+  const [inputSourceType, setInputSourceType] = useState<"dataset" | "file">("dataset");
+  const [inputDataset, setInputDataset] = useState("");
+  const [inputVersion, setInputVersion] = useState("");
+  const [inputSampleRatio, setInputSampleRatio] = useState(100);
+  const [outputTargetType, setOutputTargetType] = useState<"new" | "append">("new");
+  const [outputDataset, setOutputDataset] = useState("");
+  const [outputVersion, setOutputVersion] = useState("");
+  const [outputFormat, setOutputFormat] = useState("jsonl");
+  const [outputNewName, setOutputNewName] = useState("");
+
+  // Minimap drag
+  const [minimapDragging, setMinimapDragging] = useState(false);
 
   const toggleCat = (name: string) => {
     setExpandedCats(prev => {
@@ -355,7 +690,6 @@ const WorkflowCanvas = () => {
     };
   }, [pan, zoom]);
 
-  /* Get canvas center in canvas coords */
   const getCanvasCenter = useCallback((): Position => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return { x: 300, y: 300 };
@@ -365,7 +699,36 @@ const WorkflowCanvas = () => {
     };
   }, [pan, zoom]);
 
-  /* Add node at canvas center (double-click) */
+  /* ─── Cycle detection (BFS) ─── */
+  const wouldCreateCycle = useCallback((fromId: string, toId: string): boolean => {
+    // Check if there's a path from toId to fromId (which would create a cycle)
+    const visited = new Set<string>();
+    const queue = [toId];
+    // Follow existing connections from 'to' downstream
+    // But we need to check: can we reach fromId starting from toId?
+    // Actually we need to check: is there a path from toId → fromId via existing connections
+    const adjacency: Record<string, string[]> = {};
+    for (const c of connections) {
+      if (!adjacency[c.from]) adjacency[c.from] = [];
+      adjacency[c.from].push(c.to);
+    }
+    // BFS from toId, see if we reach fromId
+    const bfsQueue = [toId];
+    visited.add(toId);
+    while (bfsQueue.length > 0) {
+      const curr = bfsQueue.shift()!;
+      if (curr === fromId) return true;
+      for (const next of adjacency[curr] || []) {
+        if (!visited.has(next)) {
+          visited.add(next);
+          bfsQueue.push(next);
+        }
+      }
+    }
+    return false;
+  }, [connections]);
+
+  /* Add node at canvas center */
   const addNodeAtCenter = useCallback((op: Operator, categoryName: string, typeName: string) => {
     const center = getCanvasCenter();
     const newNode: CanvasNode = {
@@ -420,7 +783,7 @@ const WorkflowCanvas = () => {
     setSelectedConnection(null);
   };
 
-  /* ─── Output port drag → connection ─── */
+  /* ─── Connection with validation ─── */
   const startConnect = (e: React.MouseEvent, nodeId: string, port: string) => {
     e.stopPropagation();
     const node = nodes.find(n => n.id === nodeId)!;
@@ -429,17 +792,49 @@ const WorkflowCanvas = () => {
   };
 
   const finishConnect = (nodeId: string, port: string) => {
-    if (!connecting || connecting.nodeId === nodeId) { setConnecting(null); return; }
-    const exists = connections.some(c => c.from === connecting.nodeId && c.to === nodeId);
-    if (!exists) {
-      setConnections(prev => [...prev, {
-        id: `conn-${Date.now()}`,
-        from: connecting.nodeId,
-        fromPort: connecting.port,
-        to: nodeId,
-        toPort: port,
-      }]);
+    if (!connecting) { return; }
+
+    // Rule: no self-connection
+    if (connecting.nodeId === nodeId) {
+      toast.error("不允许节点连接自身");
+      setConnecting(null);
+      return;
     }
+
+    // Rule: no duplicate connections
+    const exists = connections.some(c =>
+      c.from === connecting.nodeId && c.fromPort === connecting.port &&
+      c.to === nodeId && c.toPort === port
+    );
+    if (exists) {
+      toast.error("该连接已存在");
+      setConnecting(null);
+      return;
+    }
+
+    // Rule: no cycles
+    if (wouldCreateCycle(connecting.nodeId, nodeId)) {
+      toast.error("不允许形成循环依赖");
+      setConnecting(null);
+      return;
+    }
+
+    // Rule: type compatibility check
+    const compatible = isTypeCompatible(connecting.port, port);
+
+    setConnections(prev => [...prev, {
+      id: `conn-${Date.now()}`,
+      from: connecting.nodeId,
+      fromPort: connecting.port,
+      to: nodeId,
+      toPort: port,
+      compatible,
+    }]);
+
+    if (!compatible) {
+      toast.warning("端口数据类型不兼容，连线已标红");
+    }
+
     setConnecting(null);
   };
 
@@ -463,6 +858,7 @@ const WorkflowCanvas = () => {
     const handleUp = () => {
       setDraggingNode(null);
       setIsPanning(false);
+      setMinimapDragging(false);
       if (connecting) setConnecting(null);
     };
     window.addEventListener("mousemove", handleMove);
@@ -501,7 +897,11 @@ const WorkflowCanvas = () => {
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Delete" || e.key === "Backspace") deleteSelected();
+      if (e.key === "Delete" || e.key === "Backspace") {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        deleteSelected();
+      }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
@@ -515,6 +915,65 @@ const WorkflowCanvas = () => {
   };
 
   const selectedNodeData = nodes.find(n => n.id === selectedNode);
+  const isInputNode = selectedNodeData?.category === "输入节点";
+  const isOutputNode = selectedNodeData?.category === "输出节点";
+  const isOperatorNode = selectedNodeData && !isInputNode && !isOutputNode;
+
+  /* ─── Minimap calculations ─── */
+  const MINIMAP_W = 180;
+  const MINIMAP_H = 120;
+
+  const minimapData = useMemo(() => {
+    if (nodes.length === 0) return null;
+    const xs = nodes.map(n => n.x);
+    const ys = nodes.map(n => n.y);
+    const minX = Math.min(...xs) - 50;
+    const minY = Math.min(...ys) - 50;
+    const maxX = Math.max(...xs) + NODE_W + 50;
+    const maxY = Math.max(...ys) + NODE_H + 50;
+    const worldW = Math.max(maxX - minX, 200);
+    const worldH = Math.max(maxY - minY, 200);
+    const scale = Math.min(MINIMAP_W / worldW, MINIMAP_H / worldH);
+    return { minX, minY, worldW, worldH, scale };
+  }, [nodes]);
+
+  const minimapViewport = useMemo(() => {
+    if (!minimapData || !canvasRef.current) return null;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const { minX, minY, scale } = minimapData;
+    const vx = (-pan.x / zoom - minX) * scale;
+    const vy = (-pan.y / zoom - minY) * scale;
+    const vw = (rect.width / zoom) * scale;
+    const vh = (rect.height / zoom) * scale;
+    return { x: vx, y: vy, w: vw, h: vh };
+  }, [minimapData, pan, zoom]);
+
+  const handleMinimapMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    e.stopPropagation();
+    setMinimapDragging(true);
+    navigateFromMinimap(e);
+  };
+
+  const handleMinimapMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!minimapDragging) return;
+    navigateFromMinimap(e);
+  };
+
+  const navigateFromMinimap = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!minimapData || !canvasRef.current) return;
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const { minX, minY, scale } = minimapData;
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const targetX = mx / scale + minX;
+    const targetY = my / scale + minY;
+    setPan({
+      x: -(targetX - canvasRect.width / 2 / zoom) * zoom,
+      y: -(targetY - canvasRect.height / 2 / zoom) * zoom,
+    });
+  };
 
   /* ─── Filter catalog by search ─── */
   const filteredCatalog = operatorSearch
@@ -526,6 +985,450 @@ const WorkflowCanvas = () => {
         })).filter(t => t.operators.length > 0),
       })).filter(cat => cat.types.length > 0)
     : operatorCatalog;
+
+  /* ─── Get node params ─── */
+  const getNodeParams = (node: CanvasNode): ParamDef[] => {
+    return operatorParams[node.type] || defaultOperatorParams;
+  };
+
+  const updateNodeConfig = (nodeId: string, key: string, value: any) => {
+    setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, config: { ...n.config, [key]: value } } : n));
+  };
+
+  /* ─── Right panel: render property panel ─── */
+  const renderPropertyPanel = () => {
+    const panelWidth = 280;
+
+    // No node selected → workflow global info
+    if (!selectedNodeData) {
+      return (
+        <div className="border-l bg-card shrink-0 flex flex-col overflow-hidden" style={{ width: panelWidth }}>
+          <div className="p-3 border-b">
+            <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+              <Settings2 className="w-3.5 h-3.5" />工作流属性
+            </span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-4">
+            {/* Basic info */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">基本信息</p>
+              <div>
+                <label className="text-[10px] text-muted-foreground">工作流名称</label>
+                <input value={wfName} readOnly className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-muted/30 text-foreground" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">描述</label>
+                <textarea value={wfDesc} onChange={e => setWfDesc(e.target.value)} rows={3} maxLength={200}
+                  placeholder="工作流描述（最多200字符）"
+                  className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary/30" />
+                <p className="text-[9px] text-muted-foreground text-right">{wfDesc.length}/200</p>
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">工作流ID</label>
+                <p className="text-xs text-muted-foreground mt-0.5 font-mono">wf-20250311-001</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-muted-foreground">创建时间</label>
+                  <p className="text-xs text-muted-foreground mt-0.5">2025-03-11</p>
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground">创建人</label>
+                  <p className="text-xs text-muted-foreground mt-0.5">admin</p>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">最后修改人</label>
+                <p className="text-xs text-muted-foreground mt-0.5">admin</p>
+              </div>
+            </div>
+
+            {/* Execution config */}
+            <div className="border-t pt-3 space-y-3">
+              <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">执行配置</p>
+              <div>
+                <label className="text-[10px] text-muted-foreground">最大并行数</label>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <button onClick={() => setWfMaxParallel(Math.max(1, wfMaxParallel - 1))}
+                    className="p-0.5 border rounded hover:bg-muted/50"><Minus className="w-3 h-3" /></button>
+                  <input type="number" value={wfMaxParallel} onChange={e => setWfMaxParallel(parseInt(e.target.value) || 1)}
+                    min={1} max={64}
+                    className="flex-1 px-2 py-1 text-xs border rounded bg-background text-center focus:outline-none focus:ring-1 focus:ring-primary/30" />
+                  <button onClick={() => setWfMaxParallel(Math.min(64, wfMaxParallel + 1))}
+                    className="p-0.5 border rounded hover:bg-muted/50"><Plus className="w-3 h-3" /></button>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">超时时间（秒）</label>
+                <input type="number" value={wfTimeout} onChange={e => setWfTimeout(parseInt(e.target.value) || 0)} min={0}
+                  className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">失败策略</label>
+                <select value={wfFailStrategy} onChange={e => setWfFailStrategy(e.target.value as any)}
+                  className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30">
+                  <option value="stop">停止</option>
+                  <option value="skip">跳过</option>
+                  <option value="retry">重试</option>
+                </select>
+              </div>
+              {wfFailStrategy === "retry" && (
+                <>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">最大重试次数</label>
+                    <input type="number" value={wfRetryMax} onChange={e => setWfRetryMax(parseInt(e.target.value) || 1)}
+                      min={1} max={10}
+                      className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">重试间隔（秒）</label>
+                    <input type="number" value={wfRetryInterval} onChange={e => setWfRetryInterval(parseInt(e.target.value) || 1)}
+                      min={1}
+                      className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Summary */}
+            <div className="border-t pt-3">
+              <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider mb-2">画布统计</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-muted/30 rounded px-2 py-1.5">
+                  <span className="text-muted-foreground">节点</span>
+                  <span className="float-right font-medium text-foreground">{nodes.length}</span>
+                </div>
+                <div className="bg-muted/30 rounded px-2 py-1.5">
+                  <span className="text-muted-foreground">连线</span>
+                  <span className="float-right font-medium text-foreground">{connections.length}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Input node selected
+    if (isInputNode) {
+      const isFileInput = selectedNodeData.type === "file_input";
+      return (
+        <div className="border-l bg-card shrink-0 flex flex-col overflow-hidden" style={{ width: panelWidth }}>
+          <div className="p-3 border-b flex items-center justify-between">
+            <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+              <Database className="w-3.5 h-3.5" style={{ color: catColors["输入节点"] }} />输入节点配置
+            </span>
+            <button onClick={() => setSelectedNode(null)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-4">
+            <div>
+              <label className="text-[10px] text-muted-foreground">节点名称</label>
+              <input value={selectedNodeData.label}
+                onChange={e => setNodes(prev => prev.map(n => n.id === selectedNode ? { ...n, label: e.target.value } : n))}
+                className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground">节点ID</label>
+              <p className="text-xs text-muted-foreground mt-0.5 font-mono">{selectedNodeData.id}</p>
+            </div>
+
+            <div className="border-t pt-3 space-y-3">
+              <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">数据源配置</p>
+
+              {isFileInput ? (
+                /* File input */
+                <div>
+                  <label className="text-[10px] text-muted-foreground">上传文件</label>
+                  <div className="mt-1 border-2 border-dashed rounded-md p-4 text-center hover:border-primary/50 transition-colors cursor-pointer">
+                    <Upload className="w-5 h-5 text-muted-foreground mx-auto mb-1" />
+                    <p className="text-[10px] text-muted-foreground">点击或拖拽文件到此处</p>
+                    <p className="text-[9px] text-muted-foreground/70 mt-1">支持 JSON, JSONL, CSV, Parquet 等格式</p>
+                  </div>
+                </div>
+              ) : (
+                /* Dataset input */
+                <>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">选择数据集</label>
+                    <select value={inputDataset} onChange={e => { setInputDataset(e.target.value); setInputVersion(""); }}
+                      className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30">
+                      <option value="">请选择数据集</option>
+                      {mockDatasets.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
+                    </select>
+                  </div>
+                  {inputDataset && (
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">选择版本</label>
+                      <select value={inputVersion} onChange={e => setInputVersion(e.target.value)}
+                        className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30">
+                        <option value="">请选择版本</option>
+                        {mockDatasets.find(d => d.id === inputDataset)?.versions.map(v => (
+                          <option key={v.id} value={v.id}>{v.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div>
+                <label className="text-[10px] text-muted-foreground">数据格式</label>
+                <p className="text-xs text-foreground mt-0.5 px-2 py-1 bg-muted/30 rounded">
+                  {inputDataset ? "JSONL（自动识别）" : "—"}
+                </p>
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">预估数据量</label>
+                <p className="text-xs text-foreground mt-0.5 px-2 py-1 bg-muted/30 rounded">
+                  {inputDataset && inputVersion ? "约 12,580 条（自动识别）" : "—"}
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t pt-3 space-y-3">
+              <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">高级配置</p>
+              <div>
+                <label className="text-[10px] text-muted-foreground">采样比例</label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Slider value={[inputSampleRatio]} min={1} max={100} step={1}
+                    onValueChange={([v]) => setInputSampleRatio(v)} className="flex-1" />
+                  <span className="text-xs text-foreground w-10 text-right">{inputSampleRatio}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Output node selected
+    if (isOutputNode) {
+      const isFileOutput = selectedNodeData.type === "file_output";
+      return (
+        <div className="border-l bg-card shrink-0 flex flex-col overflow-hidden" style={{ width: panelWidth }}>
+          <div className="p-3 border-b flex items-center justify-between">
+            <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+              <FileOutput className="w-3.5 h-3.5" style={{ color: catColors["输出节点"] }} />输出节点配置
+            </span>
+            <button onClick={() => setSelectedNode(null)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-4">
+            <div>
+              <label className="text-[10px] text-muted-foreground">节点名称</label>
+              <input value={selectedNodeData.label}
+                onChange={e => setNodes(prev => prev.map(n => n.id === selectedNode ? { ...n, label: e.target.value } : n))}
+                className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground">节点ID</label>
+              <p className="text-xs text-muted-foreground mt-0.5 font-mono">{selectedNodeData.id}</p>
+            </div>
+
+            <div className="border-t pt-3 space-y-3">
+              <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">输出配置</p>
+
+              {isFileOutput ? (
+                /* File output */
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">导出格式</label>
+                    <select value={outputFormat} onChange={e => setOutputFormat(e.target.value)}
+                      className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30">
+                      <option value="jsonl">JSONL</option>
+                      <option value="json">JSON</option>
+                      <option value="csv">CSV</option>
+                      <option value="parquet">Parquet</option>
+                      <option value="tsv">TSV</option>
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                /* Dataset output */
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">输出方式</label>
+                    <div className="flex gap-2 mt-1">
+                      <button onClick={() => setOutputTargetType("new")}
+                        className={`flex-1 px-2 py-1.5 text-xs rounded-md border ${outputTargetType === "new" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted/50"}`}>
+                        新建数据集
+                      </button>
+                      <button onClick={() => setOutputTargetType("append")}
+                        className={`flex-1 px-2 py-1.5 text-xs rounded-md border ${outputTargetType === "append" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted/50"}`}>
+                        追加至已有
+                      </button>
+                    </div>
+                  </div>
+
+                  {outputTargetType === "new" ? (
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">新数据集名称</label>
+                      <input value={outputNewName} onChange={e => setOutputNewName(e.target.value)}
+                        placeholder="请输入数据集名称"
+                        className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">选择数据集</label>
+                        <select value={outputDataset} onChange={e => { setOutputDataset(e.target.value); setOutputVersion(""); }}
+                          className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30">
+                          <option value="">请选择数据集</option>
+                          {mockDatasets.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
+                        </select>
+                      </div>
+                      {outputDataset && (
+                        <div>
+                          <label className="text-[10px] text-muted-foreground">选择版本</label>
+                          <select value={outputVersion} onChange={e => setOutputVersion(e.target.value)}
+                            className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30">
+                            <option value="">请选择版本</option>
+                            {mockDatasets.find(d => d.id === outputDataset)?.versions.map(v => (
+                              <option key={v.id} value={v.id}>{v.name}</option>
+                            ))}
+                            <option value="__new__">+ 新建版本</option>
+                          </select>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Operator node selected
+    if (isOperatorNode) {
+      const params = getNodeParams(selectedNodeData);
+      const nodeConnections = connections.filter(c => c.from === selectedNode || c.to === selectedNode);
+      // Check if operator needs external model
+      const needsModel = ["qa_calibration_mapper", "query_calibration_mapper", "response_calibration_mapper",
+        "dialog_intent_mapper", "dialog_sentiment_mapper", "dialog_sentiment_intensity_mapper",
+        "dialog_topic_mapper", "entity_attr_extract_mapper", "entity_relation_extract_mapper",
+        "event_extract_mapper", "keyword_extract_mapper", "nickname_extract_mapper",
+        "pair_preference_mapper", "relation_identity_mapper"].includes(selectedNodeData.type);
+
+      return (
+        <div className="border-l bg-card shrink-0 flex flex-col overflow-hidden" style={{ width: panelWidth }}>
+          <div className="p-3 border-b flex items-center justify-between">
+            <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full" style={{ background: catColors[selectedNodeData.category] }} />
+              算子节点配置
+            </span>
+            <button onClick={() => setSelectedNode(null)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-4">
+            {/* Top: node info */}
+            <div className="space-y-2">
+              <div>
+                <label className="text-[10px] text-muted-foreground">节点名称（可编辑）</label>
+                <input value={selectedNodeData.label}
+                  onChange={e => setNodes(prev => prev.map(n => n.id === selectedNode ? { ...n, label: e.target.value } : n))}
+                  className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-muted-foreground">节点ID</label>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 font-mono bg-muted/30 px-1.5 py-1 rounded truncate">{selectedNodeData.id}</p>
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground">算子版本</label>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 bg-muted/30 px-1.5 py-1 rounded">v1.0.0</p>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">算子名称</label>
+                <p className="text-xs text-foreground mt-0.5">{selectedNodeData.category} · {selectedNodeData.operatorType}</p>
+              </div>
+              {selectedNodeData.description && (
+                <div>
+                  <label className="text-[10px] text-muted-foreground">算子描述</label>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">{selectedNodeData.description}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Middle: param form */}
+            <div className="border-t pt-3 space-y-3">
+              <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">参数配置</p>
+              {params.map(p => (
+                <ParamFormField key={p.key} param={p}
+                  value={selectedNodeData.config[p.key]}
+                  onChange={v => updateNodeConfig(selectedNodeData.id, p.key, v)} />
+              ))}
+            </div>
+
+            {/* Dependencies */}
+            {needsModel && (
+              <div className="border-t pt-3 space-y-3">
+                <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">依赖服务</p>
+                <div>
+                  <label className="text-[10px] text-muted-foreground">模型</label>
+                  <select value={selectedNodeData.config._model || ""}
+                    onChange={e => updateNodeConfig(selectedNodeData.id, "_model", e.target.value)}
+                    className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30">
+                    <option value="">请选择模型</option>
+                    <option value="gpt-4o">GPT-4o（v2024-08, 可用）</option>
+                    <option value="qwen-max">通义千问-Max（v2.5, 可用）</option>
+                    <option value="glm-4">GLM-4（v4.0, 可用）</option>
+                    <option value="deepseek-v3">DeepSeek-V3（v3.0, 维护中）</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* Connections */}
+            <div className="border-t pt-3">
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">连接</label>
+              <div className="mt-1 space-y-1">
+                {nodeConnections.map(c => {
+                  const other = c.from === selectedNode ? nodes.find(n => n.id === c.to) : nodes.find(n => n.id === c.from);
+                  const direction = c.from === selectedNode ? "→" : "←";
+                  return (
+                    <div key={c.id} className={`flex items-center justify-between text-[10px] px-2 py-1 rounded ${c.compatible === false ? "bg-destructive/10 border border-destructive/30" : "bg-muted/50"}`}>
+                      <span className="flex items-center gap-1">
+                        {c.compatible === false && <AlertTriangle className="w-3 h-3 text-destructive" />}
+                        {direction} {other?.label || "未知"}
+                      </span>
+                      <button onClick={() => setConnections(prev => prev.filter(cc => cc.id !== c.id))} className="text-muted-foreground hover:text-destructive">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+                {nodeConnections.length === 0 && <p className="text-[10px] text-muted-foreground">暂无连接</p>}
+              </div>
+            </div>
+
+            {/* Bottom actions */}
+            <div className="border-t pt-3 space-y-2">
+              <Button size="sm" variant="outline" className="w-full text-xs h-7" onClick={() => toast.success("参数校验通过")}>
+                <CheckCircle2 className="w-3 h-3 mr-1" />验证参数
+              </Button>
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" className="flex-1 text-xs h-7">
+                  <HelpCircle className="w-3 h-3 mr-1" />查看帮助
+                </Button>
+                <Button size="sm" variant="ghost" className="flex-1 text-xs h-7">
+                  <Eye className="w-3 h-3 mr-1" />查看示例
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -547,6 +1450,15 @@ const WorkflowCanvas = () => {
             <span className="text-xs text-muted-foreground w-10 text-center">{Math.round(zoom * 100)}%</span>
             <button onClick={() => setZoom(z => Math.max(0.25, z - 0.1))} className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="缩小"><ZoomOut className="w-4 h-4" /></button>
             <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="适应画布"><Maximize2 className="w-4 h-4" /></button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button onClick={() => setShowMinimap(!showMinimap)}
+                  className={`p-2 rounded-md hover:bg-muted/50 ${showMinimap ? "text-primary" : "text-muted-foreground"}`} title="小地图">
+                  <Map className="w-4 h-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{showMinimap ? "隐藏小地图" : "显示小地图"}</TooltipContent>
+            </Tooltip>
             {(selectedNode || selectedConnection) && (
               <>
                 <div className="w-px h-5 bg-border mx-1" />
@@ -566,22 +1478,15 @@ const WorkflowCanvas = () => {
             style={{ width: panelCollapsed ? 48 : 260 }}
           >
             {panelCollapsed ? (
-              /* Collapsed icon bar */
               <div className="flex flex-col items-center py-2 gap-1">
-                <button
-                  onClick={() => setPanelCollapsed(false)}
-                  className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground mb-2"
-                  title="展开算子面板"
-                >
+                <button onClick={() => setPanelCollapsed(false)} className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground mb-2" title="展开算子面板">
                   <PanelLeftOpen className="w-4 h-4" />
                 </button>
                 {operatorCatalog.map(cat => (
                   <Tooltip key={cat.name}>
                     <TooltipTrigger asChild>
-                      <button
-                        onClick={() => { setPanelCollapsed(false); setExpandedCats(new Set([cat.name])); }}
-                        className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground"
-                      >
+                      <button onClick={() => { setPanelCollapsed(false); setExpandedCats(new Set([cat.name])); }}
+                        className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground">
                         <cat.icon className="w-4 h-4" />
                       </button>
                     </TooltipTrigger>
@@ -590,24 +1495,16 @@ const WorkflowCanvas = () => {
                 ))}
               </div>
             ) : (
-              /* Expanded panel */
               <>
                 <div className="p-3 border-b flex items-center gap-2">
-                  <button
-                    onClick={() => setPanelCollapsed(true)}
-                    className="p-1.5 rounded-md hover:bg-muted/50 text-muted-foreground shrink-0"
-                    title="折叠面板"
-                  >
+                  <button onClick={() => setPanelCollapsed(true)} className="p-1.5 rounded-md hover:bg-muted/50 text-muted-foreground shrink-0" title="折叠面板">
                     <PanelLeftClose className="w-3.5 h-3.5" />
                   </button>
                   <div className="relative flex-1">
                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                    <input
-                      value={operatorSearch}
-                      onChange={e => setOperatorSearch(e.target.value)}
+                    <input value={operatorSearch} onChange={e => setOperatorSearch(e.target.value)}
                       placeholder="搜索算子..."
-                      className="w-full pl-7 pr-3 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30"
-                    />
+                      className="w-full pl-7 pr-3 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
@@ -615,11 +1512,8 @@ const WorkflowCanvas = () => {
                     const catExpanded = expandedCats.has(cat.name);
                     return (
                       <div key={cat.name}>
-                        {/* Category header */}
-                        <button
-                          onClick={() => toggleCat(cat.name)}
-                          className="w-full flex items-center gap-2 px-2 py-2 text-xs font-semibold text-foreground hover:bg-muted/50 rounded-md"
-                        >
+                        <button onClick={() => toggleCat(cat.name)}
+                          className="w-full flex items-center gap-2 px-2 py-2 text-xs font-semibold text-foreground hover:bg-muted/50 rounded-md">
                           {catExpanded ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
                           <cat.icon className="w-3.5 h-3.5 shrink-0" style={{ color: catColors[cat.name] }} />
                           <span>{cat.name}</span>
@@ -634,29 +1528,23 @@ const WorkflowCanvas = () => {
                               const typeExpanded = expandedTypes.has(typeKey) || !!operatorSearch;
                               return (
                                 <div key={typeKey}>
-                                  {/* Operator type header with tooltip */}
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <button
-                                        onClick={() => toggleType(typeKey)}
-                                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/30"
-                                      >
+                                      <button onClick={() => toggleType(typeKey)}
+                                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/30">
                                         {typeExpanded ? <ChevronDown className="w-2.5 h-2.5 shrink-0" /> : <ChevronRight className="w-2.5 h-2.5 shrink-0" />}
                                         <span>{opType.name}</span>
                                         <span className="ml-auto text-[10px]">{opType.operators.length}</span>
                                       </button>
                                     </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-[200px]">
-                                      {opType.hint}
-                                    </TooltipContent>
+                                    <TooltipContent side="right" className="max-w-[200px]">{opType.hint}</TooltipContent>
                                   </Tooltip>
                                   {typeExpanded && (
                                     <div className="ml-3 space-y-0.5 mt-0.5">
                                       {opType.operators.map(op => (
                                         <Tooltip key={op.type}>
                                           <TooltipTrigger asChild>
-                                            <div
-                                              draggable
+                                            <div draggable
                                               onDragStart={e => {
                                                 e.dataTransfer.setData("application/operator", JSON.stringify({
                                                   ...op, category: cat.name, operatorType: opType.name,
@@ -664,15 +1552,12 @@ const WorkflowCanvas = () => {
                                                 e.dataTransfer.effectAllowed = "copy";
                                               }}
                                               onDoubleClick={() => addNodeAtCenter(op, cat.name, opType.name)}
-                                              className="flex items-center gap-2 px-2 py-1.5 text-xs text-foreground rounded-md hover:bg-muted/50 cursor-grab active:cursor-grabbing border border-transparent hover:border-border select-none"
-                                            >
+                                              className="flex items-center gap-2 px-2 py-1.5 text-xs text-foreground rounded-md hover:bg-muted/50 cursor-grab active:cursor-grabbing border border-transparent hover:border-border select-none">
                                               <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: catColors[cat.name] || "hsl(var(--primary))" }} />
                                               <span className="truncate">{op.label}</span>
                                             </div>
                                           </TooltipTrigger>
-                                          <TooltipContent side="right" className="max-w-[240px]">
-                                            {op.description}
-                                          </TooltipContent>
+                                          <TooltipContent side="right" className="max-w-[240px]">{op.description}</TooltipContent>
                                         </Tooltip>
                                       ))}
                                     </div>
@@ -725,15 +1610,27 @@ const WorkflowCanvas = () => {
                   const from = getPortPos(fromNode, conn.fromPort, false);
                   const to = getPortPos(toNode, conn.toPort, true);
                   const isSelected = selectedConnection === conn.id;
+                  const isIncompatible = conn.compatible === false;
+                  const strokeColor = isIncompatible
+                    ? "hsl(var(--destructive))"
+                    : isSelected
+                      ? "hsl(var(--primary))"
+                      : "hsl(var(--muted-foreground) / 0.4)";
                   return (
                     <g key={conn.id}>
                       <path d={getPath(from, to)} fill="none" stroke="transparent" strokeWidth={12} className="cursor-pointer"
                         onClick={(e) => { e.stopPropagation(); setSelectedConnection(conn.id); setSelectedNode(null); }} />
-                      <path d={getPath(from, to)} fill="none"
-                        stroke={isSelected ? "hsl(var(--primary))" : "hsl(var(--muted-foreground) / 0.4)"}
-                        strokeWidth={isSelected ? 2.5 : 2} className="pointer-events-none transition-colors" />
-                      <circle cx={to.x} cy={to.y} r={3}
-                        fill={isSelected ? "hsl(var(--primary))" : "hsl(var(--muted-foreground) / 0.4)"} className="pointer-events-none" />
+                      <path d={getPath(from, to)} fill="none" stroke={strokeColor}
+                        strokeWidth={isSelected ? 2.5 : 2}
+                        strokeDasharray={isIncompatible ? "6 3" : undefined}
+                        className="pointer-events-none transition-colors" />
+                      {isIncompatible && (
+                        <g transform={`translate(${(from.x + to.x) / 2 - 6}, ${(from.y + to.y) / 2 - 6})`}>
+                          <circle cx={6} cy={6} r={8} fill="hsl(var(--background))" />
+                          <text x={6} y={10} textAnchor="middle" className="text-[10px] fill-destructive font-bold">!</text>
+                        </g>
+                      )}
+                      <circle cx={to.x} cy={to.y} r={3} fill={strokeColor} className="pointer-events-none" />
                     </g>
                   );
                 })}
@@ -805,106 +1702,76 @@ const WorkflowCanvas = () => {
             )}
 
             {/* Zoom indicator */}
-            <div className="absolute bottom-4 left-4 px-2 py-1 rounded bg-card/80 backdrop-blur text-[10px] text-muted-foreground border">
+            <div className="absolute bottom-4 left-4 px-2 py-1 rounded bg-card/80 backdrop-blur text-[10px] text-muted-foreground border"
+              style={{ bottom: showMinimap && nodes.length > 0 ? MINIMAP_H + 24 : 16 }}>
               节点: {nodes.length} · 连线: {connections.length}
             </div>
+
+            {/* ─── Minimap ─── */}
+            {showMinimap && minimapData && minimapViewport && (
+              <div className="absolute bottom-3 left-3 rounded-lg border bg-card/90 backdrop-blur shadow-lg overflow-hidden"
+                style={{ width: MINIMAP_W, height: MINIMAP_H }}>
+                <svg
+                  width={MINIMAP_W}
+                  height={MINIMAP_H}
+                  className="cursor-pointer"
+                  onMouseDown={handleMinimapMouseDown}
+                  onMouseMove={handleMinimapMouseMove}
+                >
+                  {/* Background */}
+                  <rect width={MINIMAP_W} height={MINIMAP_H} fill="hsl(var(--muted) / 0.5)" />
+
+                  {/* Connections */}
+                  {connections.map(conn => {
+                    const fromNode = nodes.find(n => n.id === conn.from);
+                    const toNode = nodes.find(n => n.id === conn.to);
+                    if (!fromNode || !toNode || !minimapData) return null;
+                    const { minX, minY, scale } = minimapData;
+                    const fx = (fromNode.x + NODE_W / 2 - minX) * scale;
+                    const fy = (fromNode.y + NODE_H / 2 - minY) * scale;
+                    const tx = (toNode.x + NODE_W / 2 - minX) * scale;
+                    const ty = (toNode.y + NODE_H / 2 - minY) * scale;
+                    return (
+                      <line key={conn.id} x1={fx} y1={fy} x2={tx} y2={ty}
+                        stroke={conn.compatible === false ? "hsl(var(--destructive))" : "hsl(var(--muted-foreground) / 0.3)"}
+                        strokeWidth={1} />
+                    );
+                  })}
+
+                  {/* Nodes */}
+                  {nodes.map(node => {
+                    if (!minimapData) return null;
+                    const { minX, minY, scale } = minimapData;
+                    const nx = (node.x - minX) * scale;
+                    const ny = (node.y - minY) * scale;
+                    const nw = NODE_W * scale;
+                    const nh = NODE_H * scale;
+                    return (
+                      <rect key={node.id} x={nx} y={ny} width={Math.max(nw, 4)} height={Math.max(nh, 3)}
+                        rx={1}
+                        fill={catColors[node.category] || "hsl(var(--primary))"}
+                        opacity={selectedNode === node.id ? 1 : 0.7} />
+                    );
+                  })}
+
+                  {/* Viewport rectangle */}
+                  <rect
+                    x={Math.max(0, minimapViewport.x)}
+                    y={Math.max(0, minimapViewport.y)}
+                    width={Math.min(minimapViewport.w, MINIMAP_W)}
+                    height={Math.min(minimapViewport.h, MINIMAP_H)}
+                    fill="hsl(var(--primary) / 0.1)"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={1.5}
+                    rx={2}
+                  />
+                </svg>
+              </div>
+            )}
           </div>
 
-          {/* ─── Right: Properties panel ─── */}
-          {selectedNodeData && (
-            <div className="w-64 border-l bg-card shrink-0 flex flex-col overflow-hidden">
-              <div className="p-3 border-b flex items-center justify-between">
-                <span className="text-xs font-medium text-foreground">节点属性</span>
-                <button onClick={() => setSelectedNode(null)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-3 space-y-4">
-                <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider">名称</label>
-                  <input
-                    value={selectedNodeData.label}
-                    onChange={e => setNodes(prev => prev.map(n => n.id === selectedNode ? { ...n, label: e.target.value } : n))}
-                    className="w-full mt-1 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider">类型</label>
-                  <p className="text-xs text-foreground mt-1">{selectedNodeData.type}</p>
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider">分类</label>
-                  <p className="text-xs mt-1">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full" style={{ background: catColors[selectedNodeData.category] }} />
-                      {selectedNodeData.category} · {selectedNodeData.operatorType}
-                    </span>
-                  </p>
-                </div>
-                {selectedNodeData.description && (
-                  <div>
-                    <label className="text-[10px] text-muted-foreground uppercase tracking-wider">描述</label>
-                    <p className="text-xs text-muted-foreground mt-1">{selectedNodeData.description}</p>
-                  </div>
-                )}
-                <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider">输入端口</label>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {selectedNodeData.inputs.length > 0 ? selectedNodeData.inputs.map(p => (
-                      <span key={p} className="px-1.5 py-0.5 text-[10px] bg-muted rounded">{p}</span>
-                    )) : <span className="text-[10px] text-muted-foreground">无</span>}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider">输出端口</label>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {selectedNodeData.outputs.length > 0 ? selectedNodeData.outputs.map(p => (
-                      <span key={p} className="px-1.5 py-0.5 text-[10px] bg-muted rounded">{p}</span>
-                    )) : <span className="text-[10px] text-muted-foreground">无</span>}
-                  </div>
-                </div>
-
-                <div className="border-t pt-3">
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider">连接</label>
-                  <div className="mt-1 space-y-1">
-                    {connections.filter(c => c.from === selectedNode || c.to === selectedNode).map(c => {
-                      const other = c.from === selectedNode ? nodes.find(n => n.id === c.to) : nodes.find(n => n.id === c.from);
-                      const direction = c.from === selectedNode ? "→" : "←";
-                      return (
-                        <div key={c.id} className="flex items-center justify-between text-[10px] px-2 py-1 bg-muted/50 rounded">
-                          <span>{direction} {other?.label || "未知"}</span>
-                          <button onClick={() => setConnections(prev => prev.filter(cc => cc.id !== c.id))} className="text-muted-foreground hover:text-destructive">
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                    {connections.filter(c => c.from === selectedNode || c.to === selectedNode).length === 0 && (
-                      <p className="text-[10px] text-muted-foreground">暂无连接</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="border-t pt-3">
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider">参数配置</label>
-                  <div className="mt-2 space-y-2">
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">批大小</label>
-                      <input defaultValue="1000" className="w-full mt-0.5 px-2 py-1 text-xs border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">并行度</label>
-                      <input defaultValue="4" className="w-full mt-0.5 px-2 py-1 text-xs border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">超时(秒)</label>
-                      <input defaultValue="300" className="w-full mt-0.5 px-2 py-1 text-xs border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* ─── Right: Properties panel (always visible) ─── */}
+          {renderPropertyPanel()}
         </div>
       </div>
     </TooltipProvider>
