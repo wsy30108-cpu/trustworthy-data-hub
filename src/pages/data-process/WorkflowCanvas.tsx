@@ -1165,6 +1165,171 @@ const WorkflowCanvas = () => {
     toast.info("调试已停止");
   }, []);
 
+  /* ─── Workflow Validation ─── */
+  const validateWorkflow = useCallback((): boolean => {
+    const errors: ValidationError[] = [];
+    let errIdx = 0;
+
+    // 1. 输入节点配置：至少一个输入节点且必须配置数据源
+    const inputNodes = nodes.filter(n => n.category === "输入节点");
+    if (inputNodes.length === 0) {
+      errors.push({ id: `ve-${errIdx++}`, type: "error", message: "请先配置至少一个输入节点", nodeIds: [] });
+    } else {
+      // Check each input node has a data source configured
+      inputNodes.forEach(n => {
+        const hasSource = n.type === "file_input"
+          ? !!n.config._fileUploaded
+          : !!(n.config._dataset && n.config._version);
+        if (!hasSource) {
+          errors.push({ id: `ve-${errIdx++}`, type: "error", message: `输入数据源不存在：${n.label}`, nodeIds: [n.id] });
+        }
+      });
+    }
+
+    // 2. 输出节点配置：至少一个输出节点完整配置
+    const outputNodes = nodes.filter(n => n.category === "输出节点");
+    if (outputNodes.length === 0) {
+      errors.push({ id: `ve-${errIdx++}`, type: "error", message: "请先配置至少一个输出节点", nodeIds: [] });
+    }
+
+    // 3. 节点连通性：所有非孤立节点必须在 Input→Output 路径上
+    if (inputNodes.length > 0 && outputNodes.length > 0) {
+      // BFS from all input nodes forward
+      const reachableFromInput = new Set<string>();
+      const adjForward: Record<string, string[]> = {};
+      connections.forEach(c => { if (!adjForward[c.from]) adjForward[c.from] = []; adjForward[c.from].push(c.to); });
+      const fwdQueue = inputNodes.map(n => n.id);
+      fwdQueue.forEach(id => reachableFromInput.add(id));
+      while (fwdQueue.length > 0) {
+        const curr = fwdQueue.shift()!;
+        for (const next of adjForward[curr] || []) {
+          if (!reachableFromInput.has(next)) { reachableFromInput.add(next); fwdQueue.push(next); }
+        }
+      }
+      // BFS from all output nodes backward
+      const reachableFromOutput = new Set<string>();
+      const adjBackward: Record<string, string[]> = {};
+      connections.forEach(c => { if (!adjBackward[c.to]) adjBackward[c.to] = []; adjBackward[c.to].push(c.from); });
+      const bwdQueue = outputNodes.map(n => n.id);
+      bwdQueue.forEach(id => reachableFromOutput.add(id));
+      while (bwdQueue.length > 0) {
+        const curr = bwdQueue.shift()!;
+        for (const prev of adjBackward[curr] || []) {
+          if (!reachableFromOutput.has(prev)) { reachableFromOutput.add(prev); bwdQueue.push(prev); }
+        }
+      }
+      // Nodes that have any connections but are not on an Input→Output path
+      const connectedNodeIds = new Set<string>();
+      connections.forEach(c => { connectedNodeIds.add(c.from); connectedNodeIds.add(c.to); });
+      nodes.forEach(n => {
+        if (connectedNodeIds.has(n.id) || n.category === "输入节点" || n.category === "输出节点") {
+          if (!reachableFromInput.has(n.id) || !reachableFromOutput.has(n.id)) {
+            errors.push({ id: `ve-${errIdx++}`, type: "error", message: `存在未连接节点: ${n.label}`, nodeIds: [n.id] });
+          }
+        }
+      });
+      // Truly isolated nodes (no connections at all, not input/output)
+      nodes.forEach(n => {
+        if (!connectedNodeIds.has(n.id) && n.category !== "输入节点" && n.category !== "输出节点") {
+          errors.push({ id: `ve-${errIdx++}`, type: "error", message: `存在未连接节点: ${n.label}`, nodeIds: [n.id] });
+        }
+      });
+    }
+
+    // 4. 必填参数：所有算子的必填参数不为空
+    nodes.forEach(n => {
+      if (n.category === "输入节点" || n.category === "输出节点") return;
+      const params = operatorParams[n.type] || defaultOperatorParams;
+      const missing = params.filter(p => p.required && (n.config[p.key] === undefined || n.config[p.key] === ""));
+      if (missing.length > 0) {
+        errors.push({
+          id: `ve-${errIdx++}`, type: "error",
+          message: `节点 [${n.label}] 必填参数未填写: ${missing.map(p => p.label).join("、")}`,
+          nodeIds: [n.id],
+        });
+      }
+    });
+
+    // 5. 数据类型兼容性
+    connections.forEach(c => {
+      if (c.compatible === false) {
+        const fromNode = nodes.find(n => n.id === c.from);
+        const toNode = nodes.find(n => n.id === c.to);
+        errors.push({
+          id: `ve-${errIdx++}`, type: "error",
+          message: `节点 [${fromNode?.label}] 输出类型与节点 [${toNode?.label}] 输入类型不兼容`,
+          nodeIds: [c.from, c.to],
+          connectionIds: [c.id],
+        });
+      }
+    });
+
+    // 6. 环路检测
+    {
+      const inDeg: Record<string, number> = {};
+      const adj: Record<string, string[]> = {};
+      nodes.forEach(n => { inDeg[n.id] = 0; adj[n.id] = []; });
+      connections.forEach(c => { adj[c.from]?.push(c.to); inDeg[c.to] = (inDeg[c.to] || 0) + 1; });
+      const q = nodes.filter(n => inDeg[n.id] === 0).map(n => n.id);
+      const visited = new Set<string>();
+      while (q.length > 0) {
+        const id = q.shift()!;
+        visited.add(id);
+        for (const next of adj[id] || []) { inDeg[next]--; if (inDeg[next] === 0) q.push(next); }
+      }
+      if (visited.size < nodes.length) {
+        errors.push({ id: `ve-${errIdx++}`, type: "error", message: "工作流中存在循环依赖，请检查" });
+      }
+    }
+
+    // 7. 算子异常（mock: check version status）
+    const offlineOperators = ["deprecated_op"];
+    nodes.forEach(n => {
+      if (offlineOperators.includes(n.type)) {
+        errors.push({ id: `ve-${errIdx++}`, type: "error", message: `算子版本已更新请删除后重新添加或算子已下线：${n.label}`, nodeIds: [n.id] });
+      }
+    });
+
+    setValidationErrors(errors);
+    if (errors.length > 0) {
+      setShowValidationPanel(true);
+      // Highlight all error nodes
+      const allNodeIds = new Set<string>();
+      const allConnIds = new Set<string>();
+      errors.forEach(e => {
+        e.nodeIds?.forEach(id => allNodeIds.add(id));
+        e.connectionIds?.forEach(id => allConnIds.add(id));
+      });
+      setHighlightedNodes(allNodeIds);
+      setHighlightedConnections(allConnIds);
+      return false;
+    }
+    setShowValidationPanel(false);
+    setHighlightedNodes(new Set());
+    setHighlightedConnections(new Set());
+    return true;
+  }, [nodes, connections]);
+
+  const focusValidationError = useCallback((error: ValidationError) => {
+    // Clear previous highlights
+    setHighlightedNodes(new Set(error.nodeIds || []));
+    setHighlightedConnections(new Set(error.connectionIds || []));
+    // Select and pan to first related node
+    if (error.nodeIds && error.nodeIds.length > 0) {
+      const targetNode = nodes.find(n => n.id === error.nodeIds![0]);
+      if (targetNode && canvasRef.current) {
+        setSelectedNode(targetNode.id);
+        const rect = canvasRef.current.getBoundingClientRect();
+        setPan({
+          x: -(targetNode.x - rect.width / 2 / zoom + NODE_W / 2) * zoom,
+          y: -(targetNode.y - rect.height / 2 / zoom + NODE_H / 2) * zoom,
+        });
+      }
+    } else if (error.connectionIds && error.connectionIds.length > 0) {
+      setSelectedConnection(error.connectionIds[0]);
+    }
+  }, [nodes, zoom]);
+
   // Debug elapsed timer
   useEffect(() => {
     if (debugMode) {
