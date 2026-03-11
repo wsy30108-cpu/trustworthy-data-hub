@@ -1574,6 +1574,33 @@ const WorkflowCanvas = () => {
               </TooltipTrigger>
               <TooltipContent>{showMinimap ? "隐藏小地图" : "显示小地图"}</TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button onClick={autoLayout} className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="自动排列">
+                  <AlignHorizontalDistributeCenter className="w-4 h-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>自动排列</TooltipContent>
+            </Tooltip>
+            <div className="w-px h-5 bg-border mx-1" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button onClick={() => setViewMode(viewMode === "visual" ? "json" : "visual")}
+                  className={`p-2 rounded-md hover:bg-muted/50 ${viewMode === "json" ? "text-primary" : "text-muted-foreground"}`}>
+                  {viewMode === "visual" ? <Code2 className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{viewMode === "visual" ? "切换到 JSON 视图" : "切换到可视化视图"}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button onClick={() => setRightPanelCollapsed(!rightPanelCollapsed)}
+                  className={`p-2 rounded-md hover:bg-muted/50 ${rightPanelCollapsed ? "text-muted-foreground" : "text-primary"}`}>
+                  {rightPanelCollapsed ? <PanelRightOpen className="w-4 h-4" /> : <PanelRightClose className="w-4 h-4" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{rightPanelCollapsed ? "展开属性面板" : "收起属性面板"}</TooltipContent>
+            </Tooltip>
             {(selectedNode || selectedConnection) && (
               <>
                 <div className="w-px h-5 bg-border mx-1" />
