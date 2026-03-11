@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { ArrowLeft, Plus, Search, RotateCcw, Eye, Download, Upload, Trash2, Share2, Sparkles, Tag, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Edit, Filter } from "lucide-react";
+import { ArrowLeft, Plus, Search, RotateCcw, Eye, Download, Upload, Trash2, Share2, Sparkles, Tag, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Edit, Filter, CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
