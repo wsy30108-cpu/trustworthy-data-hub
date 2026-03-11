@@ -668,6 +668,15 @@ const WorkflowCanvas = () => {
   const [outputNewName, setOutputNewName] = useState("");
   const [outputWriteMode, setOutputWriteMode] = useState<"append" | "clear">("append");
 
+  // Debug mode
+  const [debugMode, setDebugMode] = useState(false);
+  const [debugElapsed, setDebugElapsed] = useState(0);
+  const [debugNodeStates, setDebugNodeStates] = useState<Record<string, { status: "pending" | "running" | "done" | "error"; count: number; duration: number }>>({});
+  const [debugLogs, setDebugLogs] = useState<Record<string, string[]>>({});
+  const [showLogPanel, setShowLogPanel] = useState(false);
+  const [logNodeId, setLogNodeId] = useState<string | null>(null);
+  const debugTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Minimap drag
   const [minimapDragging, setMinimapDragging] = useState(false);
 
