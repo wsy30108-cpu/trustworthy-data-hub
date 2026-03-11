@@ -149,8 +149,17 @@ const ConsoleSpaces = () => {
     return true;
   });
 
-  const detail = mockSpaces.find(s => s.id === showDetail);
   const currentAdmin = user?.name || "超级管理员";
+
+  // Navigate to detail page
+  if (showDetail) {
+    return (
+      <ConsoleSpaceDetail
+        space={showDetail}
+        onBack={() => setShowDetail(null)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
