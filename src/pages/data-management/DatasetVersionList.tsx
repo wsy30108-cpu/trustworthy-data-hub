@@ -150,18 +150,41 @@ function ExportDialog({ open, onClose, version }: { open: boolean; onClose: () =
   );
 }
 
+/* ─── Mock data for share targets ─── */
+const MOCK_USERS = [
+  { id: "u1", name: "张三" }, { id: "u2", name: "李四" }, { id: "u3", name: "王五" },
+  { id: "u4", name: "赵六" }, { id: "u5", name: "孙七" }, { id: "u6", name: "周八" },
+];
+const MOCK_ROLES = [
+  { id: "r1", name: "空间管理员" }, { id: "r2", name: "数据工程师" }, { id: "r3", name: "标注员" },
+  { id: "r4", name: "质检员" }, { id: "r5", name: "验收员" }, { id: "r6", name: "观察员" },
+];
+
 /* ─── Share Dialog ─── */
 function ShareDialog({ open, onClose, version }: { open: boolean; onClose: () => void; version: string }) {
   const [shareType, setShareType] = useState("指定用户");
   const [perms, setPerms] = useState<string[]>(["读数据集"]);
   const [expiry, setExpiry] = useState("永久有效");
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [roleSearch, setRoleSearch] = useState("");
+  const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
+  const [expiryCalendarOpen, setExpiryCalendarOpen] = useState(false);
   const { toast } = useToast();
   const togglePerm = (p: string) => setPerms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+  const toggleUser = (id: string) => setSelectedUsers(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleRole = (id: string) => setSelectedRoles(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const filteredUsers = MOCK_USERS.filter(u => u.name.includes(userSearch));
+  const filteredRoles = MOCK_ROLES.filter(r => r.name.includes(roleSearch));
+
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>分享 {version}</DialogTitle></DialogHeader>
         <div className="space-y-4">
+          {/* Share type */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium">分享对象类型</label>
             <div className="flex gap-3">
@@ -172,6 +195,76 @@ function ShareDialog({ open, onClose, version }: { open: boolean; onClose: () =>
               ))}
             </div>
           </div>
+
+          {/* User selection */}
+          {shareType === "指定用户" && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">选择用户</label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="搜索用户..." value={userSearch} onChange={e => setUserSearch(e.target.value)} className="pl-8 h-9" />
+              </div>
+              {selectedUsers.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {selectedUsers.map(uid => {
+                    const u = MOCK_USERS.find(x => x.id === uid);
+                    return u ? (
+                      <span key={uid} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs">
+                        {u.name}
+                        <X className="w-3 h-3 cursor-pointer hover:text-destructive" onClick={() => toggleUser(uid)} />
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              )}
+              <div className="border rounded-md max-h-36 overflow-y-auto">
+                {filteredUsers.length === 0 ? (
+                  <div className="p-3 text-center text-sm text-muted-foreground">无匹配用户</div>
+                ) : filteredUsers.map(u => (
+                  <label key={u.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm">
+                    <input type="checkbox" checked={selectedUsers.includes(u.id)} onChange={() => toggleUser(u.id)} className="rounded accent-primary" />
+                    {u.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Role selection */}
+          {shareType === "指定空间角色" && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">选择角色</label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="搜索角色..." value={roleSearch} onChange={e => setRoleSearch(e.target.value)} className="pl-8 h-9" />
+              </div>
+              {selectedRoles.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {selectedRoles.map(rid => {
+                    const r = MOCK_ROLES.find(x => x.id === rid);
+                    return r ? (
+                      <span key={rid} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs">
+                        {r.name}
+                        <X className="w-3 h-3 cursor-pointer hover:text-destructive" onClick={() => toggleRole(rid)} />
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              )}
+              <div className="border rounded-md max-h-36 overflow-y-auto">
+                {filteredRoles.length === 0 ? (
+                  <div className="p-3 text-center text-sm text-muted-foreground">无匹配角色</div>
+                ) : filteredRoles.map(r => (
+                  <label key={r.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm">
+                    <input type="checkbox" checked={selectedRoles.includes(r.id)} onChange={() => toggleRole(r.id)} className="rounded accent-primary" />
+                    {r.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Permissions */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium">授权权限</label>
             <div className="flex gap-3">
@@ -182,6 +275,8 @@ function ShareDialog({ open, onClose, version }: { open: boolean; onClose: () =>
               ))}
             </div>
           </div>
+
+          {/* Expiry */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium">有效期</label>
             <div className="flex gap-3">
@@ -191,6 +286,26 @@ function ShareDialog({ open, onClose, version }: { open: boolean; onClose: () =>
                 </label>
               ))}
             </div>
+            {expiry === "自定义有效期" && (
+              <Popover open={expiryCalendarOpen} onOpenChange={setExpiryCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal mt-1.5", !expiryDate && "text-muted-foreground")}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {expiryDate ? format(expiryDate, "yyyy-MM-dd") : "选择截止日期"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={expiryDate}
+                    onSelect={(d) => { setExpiryDate(d); setExpiryCalendarOpen(false); }}
+                    disabled={(date) => date < new Date()}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            )}
           </div>
         </div>
         <DialogFooter>
