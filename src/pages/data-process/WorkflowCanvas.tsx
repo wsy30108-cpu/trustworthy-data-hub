@@ -685,10 +685,14 @@ const WorkflowCanvas = () => {
   const [logNodeId, setLogNodeId] = useState<string | null>(null);
   const debugTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Validation
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [showValidationPanel, setShowValidationPanel] = useState(false);
+  const [highlightedNodes, setHighlightedNodes] = useState<Set<string>>(new Set());
+  const [highlightedConnections, setHighlightedConnections] = useState<Set<string>>(new Set());
+
   // Minimap drag
   const [minimapDragging, setMinimapDragging] = useState(false);
-
-  const toggleCat = (name: string) => {
     setExpandedCats(prev => {
       const next = new Set(prev);
       next.has(name) ? next.delete(name) : next.add(name);
