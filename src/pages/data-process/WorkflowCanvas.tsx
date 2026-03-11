@@ -6,7 +6,8 @@ import {
   X, PanelLeftClose, PanelLeftOpen, Search, Plus, Minus,
   Type, Image, Mic, Video, Layers, Database, FileOutput, Wrench,
   AlertTriangle, CheckCircle2, HelpCircle, Eye, Upload, Map,
-  PanelRightClose, PanelRightOpen, Code2, LayoutGrid, AlignHorizontalDistributeCenter, Info
+  PanelRightClose, PanelRightOpen, Code2, LayoutGrid, AlignHorizontalDistributeCenter, Info,
+  Bug, Square, Clock, Activity, Terminal, Loader2
 } from "lucide-react";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
@@ -667,6 +668,15 @@ const WorkflowCanvas = () => {
   const [outputNewName, setOutputNewName] = useState("");
   const [outputWriteMode, setOutputWriteMode] = useState<"append" | "clear">("append");
 
+  // Debug mode
+  const [debugMode, setDebugMode] = useState(false);
+  const [debugElapsed, setDebugElapsed] = useState(0);
+  const [debugNodeStates, setDebugNodeStates] = useState<Record<string, { status: "pending" | "running" | "done" | "error"; count: number; duration: number }>>({});
+  const [debugLogs, setDebugLogs] = useState<Record<string, string[]>>({});
+  const [showLogPanel, setShowLogPanel] = useState(false);
+  const [logNodeId, setLogNodeId] = useState<string | null>(null);
+  const debugTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Minimap drag
   const [minimapDragging, setMinimapDragging] = useState(false);
 
@@ -1051,6 +1061,115 @@ const WorkflowCanvas = () => {
     setZoom(1);
     toast.success("已自动排列节点");
   }, [nodes, connections]);
+
+  /* ─── Debug mode ─── */
+  const startDebug = useCallback(() => {
+    if (nodes.length === 0) { toast.error("画布中没有节点"); return; }
+    setDebugMode(true);
+    setDebugElapsed(0);
+    setShowLogPanel(false);
+    setLogNodeId(null);
+    // Initialize all nodes as pending
+    const initStates: typeof debugNodeStates = {};
+    const initLogs: Record<string, string[]> = {};
+    nodes.forEach(n => {
+      initStates[n.id] = { status: "pending", count: 0, duration: 0 };
+      initLogs[n.id] = [];
+    });
+    setDebugNodeStates(initStates);
+    setDebugLogs(initLogs);
+
+    // Build execution order (topological)
+    const inDeg: Record<string, number> = {};
+    const adj: Record<string, string[]> = {};
+    nodes.forEach(n => { inDeg[n.id] = 0; adj[n.id] = []; });
+    connections.forEach(c => { adj[c.from]?.push(c.to); inDeg[c.to] = (inDeg[c.to] || 0) + 1; });
+    const order: string[] = [];
+    const queue = nodes.filter(n => inDeg[n.id] === 0).map(n => n.id);
+    const visited = new Set<string>();
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      order.push(id);
+      for (const next of adj[id] || []) {
+        inDeg[next]--;
+        if (inDeg[next] === 0) queue.push(next);
+      }
+    }
+    // Add unvisited
+    nodes.forEach(n => { if (!visited.has(n.id)) order.push(n.id); });
+
+    // Simulate sequential execution
+    let step = 0;
+    const simulate = () => {
+      if (step < order.length) {
+        const nodeId = order[step];
+        const mockCount = Math.floor(Math.random() * 10000) + 500;
+        const mockDuration = Math.floor(Math.random() * 30) + 2;
+        // Set current node running
+        setDebugNodeStates(prev => ({
+          ...prev,
+          [nodeId]: { status: "running", count: 0, duration: 0 },
+        }));
+        setDebugLogs(prev => ({
+          ...prev,
+          [nodeId]: [
+            ...(prev[nodeId] || []),
+            `[${new Date().toLocaleTimeString()}] 开始执行节点...`,
+            `[${new Date().toLocaleTimeString()}] 加载数据中...`,
+          ],
+        }));
+
+        // Finish after mockDuration seconds (compressed to 2-4s)
+        const finishDelay = 2000 + Math.random() * 2000;
+        setTimeout(() => {
+          setDebugNodeStates(prev => ({
+            ...prev,
+            [nodeId]: { status: "done", count: mockCount, duration: mockDuration },
+          }));
+          setDebugLogs(prev => ({
+            ...prev,
+            [nodeId]: [
+              ...(prev[nodeId] || []),
+              `[${new Date().toLocaleTimeString()}] 处理 ${mockCount} 条数据`,
+              `[${new Date().toLocaleTimeString()}] 节点执行完成 (${mockDuration}s)`,
+            ],
+          }));
+          step++;
+          simulate();
+        }, finishDelay);
+      }
+    };
+    simulate();
+    toast.info("工作流调试已启动");
+  }, [nodes, connections]);
+
+  const stopDebug = useCallback(() => {
+    setDebugMode(false);
+    if (debugTimerRef.current) { clearInterval(debugTimerRef.current); debugTimerRef.current = null; }
+    setShowLogPanel(false);
+    setLogNodeId(null);
+    toast.info("调试已停止");
+  }, []);
+
+  // Debug elapsed timer
+  useEffect(() => {
+    if (debugMode) {
+      debugTimerRef.current = setInterval(() => setDebugElapsed(prev => prev + 1), 1000);
+      return () => { if (debugTimerRef.current) clearInterval(debugTimerRef.current); };
+    }
+  }, [debugMode]);
+
+  const debugDoneCount = useMemo(() => Object.values(debugNodeStates).filter(s => s.status === "done").length, [debugNodeStates]);
+  const debugRunningCount = useMemo(() => Object.values(debugNodeStates).filter(s => s.status === "running").length, [debugNodeStates]);
+  const debugAllDone = debugMode && debugDoneCount === nodes.length && nodes.length > 0;
+  const formatElapsed = (s: number) => {
+    const h = String(Math.floor(s / 3600)).padStart(2, "0");
+    const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+    const sec = String(s % 60).padStart(2, "0");
+    return `${h}:${m}:${sec}`;
+  };
 
   /* ─── JSON representation ─── */
   const workflowJson = useMemo(() => {
@@ -1555,7 +1674,14 @@ const WorkflowCanvas = () => {
               <ArrowLeft className="w-4 h-4" />
             </button>
             <span className="text-sm font-medium text-foreground">{wfName}</span>
-            <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded">编辑中</span>
+            {debugMode ? (
+              <span className="text-xs text-primary-foreground px-2 py-0.5 bg-primary rounded flex items-center gap-1">
+                {debugAllDone ? <CheckCircle2 className="w-3 h-3" /> : <Loader2 className="w-3 h-3 animate-spin" />}
+                {debugAllDone ? "已完成" : "调试中"}
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded">编辑中</span>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <button className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="撤销"><Undo2 className="w-4 h-4" /></button>
@@ -1608,11 +1734,54 @@ const WorkflowCanvas = () => {
               </>
             )}
             <div className="w-px h-5 bg-border mx-1" />
-            <button className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted/50 text-muted-foreground flex items-center gap-1.5"><Save className="w-3.5 h-3.5" /> 保存</button>
-            <button className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> 运行</button>
+            <button className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted/50 text-muted-foreground flex items-center gap-1.5" disabled={debugMode}><Save className="w-3.5 h-3.5" /> 保存</button>
+            {debugMode ? (
+              <button onClick={stopDebug} className="px-3 py-1.5 text-xs bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 flex items-center gap-1.5">
+                <Square className="w-3.5 h-3.5" /> 停止调试
+              </button>
+            ) : (
+              <>
+                <button onClick={startDebug} className="px-3 py-1.5 text-xs border border-primary text-primary rounded-md hover:bg-primary/10 flex items-center gap-1.5">
+                  <Bug className="w-3.5 h-3.5" /> 调试
+                </button>
+                <button className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> 运行</button>
+              </>
+            )}
           </div>
         </div>
 
+        {/* ─── Debug Status Bar ─── */}
+        {debugMode && (
+          <div className="h-9 border-b bg-muted/50 flex items-center justify-between px-4 shrink-0 z-20 animate-fade-in">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                {debugAllDone ? (
+                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                )}
+                <span className="text-xs font-medium text-foreground">{debugAllDone ? "已完成" : "运行中"}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="w-3 h-3" />
+                <span>已耗时 {formatElapsed(debugElapsed)}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Activity className="w-3 h-3" />
+                <span>进度 {debugDoneCount}/{nodes.length} 节点</span>
+              </div>
+              {debugRunningCount > 0 && (
+                <div className="flex items-center gap-1.5 text-xs text-primary">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>{debugRunningCount} 个节点执行中</span>
+                </div>
+              )}
+            </div>
+            <button onClick={stopDebug} className="px-2.5 py-1 text-xs border border-destructive text-destructive rounded-md hover:bg-destructive/10 flex items-center gap-1">
+              <Square className="w-3 h-3" /> 停止运行
+            </button>
+          </div>
+        )}
         <div className="flex flex-1 overflow-hidden">
           {/* ─── Left: Operator panel ─── */}
           <div
@@ -1756,6 +1925,12 @@ const WorkflowCanvas = () => {
 
             {/* Nodes & connections layer */}
             <svg ref={svgRef} className="absolute inset-0 w-full h-full" style={{ overflow: "visible" }}>
+              {/* Flow animation defs */}
+              <defs>
+                <marker id="flowDot" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="4" markerHeight="4">
+                  <circle cx="3" cy="3" r="3" fill="hsl(var(--primary))" />
+                </marker>
+              </defs>
               <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
                 {/* Connections */}
                 {connections.map(conn => {
@@ -1766,19 +1941,34 @@ const WorkflowCanvas = () => {
                   const to = getPortPos(toNode, conn.toPort, true);
                   const isSelected = selectedConnection === conn.id;
                   const isIncompatible = conn.compatible === false;
+
+                  // Debug: check if data is flowing on this connection
+                  const fromState = debugNodeStates[conn.from];
+                  const isFlowing = debugMode && fromState && (fromState.status === "running" || fromState.status === "done");
+                  const flowDone = debugMode && fromState?.status === "done";
+
                   const strokeColor = isIncompatible
                     ? "hsl(var(--destructive))"
-                    : isSelected
-                      ? "hsl(var(--primary))"
-                      : "hsl(var(--muted-foreground) / 0.4)";
+                    : isFlowing
+                      ? (flowDone ? "hsl(142 71% 45%)" : "hsl(var(--primary))")
+                      : isSelected
+                        ? "hsl(var(--primary))"
+                        : "hsl(var(--muted-foreground) / 0.4)";
+                  const pathD = getPath(from, to);
                   return (
                     <g key={conn.id}>
-                      <path d={getPath(from, to)} fill="none" stroke="transparent" strokeWidth={12} className="cursor-pointer"
+                      <path d={pathD} fill="none" stroke="transparent" strokeWidth={12} className="cursor-pointer"
                         onClick={(e) => { e.stopPropagation(); setSelectedConnection(conn.id); setSelectedNode(null); }} />
-                      <path d={getPath(from, to)} fill="none" stroke={strokeColor}
+                      <path d={pathD} fill="none" stroke={strokeColor}
                         strokeWidth={isSelected ? 2.5 : 2}
                         strokeDasharray={isIncompatible ? "6 3" : undefined}
                         className="pointer-events-none transition-colors" />
+                      {/* Flow animation dot */}
+                      {isFlowing && !flowDone && (
+                        <circle r={3} fill="hsl(var(--primary))" className="pointer-events-none">
+                          <animateMotion dur="1.5s" repeatCount="indefinite" path={pathD} />
+                        </circle>
+                      )}
                       {isIncompatible && (
                         <g transform={`translate(${(from.x + to.x) / 2 - 6}, ${(from.y + to.y) / 2 - 6})`}>
                           <circle cx={6} cy={6} r={8} fill="hsl(var(--background))" />
@@ -1800,20 +1990,53 @@ const WorkflowCanvas = () => {
                 {nodes.map(node => {
                   const isSelected = selectedNode === node.id;
                   const color = catColors[node.category] || "hsl(var(--primary))";
+                  const nodeDebug = debugNodeStates[node.id];
+                  const debugBorderColor = debugMode && nodeDebug
+                    ? nodeDebug.status === "running" ? "hsl(var(--primary))"
+                      : nodeDebug.status === "done" ? "hsl(142 71% 45%)"
+                      : nodeDebug.status === "error" ? "hsl(var(--destructive))"
+                      : undefined
+                    : undefined;
                   return (
                     <g key={node.id}>
-                      <foreignObject x={node.x} y={node.y} width={NODE_W} height={NODE_H}>
-                        <div
-                          onMouseDown={e => startNodeDrag(e, node.id)}
-                          onClick={e => { e.stopPropagation(); setSelectedNode(node.id); setSelectedConnection(null); }}
-                          className={`h-full rounded-lg border-2 bg-card shadow-sm select-none transition-shadow ${isSelected ? "shadow-lg" : "hover:shadow-md"}`}
-                          style={{ borderColor: isSelected ? color : "hsl(var(--border))" }}
-                        >
-                          <div className="h-1.5 rounded-t-md" style={{ background: color }} />
-                          <div className="px-3 py-2">
-                            <div className="text-xs font-medium text-foreground truncate">{node.label}</div>
-                            <div className="text-[10px] text-muted-foreground mt-0.5">{node.category} · {node.operatorType}</div>
+                      <foreignObject x={node.x} y={node.y} width={NODE_W} height={NODE_H + (debugMode && nodeDebug && nodeDebug.status !== "pending" ? 20 : 0)}>
+                        <div className="relative">
+                          <div
+                            onMouseDown={e => { if (!debugMode) startNodeDrag(e, node.id); }}
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedNode(node.id);
+                              setSelectedConnection(null);
+                              if (debugMode) { setLogNodeId(node.id); setShowLogPanel(true); }
+                            }}
+                            className={`rounded-lg border-2 bg-card shadow-sm select-none transition-all ${debugMode ? "cursor-pointer" : ""} ${isSelected ? "shadow-lg" : "hover:shadow-md"} ${debugMode && nodeDebug?.status === "running" ? "animate-pulse" : ""}`}
+                            style={{
+                              borderColor: debugBorderColor || (isSelected ? color : "hsl(var(--border))"),
+                              height: NODE_H,
+                            }}
+                          >
+                            <div className="h-1.5 rounded-t-md" style={{ background: debugBorderColor || color }} />
+                            <div className="px-3 py-2">
+                              <div className="text-xs font-medium text-foreground truncate">{node.label}</div>
+                              <div className="text-[10px] text-muted-foreground mt-0.5">{node.category} · {node.operatorType}</div>
+                            </div>
+                            {/* Debug status icon */}
+                            {debugMode && nodeDebug && (
+                              <div className="absolute top-1 right-1">
+                                {nodeDebug.status === "running" && <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />}
+                                {nodeDebug.status === "done" && <CheckCircle2 className="w-3.5 h-3.5" style={{ color: "hsl(142 71% 45%)" }} />}
+                                {nodeDebug.status === "error" && <AlertTriangle className="w-3.5 h-3.5 text-destructive" />}
+                              </div>
+                            )}
                           </div>
+                          {/* Debug stats badge below node */}
+                          {debugMode && nodeDebug && nodeDebug.status !== "pending" && (
+                            <div className="flex items-center justify-center gap-2 mt-0.5 text-[9px] text-muted-foreground">
+                              <span>{nodeDebug.count.toLocaleString()} 条</span>
+                              <span>·</span>
+                              <span>{nodeDebug.duration}s</span>
+                            </div>
+                          )}
                         </div>
                       </foreignObject>
 
@@ -1921,6 +2144,40 @@ const WorkflowCanvas = () => {
                     rx={2}
                   />
                 </svg>
+              </div>
+            )}
+
+            {/* ─── Debug Log Panel ─── */}
+            {debugMode && showLogPanel && logNodeId && (
+              <div className="absolute bottom-0 left-0 right-0 bg-card border-t shadow-lg animate-fade-in" style={{ height: 200 }}>
+                <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-xs font-medium text-foreground">
+                      {nodes.find(n => n.id === logNodeId)?.label || logNodeId} — 实时日志
+                    </span>
+                    {debugNodeStates[logNodeId]?.status === "running" && (
+                      <Loader2 className="w-3 h-3 text-primary animate-spin" />
+                    )}
+                    {debugNodeStates[logNodeId]?.status === "done" && (
+                      <CheckCircle2 className="w-3 h-3" style={{ color: "hsl(142 71% 45%)" }} />
+                    )}
+                  </div>
+                  <button onClick={() => setShowLogPanel(false)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="overflow-y-auto p-3 font-mono text-[11px] text-foreground/80 space-y-0.5" style={{ height: 160 }}>
+                  {(debugLogs[logNodeId] || []).length === 0 ? (
+                    <p className="text-muted-foreground">等待执行...</p>
+                  ) : (
+                    (debugLogs[logNodeId] || []).map((line, i) => (
+                      <div key={i} className="leading-relaxed">
+                        <span className="text-muted-foreground">{line}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             )}
           </div>
