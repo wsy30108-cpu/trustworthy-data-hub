@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Plus, Search, RotateCcw, Edit, Trash2, Eye, Download, X, Tag, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, ChevronUp, Filter } from "lucide-react";
+import { Plus, Search, RotateCcw, Edit, Trash2, Eye, Download, X, Tag, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, ChevronUp, Filter, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -55,8 +55,17 @@ const sharedDatasets: SharedDataset[] = [
 const MODALITIES = ["文本", "图像", "语音", "视频", "表格", "跨模态"];
 const AUTH_SCOPES_MINE = ["仅数据集所有者", "指定用户", "指定空间角色", "空间内全体成员"];
 const AUTH_SCOPES_SUB = ["只读", "读写", "可导入版本"];
-const ALL_TAG_KEYS = ["语言", "领域", "标注", "采样率", "类型", "部门"];
-const ALL_TAG_VALUES = ["中文", "多语种", "金融", "医疗", "客服", "工业", "电商", "已标注", "16kHz", "图文对", "AI中心"];
+
+// Tag tree structure: key -> values[]
+const TAG_TREE: Record<string, string[]> = {
+  "语言": ["中文", "多语种", "英文"],
+  "领域": ["金融", "医疗", "客服", "工业", "电商"],
+  "标注": ["已标注", "未标注"],
+  "采样率": ["16kHz", "44.1kHz"],
+  "类型": ["图文对", "文本对"],
+  "部门": ["AI中心", "数据中心"],
+};
+
 const PAGE_SIZES = [10, 20, 50];
 
 /* ─── Multi-check dropdown ─── */
@@ -86,6 +95,109 @@ function MultiCheckDropdown({ options, selected, onChange, placeholder, classNam
               <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} className="rounded accent-primary w-3.5 h-3.5" />{o}
             </label>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Tag Tree Multi-Select Dropdown ─── */
+function TagTreeDropdown({ selected, onChange, className }: {
+  selected: string[]; // stored as "key:value" pairs
+  onChange: (v: string[]) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", handler); return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const toggleExpand = (key: string) => {
+    setExpandedKeys(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  };
+
+  const toggleSelect = (tagKey: string, tagValue: string) => {
+    const id = `${tagKey}:${tagValue}`;
+    onChange(selected.includes(id) ? selected.filter(s => s !== id) : [...selected, id]);
+  };
+
+  const toggleSelectAll = (tagKey: string) => {
+    const values = TAG_TREE[tagKey] || [];
+    const allIds = values.map(v => `${tagKey}:${v}`);
+    const allSelected = allIds.every(id => selected.includes(id));
+    if (allSelected) {
+      onChange(selected.filter(s => !allIds.includes(s)));
+    } else {
+      onChange([...selected.filter(s => !allIds.includes(s)), ...allIds]);
+    }
+  };
+
+  // Filter tree by search
+  const filteredTree = Object.entries(TAG_TREE).filter(([key, values]) => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return key.toLowerCase().includes(s) || values.some(v => v.toLowerCase().includes(s));
+  });
+
+  return (
+    <div ref={ref} className={cn("relative", className)}>
+      <button type="button" onClick={() => setOpen(!open)}
+        className="w-full h-9 px-3 text-sm border rounded-md bg-muted/30 text-left flex items-center justify-between gap-1 hover:border-primary/50 transition-colors">
+        {selected.length ? (
+          <span className="text-foreground truncate">{selected.length}项已选</span>
+        ) : <span className="text-muted-foreground">标签筛选</span>}
+        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-[260px] bg-popover border rounded-lg shadow-lg">
+          <div className="p-2 border-b">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜索标签..."
+                className="w-full h-8 pl-7 pr-3 text-sm border rounded-md bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary/30" />
+            </div>
+          </div>
+          <div className="max-h-56 overflow-y-auto p-1">
+            {filteredTree.length === 0 && <p className="text-xs text-muted-foreground text-center py-3">无匹配标签</p>}
+            {filteredTree.map(([tagKey, values]) => {
+              const filteredValues = search ? values.filter(v => v.toLowerCase().includes(search.toLowerCase()) || tagKey.toLowerCase().includes(search.toLowerCase())) : values;
+              const expanded = expandedKeys.includes(tagKey) || !!search;
+              const allIds = filteredValues.map(v => `${tagKey}:${v}`);
+              const allSelected = allIds.length > 0 && allIds.every(id => selected.includes(id));
+              const someSelected = allIds.some(id => selected.includes(id));
+
+              return (
+                <div key={tagKey}>
+                  <div className="flex items-center gap-1 px-2 py-1.5 hover:bg-muted/50 rounded cursor-pointer" onClick={() => toggleExpand(tagKey)}>
+                    {expanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                    <div className="flex items-center gap-1.5 flex-1" onClick={e => { e.stopPropagation(); toggleSelectAll(tagKey); }}>
+                      <div className={cn("w-3.5 h-3.5 rounded border flex items-center justify-center text-[10px]",
+                        allSelected ? "bg-primary border-primary text-primary-foreground" : someSelected ? "bg-primary/30 border-primary" : "border-muted-foreground/40")}>
+                        {allSelected && <Check className="w-2.5 h-2.5" />}
+                        {someSelected && !allSelected && <span className="block w-1.5 h-0.5 bg-primary rounded" />}
+                      </div>
+                      <span className="text-sm font-medium text-foreground">{tagKey}</span>
+                    </div>
+                  </div>
+                  {expanded && filteredValues.map(val => {
+                    const id = `${tagKey}:${val}`;
+                    const isSelected = selected.includes(id);
+                    return (
+                      <label key={id} className="flex items-center gap-2 pl-8 pr-2 py-1.5 hover:bg-muted/50 cursor-pointer rounded text-sm">
+                        <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(tagKey, val)} className="rounded accent-primary w-3.5 h-3.5" />
+                        {val}
+                      </label>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -128,20 +240,47 @@ function TagCell({ tags, onEdit }: { tags: KVTag[]; onEdit?: () => void }) {
   );
 }
 
-/* ─── Tag Editor Dialog ─── */
+/* ─── Tag Editor Dialog (key & value both required) ─── */
 function TagEditorDialog({ open, onClose, tags, onSave }: {
   open: boolean; onClose: () => void; tags: KVTag[]; onSave: (t: KVTag[]) => void;
 }) {
   const [draft, setDraft] = useState<KVTag[]>([]);
+  const [errors, setErrors] = useState<{ key?: boolean; value?: boolean }[]>([]);
   const { toast } = useToast();
-  useEffect(() => { if (open) setDraft(tags.map(t => ({ ...t }))); }, [open, tags]);
+  useEffect(() => {
+    if (open) {
+      setDraft(tags.map(t => ({ ...t })));
+      setErrors([]);
+    }
+  }, [open, tags]);
   const add = () => {
     if (draft.length >= 20) { toast({ title: "最多支持20个标签", variant: "destructive" }); return; }
     setDraft([...draft, { key: "", value: "" }]);
+    setErrors([...errors, {}]);
   };
-  const remove = (i: number) => setDraft(draft.filter((_, idx) => idx !== i));
-  const update = (i: number, f: "key" | "value", v: string) => { const n = [...draft]; n[i] = { ...n[i], [f]: v }; setDraft(n); };
-  const save = () => { onSave(draft.filter(t => t.key.trim() && t.value.trim())); onClose(); };
+  const remove = (i: number) => {
+    setDraft(draft.filter((_, idx) => idx !== i));
+    setErrors(errors.filter((_, idx) => idx !== i));
+  };
+  const update = (i: number, f: "key" | "value", v: string) => {
+    const n = [...draft]; n[i] = { ...n[i], [f]: v }; setDraft(n);
+    const e = [...errors]; e[i] = { ...e[i], [f]: false }; setErrors(e);
+  };
+  const save = () => {
+    // Validate all tags have both key and value
+    const newErrors = draft.map(t => ({
+      key: !t.key.trim(),
+      value: !t.value.trim(),
+    }));
+    const hasErrors = newErrors.some(e => e.key || e.value);
+    if (hasErrors) {
+      setErrors(newErrors);
+      toast({ title: "标签的键和值均为必填项", variant: "destructive" });
+      return;
+    }
+    onSave(draft);
+    onClose();
+  };
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
@@ -149,10 +288,23 @@ function TagEditorDialog({ open, onClose, tags, onSave }: {
         <DialogHeader><DialogTitle>编辑数据集标签</DialogTitle></DialogHeader>
         <div className="space-y-2 max-h-72 overflow-y-auto">
           {draft.map((t, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <Input placeholder="Key" value={t.key} onChange={e => update(i, "key", e.target.value)} className="flex-1 h-8 text-sm" />
-              <Input placeholder="Value" value={t.value} onChange={e => update(i, "value", e.target.value)} className="flex-1 h-8 text-sm" />
-              <button onClick={() => remove(i)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4 text-muted-foreground" /></button>
+            <div key={i} className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <Input placeholder="Key（必填）" value={t.key} onChange={e => update(i, "key", e.target.value)}
+                    className={cn("h-8 text-sm", errors[i]?.key && "border-destructive")} />
+                </div>
+                <div className="flex-1">
+                  <Input placeholder="Value（必填）" value={t.value} onChange={e => update(i, "value", e.target.value)}
+                    className={cn("h-8 text-sm", errors[i]?.value && "border-destructive")} />
+                </div>
+                <button onClick={() => remove(i)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4 text-muted-foreground" /></button>
+              </div>
+              {(errors[i]?.key || errors[i]?.value) && (
+                <p className="text-xs text-destructive pl-1">
+                  {errors[i]?.key && errors[i]?.value ? "标签键和值均不能为空" : errors[i]?.key ? "标签键不能为空" : "标签值不能为空"}
+                </p>
+              )}
             </div>
           ))}
           {draft.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">暂无标签</p>}
@@ -321,8 +473,7 @@ function ActiveFilterTags({ filters, onRemove, onClear }: {
   filters.scopes.forEach(s => chips.push({ label: `授权范围=${s}`, key: "scopes", value: s }));
   if (filters.dateFrom) chips.push({ label: `开始时间=${format(filters.dateFrom, "yyyy-MM-dd")}`, key: "dateFrom" });
   if (filters.dateTo) chips.push({ label: `结束时间=${format(filters.dateTo, "yyyy-MM-dd")}`, key: "dateTo" });
-  if (filters.tagKey) chips.push({ label: `标签名=${filters.tagKey}`, key: "tagKey" });
-  if (filters.tagValue) chips.push({ label: `标签值=${filters.tagValue}`, key: "tagValue" });
+  filters.selectedTags.forEach(t => chips.push({ label: `标签=${t}`, key: "selectedTags", value: t }));
   if (filters.creator) chips.push({ label: `创建人=${filters.creator}`, key: "creator" });
 
   if (chips.length === 0) return null;
@@ -345,7 +496,7 @@ function ActiveFilterTags({ filters, onRemove, onClear }: {
   );
 }
 
-/* ─── Filter Bar (redesigned) ─── */
+/* ─── Filter Bar (redesigned - single row with inline buttons) ─── */
 function FilterBar({ tab, filters, setFilters, onReset, onAdd }: {
   tab: number; filters: ReturnType<typeof defaultFilters>; setFilters: (f: ReturnType<typeof defaultFilters>) => void; onReset: () => void; onAdd?: () => void;
 }) {
@@ -355,7 +506,7 @@ function FilterBar({ tab, filters, setFilters, onReset, onAdd }: {
   const scopeOptions = tab === 0 ? AUTH_SCOPES_MINE : AUTH_SCOPES_SUB;
 
   const hasActiveFilters = filters.modalities.length > 0 || filters.scopes.length > 0 ||
-    filters.dateFrom || filters.dateTo || filters.tagKey || filters.tagValue || filters.creator || filters.name;
+    filters.dateFrom || filters.dateTo || filters.selectedTags.length > 0 || filters.creator || filters.name;
 
   const handleRemoveFilter = (key: string, value?: string) => {
     const next = { ...filters };
@@ -363,8 +514,7 @@ function FilterBar({ tab, filters, setFilters, onReset, onAdd }: {
     else if (key === "scopes" && value) next.scopes = next.scopes.filter(s => s !== value);
     else if (key === "dateFrom") next.dateFrom = undefined;
     else if (key === "dateTo") next.dateTo = undefined;
-    else if (key === "tagKey") next.tagKey = "";
-    else if (key === "tagValue") next.tagValue = "";
+    else if (key === "selectedTags" && value) next.selectedTags = next.selectedTags.filter(t => t !== value);
     else if (key === "creator") next.creator = "";
     setFilters(next);
   };
@@ -372,10 +522,10 @@ function FilterBar({ tab, filters, setFilters, onReset, onAdd }: {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border bg-card p-4 space-y-3">
-        {/* Primary row: search + basic filters */}
-        <div className="flex items-center gap-3">
-          {/* Search - wider */}
-          <div className="relative flex-1 max-w-[320px]">
+        {/* Primary row: search + basic filters + buttons (all in one row) */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[200px] max-w-[280px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input value={filters.name} onChange={e => setFilters({ ...filters, name: e.target.value })}
               placeholder="模糊搜索数据集名称..."
@@ -384,11 +534,11 @@ function FilterBar({ tab, filters, setFilters, onReset, onAdd }: {
 
           {/* Modality */}
           <MultiCheckDropdown options={MODALITIES} selected={filters.modalities}
-            onChange={v => setFilters({ ...filters, modalities: v })} placeholder="模态 ∨ 全部" className="w-[140px]" />
+            onChange={v => setFilters({ ...filters, modalities: v })} placeholder="模态 ∨ 全部" className="w-[130px]" />
 
           {/* Auth scope */}
           <MultiCheckDropdown options={scopeOptions} selected={filters.scopes}
-            onChange={v => setFilters({ ...filters, scopes: v })} placeholder="授权范围 ∨ 全部" className="w-[160px]" />
+            onChange={v => setFilters({ ...filters, scopes: v })} placeholder="授权范围 ∨ 全部" className="w-[150px]" />
 
           {/* Time */}
           <DateRangePicker from={filters.dateFrom} to={filters.dateTo}
@@ -396,32 +546,41 @@ function FilterBar({ tab, filters, setFilters, onReset, onAdd }: {
 
           {/* Advanced toggle */}
           <button onClick={() => setShowAdvanced(!showAdvanced)}
-            className={cn("h-9 px-3 text-sm border rounded-md flex items-center gap-1.5 transition-colors",
+            className={cn("h-9 px-3 text-sm border rounded-md flex items-center gap-1.5 transition-colors shrink-0",
               showAdvanced ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/30 text-muted-foreground hover:text-foreground hover:border-primary/30")}>
             <Filter className="w-3.5 h-3.5" />
             高级筛选
             {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
+
+          {/* Spacer to push buttons right */}
+          <div className="flex-1" />
+
+          {/* Reset button */}
+          <Button variant="outline" size="sm" onClick={onReset}
+            className={cn("h-9 gap-1.5 text-xs shrink-0", !hasActiveFilters && "opacity-50")} disabled={!hasActiveFilters}>
+            <RotateCcw className="w-3 h-3" />重置
+          </Button>
+
+          {/* Create button */}
+          {onAdd && (
+            <Button size="sm" onClick={onAdd} className="h-9 gap-1.5 text-xs shrink-0">
+              <Plus className="w-3.5 h-3.5" />新增数据集
+            </Button>
+          )}
         </div>
 
         {/* Advanced filters row */}
         {showAdvanced && (
           <div className="flex items-center gap-3 pt-2 border-t border-dashed">
+            {/* Tag tree dropdown (single control replacing two inputs) */}
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground whitespace-nowrap">标签名</span>
-              <select value={filters.tagKey} onChange={e => setFilters({ ...filters, tagKey: e.target.value })}
-                className="h-9 px-3 text-sm border rounded-md bg-muted/30 w-[120px]">
-                <option value="">全部</option>
-                {ALL_TAG_KEYS.map(k => <option key={k}>{k}</option>)}
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground whitespace-nowrap">标签值</span>
-              <select value={filters.tagValue} onChange={e => setFilters({ ...filters, tagValue: e.target.value })}
-                className="h-9 px-3 text-sm border rounded-md bg-muted/30 w-[120px]">
-                <option value="">全部</option>
-                {ALL_TAG_VALUES.map(v => <option key={v}>{v}</option>)}
-              </select>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">标签</span>
+              <TagTreeDropdown
+                selected={filters.selectedTags}
+                onChange={v => setFilters({ ...filters, selectedTags: v })}
+                className="w-[180px]"
+              />
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground whitespace-nowrap">{creatorLabel}</span>
@@ -434,19 +593,6 @@ function FilterBar({ tab, filters, setFilters, onReset, onAdd }: {
             </div>
           </div>
         )}
-
-        {/* Actions row */}
-        <div className="flex items-center justify-between pt-1">
-          <Button variant="outline" size="sm" onClick={onReset}
-            className={cn("h-8 gap-1.5 text-xs", !hasActiveFilters && "opacity-50")} disabled={!hasActiveFilters}>
-            <RotateCcw className="w-3 h-3" />重置
-          </Button>
-          {onAdd && (
-            <Button size="sm" onClick={onAdd} className="h-8 gap-1.5 text-xs">
-              <Plus className="w-3.5 h-3.5" />新增数据集
-            </Button>
-          )}
-        </div>
       </div>
 
       {/* Active filter tags */}
@@ -474,7 +620,7 @@ function EmptyState({ message, guide, onReset }: { message: string; guide: strin
 }
 
 /* ═══════════════ Main Component ═══════════════ */
-const defaultFilters = () => ({ name: "", modalities: [] as string[], scopes: [] as string[], dateFrom: undefined as Date | undefined, dateTo: undefined as Date | undefined, tagKey: "", tagValue: "", creator: "" });
+const defaultFilters = () => ({ name: "", modalities: [] as string[], scopes: [] as string[], dateFrom: undefined as Date | undefined, dateTo: undefined as Date | undefined, selectedTags: [] as string[], creator: "" });
 
 const DataManagementDatasets = () => {
   const { toast } = useToast();
@@ -510,8 +656,14 @@ const DataManagementDatasets = () => {
       if (filters.name && !d.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
       if (filters.modalities.length && !filters.modalities.includes(d.modality)) return false;
       if (filters.scopes.length && !filters.scopes.includes(d.scope)) return false;
-      if (filters.tagKey && !d.tags.some(t => t.key === filters.tagKey)) return false;
-      if (filters.tagValue && !d.tags.some(t => t.value === filters.tagValue)) return false;
+      // Tag tree filter: selectedTags are "key:value" pairs
+      if (filters.selectedTags.length > 0) {
+        const match = filters.selectedTags.some(st => {
+          const [tk, tv] = st.split(":");
+          return d.tags.some(t => t.key === tk && t.value === tv);
+        });
+        if (!match) return false;
+      }
       if (filters.creator) {
         const creatorField = (d as any).creator || (d as any).publisher || (d as any).sharer || "";
         if (!creatorField.toLowerCase().includes(filters.creator.toLowerCase())) return false;
@@ -610,7 +762,7 @@ const DataManagementDatasets = () => {
   const renderMyDatasets = () => {
     const filtered = applyFilters(myDs);
     const { items, total } = paginate(filtered);
-    const noFiltersActive = !filters.name && !filters.modalities.length && !filters.scopes.length && !filters.dateFrom && !filters.tagKey && !filters.tagValue && !filters.creator;
+    const noFiltersActive = !filters.name && !filters.modalities.length && !filters.scopes.length && !filters.dateFrom && !filters.selectedTags.length && !filters.creator;
     return (
       <div className="rounded-lg border bg-card overflow-hidden">
         <div className="overflow-x-auto">
