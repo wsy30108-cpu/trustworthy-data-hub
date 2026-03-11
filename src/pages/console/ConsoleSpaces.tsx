@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { Plus, Search, MoreHorizontal, Eye, Edit2, Power, Trash2, Boxes } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import ConsoleSpaceDetail from "./ConsoleSpaceDetail";
 
 type SpaceType = "all" | "org" | "team" | "personal";
 type SpaceStatus = "all" | "active" | "disabled";
@@ -77,7 +78,7 @@ const ConsoleSpaces = () => {
   const [typeFilter, setTypeFilter] = useState<SpaceType>("all");
   const [statusFilter, setStatusFilter] = useState<SpaceStatus>("all");
   const [showCreate, setShowCreate] = useState(false);
-  const [showDetail, setShowDetail] = useState<string | null>(null);
+  const [showDetail, setShowDetail] = useState<typeof mockSpaces[0] | null>(null);
   const [actionMenu, setActionMenu] = useState<string | null>(null);
 
   // Create form state
@@ -148,8 +149,17 @@ const ConsoleSpaces = () => {
     return true;
   });
 
-  const detail = mockSpaces.find(s => s.id === showDetail);
   const currentAdmin = user?.name || "超级管理员";
+
+  // Navigate to detail page
+  if (showDetail) {
+    return (
+      <ConsoleSpaceDetail
+        space={showDetail}
+        onBack={() => setShowDetail(null)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -217,7 +227,7 @@ const ConsoleSpaces = () => {
               {filtered.map(s => (
                 <tr key={s.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium">
-                    <button onClick={() => setShowDetail(s.id)} className="text-primary hover:underline">{s.name}</button>
+                    <button onClick={() => setShowDetail(s)} className="text-primary hover:underline">{s.name}</button>
                   </td>
                   <td className="py-3 px-4 text-muted-foreground font-mono text-xs">{s.identifier}</td>
                   <td className="py-3 px-4">
@@ -240,7 +250,7 @@ const ConsoleSpaces = () => {
                         <>
                           <div className="fixed inset-0 z-40" onClick={() => setActionMenu(null)} />
                           <div className="absolute right-0 top-full mt-1 w-32 bg-card border rounded-lg shadow-lg z-50 p-1">
-                            <button onClick={() => { setShowDetail(s.id); setActionMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded hover:bg-muted/50"><Eye className="w-3 h-3" />查看详情</button>
+                            <button onClick={() => { setShowDetail(s); setActionMenu(null); }} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded hover:bg-muted/50"><Eye className="w-3 h-3" />查看详情</button>
                             <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded hover:bg-muted/50"><Edit2 className="w-3 h-3" />编辑</button>
                             <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded hover:bg-muted/50"><Power className="w-3 h-3" />{s.status === "启用" ? "停用" : "启用"}</button>
                             <button className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded hover:bg-muted/50 text-destructive"><Trash2 className="w-3 h-3" />删除</button>
@@ -356,49 +366,6 @@ const ConsoleSpaces = () => {
         </div>
       )}
 
-      {/* 空间详情弹窗 */}
-      {showDetail && detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowDetail(null)}>
-          <div className="bg-card rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6 animate-fade-in" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold">{detail.name}</h2>
-              <span className={`status-tag ${detail.status === "启用" ? "status-tag-success" : "status-tag-error"}`}>{detail.status}</span>
-            </div>
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="p-4 rounded-lg border text-center">
-                <div className="text-xl font-bold">{detail.storage}</div>
-                <div className="text-xs text-muted-foreground mt-1">存储使用率</div>
-              </div>
-              <div className="p-4 rounded-lg border text-center">
-                <div className="text-xl font-bold">{Math.floor(Math.random() * 20)}</div>
-                <div className="text-xs text-muted-foreground mt-1">运行中任务</div>
-              </div>
-              <div className="p-4 rounded-lg border text-center">
-                <div className="text-xl font-bold">{detail.members}</div>
-                <div className="text-xs text-muted-foreground mt-1">空间成员</div>
-              </div>
-            </div>
-            <div className="space-y-3 text-sm">
-              <h3 className="font-medium text-foreground">基本信息</h3>
-              {[
-                ["空间标识", detail.identifier],
-                ["空间类型", detail.type],
-                ["所属机构", detail.org],
-                ["管理员", detail.admin],
-                ["创建时间", detail.createdAt],
-              ].map(([k, v]) => (
-                <div key={k} className="flex items-center py-2 border-b border-dashed">
-                  <span className="w-24 text-muted-foreground shrink-0">{k}</span>
-                  <span>{v}</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-end mt-6">
-              <button onClick={() => setShowDetail(null)} className="px-4 py-2 text-sm border rounded-md hover:bg-muted/50">关闭</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
