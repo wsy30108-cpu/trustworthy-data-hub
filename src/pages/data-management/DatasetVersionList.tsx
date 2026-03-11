@@ -561,9 +561,11 @@ export default function DatasetVersionList({ dataset, permissions, onBack, onVie
                       <button className="p-1 rounded hover:bg-muted/50" title="查看" onClick={() => onViewDetail(v, dataset)}>
                         <Eye className="w-3.5 h-3.5 text-muted-foreground" />
                       </button>
-                      <button className="p-1 rounded hover:bg-muted/50" title="导出" onClick={() => setExportTarget(v.version)}>
-                        <Download className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
+                      {isMine && (
+                        <button className="p-1 rounded hover:bg-muted/50" title="导出" onClick={() => setExportTarget(v.version)}>
+                          <Download className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
+                      )}
                       {(isMine || perms.canWrite) && (
                         <button className="p-1 rounded hover:bg-muted/50" title="清洗" onClick={() => toast({ title: `${v.version} 清洗任务已创建` })}>
                           <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
