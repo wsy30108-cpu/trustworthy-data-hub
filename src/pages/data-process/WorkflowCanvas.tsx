@@ -2118,19 +2118,22 @@ const WorkflowCanvas = () => {
                   const to = getPortPos(toNode, conn.toPort, true);
                   const isSelected = selectedConnection === conn.id;
                   const isIncompatible = conn.compatible === false;
+                  const isConnHighlighted = highlightedConnections.has(conn.id);
 
                   // Debug: check if data is flowing on this connection
                   const fromState = debugNodeStates[conn.from];
                   const isFlowing = debugMode && fromState && (fromState.status === "running" || fromState.status === "done");
                   const flowDone = debugMode && fromState?.status === "done";
 
-                  const strokeColor = isIncompatible
+                  const strokeColor = isConnHighlighted && !debugMode
                     ? "hsl(var(--destructive))"
-                    : isFlowing
-                      ? (flowDone ? "hsl(142 71% 45%)" : "hsl(var(--primary))")
-                      : isSelected
-                        ? "hsl(var(--primary))"
-                        : "hsl(var(--muted-foreground) / 0.4)";
+                    : isIncompatible
+                      ? "hsl(var(--destructive))"
+                      : isFlowing
+                        ? (flowDone ? "hsl(142 71% 45%)" : "hsl(var(--primary))")
+                        : isSelected
+                          ? "hsl(var(--primary))"
+                          : "hsl(var(--muted-foreground) / 0.4)";
                   const pathD = getPath(from, to);
                   return (
                     <g key={conn.id}>
