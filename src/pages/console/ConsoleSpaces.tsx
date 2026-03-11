@@ -366,49 +366,6 @@ const ConsoleSpaces = () => {
         </div>
       )}
 
-      {/* 空间详情弹窗 */}
-      {showDetail && detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowDetail(null)}>
-          <div className="bg-card rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6 animate-fade-in" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold">{detail.name}</h2>
-              <span className={`status-tag ${detail.status === "启用" ? "status-tag-success" : "status-tag-error"}`}>{detail.status}</span>
-            </div>
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="p-4 rounded-lg border text-center">
-                <div className="text-xl font-bold">{detail.storage}</div>
-                <div className="text-xs text-muted-foreground mt-1">存储使用率</div>
-              </div>
-              <div className="p-4 rounded-lg border text-center">
-                <div className="text-xl font-bold">{Math.floor(Math.random() * 20)}</div>
-                <div className="text-xs text-muted-foreground mt-1">运行中任务</div>
-              </div>
-              <div className="p-4 rounded-lg border text-center">
-                <div className="text-xl font-bold">{detail.members}</div>
-                <div className="text-xs text-muted-foreground mt-1">空间成员</div>
-              </div>
-            </div>
-            <div className="space-y-3 text-sm">
-              <h3 className="font-medium text-foreground">基本信息</h3>
-              {[
-                ["空间标识", detail.identifier],
-                ["空间类型", detail.type],
-                ["所属机构", detail.org],
-                ["管理员", detail.admin],
-                ["创建时间", detail.createdAt],
-              ].map(([k, v]) => (
-                <div key={k} className="flex items-center py-2 border-b border-dashed">
-                  <span className="w-24 text-muted-foreground shrink-0">{k}</span>
-                  <span>{v}</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-end mt-6">
-              <button onClick={() => setShowDetail(null)} className="px-4 py-2 text-sm border rounded-md hover:bg-muted/50">关闭</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
