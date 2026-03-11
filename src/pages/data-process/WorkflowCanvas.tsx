@@ -5,7 +5,8 @@ import {
   Trash2, Boxes, Settings2, ChevronDown, ChevronRight,
   X, PanelLeftClose, PanelLeftOpen, Search, Plus, Minus,
   Type, Image, Mic, Video, Layers, Database, FileOutput, Wrench,
-  AlertTriangle, CheckCircle2, HelpCircle, Eye, Upload, Map
+  AlertTriangle, CheckCircle2, HelpCircle, Eye, Upload, Map,
+  PanelRightClose, PanelRightOpen, Code2, LayoutGrid, AlignHorizontalDistributeCenter, Info
 } from "lucide-react";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
@@ -637,6 +638,8 @@ const WorkflowCanvas = () => {
   const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [viewMode, setViewMode] = useState<"visual" | "json">("visual");
 
   // Accordion state
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(["文本"]));
@@ -655,11 +658,14 @@ const WorkflowCanvas = () => {
   const [inputDataset, setInputDataset] = useState("");
   const [inputVersion, setInputVersion] = useState("");
   const [inputSampleRatio, setInputSampleRatio] = useState(100);
+  const [inputSamplingMode, setInputSamplingMode] = useState<"all" | "ratio" | "count">("all");
+  const [inputSampleCount, setInputSampleCount] = useState(1000);
   const [outputTargetType, setOutputTargetType] = useState<"new" | "append">("new");
   const [outputDataset, setOutputDataset] = useState("");
   const [outputVersion, setOutputVersion] = useState("");
   const [outputFormat, setOutputFormat] = useState("jsonl");
   const [outputNewName, setOutputNewName] = useState("");
+  const [outputWriteMode, setOutputWriteMode] = useState<"append" | "clear">("append");
 
   // Minimap drag
   const [minimapDragging, setMinimapDragging] = useState(false);
@@ -995,8 +1001,71 @@ const WorkflowCanvas = () => {
     setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, config: { ...n.config, [key]: value } } : n));
   };
 
+  /* ─── Auto layout (topological sort + layered positioning) ─── */
+  const autoLayout = useCallback(() => {
+    if (nodes.length === 0) return;
+    // Build adjacency & in-degree
+    const inDeg: Record<string, number> = {};
+    const adj: Record<string, string[]> = {};
+    nodes.forEach(n => { inDeg[n.id] = 0; adj[n.id] = []; });
+    connections.forEach(c => {
+      adj[c.from]?.push(c.to);
+      inDeg[c.to] = (inDeg[c.to] || 0) + 1;
+    });
+    // Topological sort (BFS / Kahn)
+    const queue = nodes.filter(n => inDeg[n.id] === 0).map(n => n.id);
+    const layers: string[][] = [];
+    const visited = new Set<string>();
+    while (queue.length > 0) {
+      const layer = [...queue];
+      layers.push(layer);
+      queue.length = 0;
+      for (const id of layer) {
+        visited.add(id);
+        for (const next of adj[id] || []) {
+          inDeg[next]--;
+          if (inDeg[next] === 0 && !visited.has(next)) queue.push(next);
+        }
+      }
+    }
+    // Place unvisited nodes (disconnected) in last layer
+    const remaining = nodes.filter(n => !visited.has(n.id)).map(n => n.id);
+    if (remaining.length) layers.push(remaining);
+
+    const H_GAP = 240;
+    const V_GAP = 100;
+    const startX = 80;
+    const startY = 80;
+    const posMap: Record<string, Position> = {};
+    layers.forEach((layer, li) => {
+      layer.forEach((nid, ni) => {
+        posMap[nid] = {
+          x: startX + li * H_GAP,
+          y: startY + ni * V_GAP,
+        };
+      });
+    });
+    setNodes(prev => prev.map(n => posMap[n.id] ? { ...n, x: posMap[n.id].x, y: posMap[n.id].y } : n));
+    // Reset pan to see layout
+    setPan({ x: 0, y: 0 });
+    setZoom(1);
+    toast.success("已自动排列节点");
+  }, [nodes, connections]);
+
+  /* ─── JSON representation ─── */
+  const workflowJson = useMemo(() => {
+    return JSON.stringify({
+      name: wfName,
+      description: wfDesc,
+      config: { maxParallel: wfMaxParallel, timeout: wfTimeout, failStrategy: wfFailStrategy, retryMax: wfRetryMax, retryInterval: wfRetryInterval },
+      nodes: nodes.map(n => ({ id: n.id, type: n.type, label: n.label, category: n.category, operatorType: n.operatorType, x: n.x, y: n.y, config: n.config })),
+      connections: connections.map(c => ({ from: c.from, fromPort: c.fromPort, to: c.to, toPort: c.toPort, compatible: c.compatible })),
+    }, null, 2);
+  }, [wfName, wfDesc, wfMaxParallel, wfTimeout, wfFailStrategy, wfRetryMax, wfRetryInterval, nodes, connections]);
+
   /* ─── Right panel: render property panel ─── */
   const renderPropertyPanel = () => {
+    if (rightPanelCollapsed) return null;
     const panelWidth = 280;
 
     // No node selected → workflow global info
@@ -1190,13 +1259,34 @@ const WorkflowCanvas = () => {
             <div className="border-t pt-3 space-y-3">
               <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">高级配置</p>
               <div>
-                <label className="text-[10px] text-muted-foreground">采样比例</label>
-                <div className="flex items-center gap-2 mt-1">
-                  <Slider value={[inputSampleRatio]} min={1} max={100} step={1}
-                    onValueChange={([v]) => setInputSampleRatio(v)} className="flex-1" />
-                  <span className="text-xs text-foreground w-10 text-right">{inputSampleRatio}%</span>
+                <label className="text-[10px] text-muted-foreground">采样模式</label>
+                <div className="flex gap-1 mt-1">
+                  {([["all", "全量"], ["ratio", "按比例"], ["count", "按条数"]] as const).map(([mode, label]) => (
+                    <button key={mode} onClick={() => setInputSamplingMode(mode)}
+                      className={`flex-1 px-1.5 py-1 text-[10px] rounded-md border ${inputSamplingMode === mode ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted/50"}`}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
+              {inputSamplingMode === "ratio" && (
+                <div>
+                  <label className="text-[10px] text-muted-foreground">采样比例</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Slider value={[inputSampleRatio]} min={1} max={100} step={1}
+                      onValueChange={([v]) => setInputSampleRatio(v)} className="flex-1" />
+                    <span className="text-xs text-foreground w-10 text-right">{inputSampleRatio}%</span>
+                  </div>
+                </div>
+              )}
+              {inputSamplingMode === "count" && (
+                <div>
+                  <label className="text-[10px] text-muted-foreground">前N条</label>
+                  <input type="number" value={inputSampleCount} onChange={e => setInputSampleCount(parseInt(e.target.value) || 0)}
+                    min={1} placeholder="输入条数"
+                    className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1250,7 +1340,7 @@ const WorkflowCanvas = () => {
                 /* Dataset output */
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[10px] text-muted-foreground">输出方式</label>
+                    <label className="text-[10px] text-muted-foreground">输出类型</label>
                     <div className="flex gap-2 mt-1">
                       <button onClick={() => setOutputTargetType("new")}
                         className={`flex-1 px-2 py-1.5 text-xs rounded-md border ${outputTargetType === "new" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted/50"}`}>
@@ -1293,6 +1383,31 @@ const WorkflowCanvas = () => {
                           </select>
                         </div>
                       )}
+
+                      {/* 输出方式 */}
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">输出方式</label>
+                        <div className="flex gap-2 mt-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button onClick={() => setOutputWriteMode("append")}
+                                className={`flex-1 px-2 py-1.5 text-xs rounded-md border ${outputWriteMode === "append" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted/50"}`}>
+                                追加输出
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[220px]">直接写入当前数据集的版本，不做任何处理（如去重等）</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button onClick={() => setOutputWriteMode("clear")}
+                                className={`flex-1 px-2 py-1.5 text-xs rounded-md border ${outputWriteMode === "clear" ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted/50"}`}>
+                                清空后输出
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[220px]">清空当前数据集版本所有数据后输出</TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </div>
                     </>
                   )}
                 </div>
@@ -1459,6 +1574,33 @@ const WorkflowCanvas = () => {
               </TooltipTrigger>
               <TooltipContent>{showMinimap ? "隐藏小地图" : "显示小地图"}</TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button onClick={autoLayout} className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="自动排列">
+                  <AlignHorizontalDistributeCenter className="w-4 h-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>自动排列</TooltipContent>
+            </Tooltip>
+            <div className="w-px h-5 bg-border mx-1" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button onClick={() => setViewMode(viewMode === "visual" ? "json" : "visual")}
+                  className={`p-2 rounded-md hover:bg-muted/50 ${viewMode === "json" ? "text-primary" : "text-muted-foreground"}`}>
+                  {viewMode === "visual" ? <Code2 className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{viewMode === "visual" ? "切换到 JSON 视图" : "切换到可视化视图"}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button onClick={() => setRightPanelCollapsed(!rightPanelCollapsed)}
+                  className={`p-2 rounded-md hover:bg-muted/50 ${rightPanelCollapsed ? "text-muted-foreground" : "text-primary"}`}>
+                  {rightPanelCollapsed ? <PanelRightOpen className="w-4 h-4" /> : <PanelRightClose className="w-4 h-4" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{rightPanelCollapsed ? "展开属性面板" : "收起属性面板"}</TooltipContent>
+            </Tooltip>
             {(selectedNode || selectedConnection) && (
               <>
                 <div className="w-px h-5 bg-border mx-1" />
@@ -1578,7 +1720,20 @@ const WorkflowCanvas = () => {
             )}
           </div>
 
-          {/* ─── Center: Canvas ─── */}
+          {/* ─── Center: Canvas or JSON ─── */}
+          {viewMode === "json" ? (
+            <div className="flex-1 relative overflow-hidden bg-background">
+              <div className="absolute top-3 left-3 text-xs text-muted-foreground flex items-center gap-1.5">
+                <Code2 className="w-3.5 h-3.5" /> JSON 源码视图
+              </div>
+              <textarea
+                value={workflowJson}
+                readOnly
+                className="w-full h-full pt-10 px-4 pb-4 text-xs font-mono bg-background text-foreground resize-none focus:outline-none"
+                style={{ tabSize: 2 }}
+              />
+            </div>
+          ) : (
           <div
             ref={canvasRef}
             className="flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing"
@@ -1769,6 +1924,7 @@ const WorkflowCanvas = () => {
               </div>
             )}
           </div>
+          )}
 
           {/* ─── Right: Properties panel (always visible) ─── */}
           {renderPropertyPanel()}
