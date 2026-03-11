@@ -701,6 +701,11 @@ const WorkflowCanvas = () => {
   const [highlightedNodes, setHighlightedNodes] = useState<Set<string>>(new Set());
   const [highlightedConnections, setHighlightedConnections] = useState<Set<string>>(new Set());
 
+  // Run submission & instances
+  const [panelMode, setPanelMode] = useState<"default" | "runSubmit" | "debugConfig">("default");
+  const [workflowInstances, setWorkflowInstances] = useState<WorkflowInstance[]>([]);
+  const [debugInputParams, setDebugInputParams] = useState<Record<string, any>>({});
+
   // Minimap drag
   const [minimapDragging, setMinimapDragging] = useState(false);
 
