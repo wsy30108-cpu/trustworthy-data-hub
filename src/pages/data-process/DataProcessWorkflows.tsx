@@ -381,12 +381,13 @@ const DataProcessWorkflows = () => {
               </div>
               <div className="max-h-64 overflow-y-auto space-y-1">
                 {filteredTemplates.map(t => (
-                  <button key={t.id} onClick={() => { setShowNewDialog(false); navigate(`/data-process/workflow-canvas?name=${encodeURIComponent(t.name)}&template=${t.id}`); }} className="w-full text-left p-3 rounded-lg hover:bg-muted/50 transition-colors flex items-center justify-between">
-                    <div>
+                  <button key={t.id} onClick={() => { setShowNewDialog(false); navigate(`/data-process/workflow-canvas?name=${encodeURIComponent(t.name)}&template=${t.id}`); }} className="w-full text-left p-3 rounded-lg hover:bg-muted/50 transition-colors flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm">{t.name}</div>
-                      <div className="text-xs text-muted-foreground">{t.category} · {t.operators} 个算子</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{t.category} · {t.operators} 个算子 · 创建人：{t.creator}</div>
+                      {t.desc && <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.desc}</div>}
                     </div>
-                    <ChevronDown className="w-4 h-4 text-muted-foreground -rotate-90" />
+                    <ChevronDown className="w-4 h-4 text-muted-foreground -rotate-90 shrink-0" />
                   </button>
                 ))}
                 {filteredTemplates.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">无匹配模板</p>}
