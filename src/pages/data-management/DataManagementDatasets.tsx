@@ -883,7 +883,7 @@ const DataManagementDatasets = () => {
                   <td className="py-3 px-3"><span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span></td>
                   <td className="py-3 px-3"><TagCell tags={ds.tags} /></td>
                   <td className="py-3 px-3 text-xs text-muted-foreground">{ds.latestVersion}</td>
-                  <td className="py-3 px-3"><span className="px-1.5 py-0.5 rounded text-[10px] bg-accent text-accent-foreground">{ds.authLevel}</span></td>
+                  <td className="py-3 px-3"><span className={cn("px-1.5 py-0.5 rounded text-[10px]", ds.authLevel === "读写" ? "bg-primary/10 text-primary" : "bg-accent text-accent-foreground")}>{ds.authLevel}</span></td>
                   <td className="py-3 px-3 text-muted-foreground text-xs">{ds.publisher}</td>
                   <td className="py-3 px-3 text-muted-foreground text-xs">{ds.subscribedAt}</td>
                   <td className="py-3 px-3 text-muted-foreground text-xs">{ds.updatedAt}</td>
