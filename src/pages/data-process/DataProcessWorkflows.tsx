@@ -53,11 +53,11 @@ const statusColors: Record<WorkflowStatus, string> = {
 
 /* ─── Mock templates for "from template" ─── */
 const mockTemplates = [
-  { id: "T-001", name: "通用文本清洗模板", category: "文本处理", operators: 6 },
-  { id: "T-002", name: "图像增强标准模板", category: "图像处理", operators: 4 },
-  { id: "T-003", name: "多模态数据预处理", category: "多模态处理", operators: 8 },
-  { id: "T-004", name: "语音降噪管线", category: "语音处理", operators: 5 },
-  { id: "T-005", name: "表格数据ETL模板", category: "表格处理", operators: 7 },
+  { id: "T-001", name: "通用文本清洗模板", category: "文本处理", operators: 6, desc: "适用于大规模文本数据的清洗与标准化，包含去重、分词、格式化等步骤", creator: "张三" },
+  { id: "T-002", name: "图像增强标准模板", category: "图像处理", operators: 4, desc: "对图像进行亮度调整、对比度增强、噪声去除等预处理操作", creator: "李四" },
+  { id: "T-003", name: "多模态数据预处理", category: "多模态处理", operators: 8, desc: "支持文本、图像、音频等多种模态数据的统一预处理流程", creator: "王五" },
+  { id: "T-004", name: "语音降噪管线", category: "语音处理", operators: 5, desc: "针对语音数据进行降噪、分段、特征提取等处理", creator: "赵六" },
+  { id: "T-005", name: "表格数据ETL模板", category: "表格处理", operators: 7, desc: "实现表格数据的抽取、转换、加载全流程自动化处理", creator: "张三" },
 ];
 
 /* ─── Mock datasets ─── */
