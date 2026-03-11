@@ -23,10 +23,12 @@ interface Dataset {
   desc?: string;
 }
 interface SubscribedDataset extends Dataset {
-  publisher: string; subscribedAt: string; authLevel: string;
+  publisher: string; subscribedAt: string; authLevel: "只读" | "读写";
+  subscribedVersions: string[];
 }
 interface SharedDataset extends Dataset {
-  sharer: string; sharedAt: string; authLevel: string;
+  sharer: string; sharedAt: string; authPerms: string[];
+  sharedVersions: string[];
 }
 
 /* ─── Mock Data ─── */
