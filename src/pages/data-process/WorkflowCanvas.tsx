@@ -1941,19 +1941,34 @@ const WorkflowCanvas = () => {
                   const to = getPortPos(toNode, conn.toPort, true);
                   const isSelected = selectedConnection === conn.id;
                   const isIncompatible = conn.compatible === false;
+
+                  // Debug: check if data is flowing on this connection
+                  const fromState = debugNodeStates[conn.from];
+                  const isFlowing = debugMode && fromState && (fromState.status === "running" || fromState.status === "done");
+                  const flowDone = debugMode && fromState?.status === "done";
+
                   const strokeColor = isIncompatible
                     ? "hsl(var(--destructive))"
-                    : isSelected
-                      ? "hsl(var(--primary))"
-                      : "hsl(var(--muted-foreground) / 0.4)";
+                    : isFlowing
+                      ? (flowDone ? "hsl(142 71% 45%)" : "hsl(var(--primary))")
+                      : isSelected
+                        ? "hsl(var(--primary))"
+                        : "hsl(var(--muted-foreground) / 0.4)";
+                  const pathD = getPath(from, to);
                   return (
                     <g key={conn.id}>
-                      <path d={getPath(from, to)} fill="none" stroke="transparent" strokeWidth={12} className="cursor-pointer"
+                      <path d={pathD} fill="none" stroke="transparent" strokeWidth={12} className="cursor-pointer"
                         onClick={(e) => { e.stopPropagation(); setSelectedConnection(conn.id); setSelectedNode(null); }} />
-                      <path d={getPath(from, to)} fill="none" stroke={strokeColor}
+                      <path d={pathD} fill="none" stroke={strokeColor}
                         strokeWidth={isSelected ? 2.5 : 2}
                         strokeDasharray={isIncompatible ? "6 3" : undefined}
                         className="pointer-events-none transition-colors" />
+                      {/* Flow animation dot */}
+                      {isFlowing && !flowDone && (
+                        <circle r={3} fill="hsl(var(--primary))" className="pointer-events-none">
+                          <animateMotion dur="1.5s" repeatCount="indefinite" path={pathD} />
+                        </circle>
+                      )}
                       {isIncompatible && (
                         <g transform={`translate(${(from.x + to.x) / 2 - 6}, ${(from.y + to.y) / 2 - 6})`}>
                           <circle cx={6} cy={6} r={8} fill="hsl(var(--background))" />
