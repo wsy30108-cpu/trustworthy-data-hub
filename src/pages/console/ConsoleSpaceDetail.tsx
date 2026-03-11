@@ -104,11 +104,74 @@ function ConfirmDialog({ open, onClose, onConfirm, title, desc }: {
   );
 }
 
+/* ─── Multi-Select Admin Dropdown ─── */
+function AdminMultiSelect({ selected, onChange }: { selected: string[]; onChange: (v: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = ALL_ADMIN_CANDIDATES.filter(n => n.includes(search));
+
+  const toggle = (name: string) => {
+    if (name === CURRENT_USER && selected.includes(name)) return; // can't remove self
+    onChange(selected.includes(name) ? selected.filter(n => n !== name) : [...selected, name]);
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <div className="min-h-[32px] flex flex-wrap items-center gap-1 px-2 py-1 border rounded-md bg-background cursor-pointer"
+        onClick={() => setOpen(!open)}>
+        {selected.length === 0 && <span className="text-sm text-muted-foreground">选择管理员...</span>}
+        {selected.map(n => (
+          <span key={n} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-primary/10 text-primary font-medium">
+            {n}
+            {n !== CURRENT_USER && (
+              <button onClick={e => { e.stopPropagation(); toggle(n); }} className="hover:text-destructive">
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </span>
+        ))}
+        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground ml-auto shrink-0" />
+      </div>
+      {open && (
+        <div className="absolute z-50 top-full mt-1 left-0 right-0 border rounded-md bg-popover shadow-md max-h-48 overflow-hidden">
+          <div className="p-1.5 border-b">
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜索..."
+              className="w-full h-7 px-2 text-xs border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary/40" />
+          </div>
+          <div className="max-h-36 overflow-y-auto p-1">
+            {filtered.map(n => (
+              <button key={n} onClick={() => toggle(n)}
+                className={cn("w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-muted/50 text-left",
+                  selected.includes(n) && "bg-primary/5")}>
+                <div className={cn("w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0",
+                  selected.includes(n) ? "bg-primary border-primary" : "border-muted-foreground/30")}>
+                  {selected.includes(n) && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                </div>
+                <span>{n}</span>
+                {n === CURRENT_USER && <span className="text-[10px] text-muted-foreground ml-auto">(当前用户)</span>}
+              </button>
+            ))}
+            {filtered.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">无匹配结果</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ═══════════════ Tab 1: Space Info ═══════════════ */
 function SpaceInfoTab({ space, onUpdate }: { space: SpaceData; onUpdate: (s: SpaceData) => void }) {
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", desc: "", status: "", storageLocation: "", admin: "" });
+  const [form, setForm] = useState({ name: "", desc: "", status: "", storageLocation: "", admins: [] as string[] });
 
   useEffect(() => {
     setForm({
@@ -116,13 +179,14 @@ function SpaceInfoTab({ space, onUpdate }: { space: SpaceData; onUpdate: (s: Spa
       desc: space.desc || "",
       status: space.status,
       storageLocation: space.storageLocation || "MinIO-主存储",
-      admin: space.admin,
+      admins: space.admins || [space.admin],
     });
   }, [space]);
 
   const save = () => {
     if (form.name.trim().length < 2) { toast({ title: "空间名称至少2个字符", variant: "destructive" }); return; }
-    onUpdate({ ...space, ...form });
+    if (form.admins.length === 0) { toast({ title: "至少保留一个空间管理员", variant: "destructive" }); return; }
+    onUpdate({ ...space, ...form, admin: form.admins[0] });
     setEditing(false);
     toast({ title: "空间信息已更新" });
   };
@@ -235,9 +299,13 @@ function SpaceInfoTab({ space, onUpdate }: { space: SpaceData; onUpdate: (s: Spa
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">空间管理员</label>
                 {editing ? (
-                  <Input value={form.admin} onChange={e => setForm({ ...form, admin: e.target.value })} className="h-8 text-sm" />
+                  <AdminMultiSelect selected={form.admins} onChange={admins => setForm({ ...form, admins })} />
                 ) : (
-                  <p className="text-sm text-foreground">{space.admin}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {(space.admins || [space.admin]).map(a => (
+                      <span key={a} className="px-1.5 py-0.5 rounded text-xs bg-primary/10 text-primary font-medium">{a}</span>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
