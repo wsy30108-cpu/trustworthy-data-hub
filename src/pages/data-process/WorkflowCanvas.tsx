@@ -1259,13 +1259,34 @@ const WorkflowCanvas = () => {
             <div className="border-t pt-3 space-y-3">
               <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">高级配置</p>
               <div>
-                <label className="text-[10px] text-muted-foreground">采样比例</label>
-                <div className="flex items-center gap-2 mt-1">
-                  <Slider value={[inputSampleRatio]} min={1} max={100} step={1}
-                    onValueChange={([v]) => setInputSampleRatio(v)} className="flex-1" />
-                  <span className="text-xs text-foreground w-10 text-right">{inputSampleRatio}%</span>
+                <label className="text-[10px] text-muted-foreground">采样模式</label>
+                <div className="flex gap-1 mt-1">
+                  {([["all", "全量"], ["ratio", "按比例"], ["count", "按条数"]] as const).map(([mode, label]) => (
+                    <button key={mode} onClick={() => setInputSamplingMode(mode)}
+                      className={`flex-1 px-1.5 py-1 text-[10px] rounded-md border ${inputSamplingMode === mode ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted/50"}`}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
+              {inputSamplingMode === "ratio" && (
+                <div>
+                  <label className="text-[10px] text-muted-foreground">采样比例</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Slider value={[inputSampleRatio]} min={1} max={100} step={1}
+                      onValueChange={([v]) => setInputSampleRatio(v)} className="flex-1" />
+                    <span className="text-xs text-foreground w-10 text-right">{inputSampleRatio}%</span>
+                  </div>
+                </div>
+              )}
+              {inputSamplingMode === "count" && (
+                <div>
+                  <label className="text-[10px] text-muted-foreground">前N条</label>
+                  <input type="number" value={inputSampleCount} onChange={e => setInputSampleCount(parseInt(e.target.value) || 0)}
+                    min={1} placeholder="输入条数"
+                    className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+                </div>
+              )}
             </div>
           </div>
         </div>
