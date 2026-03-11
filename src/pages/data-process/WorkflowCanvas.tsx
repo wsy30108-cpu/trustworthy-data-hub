@@ -1001,8 +1001,71 @@ const WorkflowCanvas = () => {
     setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, config: { ...n.config, [key]: value } } : n));
   };
 
+  /* ─── Auto layout (topological sort + layered positioning) ─── */
+  const autoLayout = useCallback(() => {
+    if (nodes.length === 0) return;
+    // Build adjacency & in-degree
+    const inDeg: Record<string, number> = {};
+    const adj: Record<string, string[]> = {};
+    nodes.forEach(n => { inDeg[n.id] = 0; adj[n.id] = []; });
+    connections.forEach(c => {
+      adj[c.from]?.push(c.to);
+      inDeg[c.to] = (inDeg[c.to] || 0) + 1;
+    });
+    // Topological sort (BFS / Kahn)
+    const queue = nodes.filter(n => inDeg[n.id] === 0).map(n => n.id);
+    const layers: string[][] = [];
+    const visited = new Set<string>();
+    while (queue.length > 0) {
+      const layer = [...queue];
+      layers.push(layer);
+      queue.length = 0;
+      for (const id of layer) {
+        visited.add(id);
+        for (const next of adj[id] || []) {
+          inDeg[next]--;
+          if (inDeg[next] === 0 && !visited.has(next)) queue.push(next);
+        }
+      }
+    }
+    // Place unvisited nodes (disconnected) in last layer
+    const remaining = nodes.filter(n => !visited.has(n.id)).map(n => n.id);
+    if (remaining.length) layers.push(remaining);
+
+    const H_GAP = 240;
+    const V_GAP = 100;
+    const startX = 80;
+    const startY = 80;
+    const posMap: Record<string, Position> = {};
+    layers.forEach((layer, li) => {
+      layer.forEach((nid, ni) => {
+        posMap[nid] = {
+          x: startX + li * H_GAP,
+          y: startY + ni * V_GAP,
+        };
+      });
+    });
+    setNodes(prev => prev.map(n => posMap[n.id] ? { ...n, x: posMap[n.id].x, y: posMap[n.id].y } : n));
+    // Reset pan to see layout
+    setPan({ x: 0, y: 0 });
+    setZoom(1);
+    toast.success("已自动排列节点");
+  }, [nodes, connections]);
+
+  /* ─── JSON representation ─── */
+  const workflowJson = useMemo(() => {
+    return JSON.stringify({
+      name: wfName,
+      description: wfDesc,
+      config: { maxParallel: wfMaxParallel, timeout: wfTimeout, failStrategy: wfFailStrategy, retryMax: wfRetryMax, retryInterval: wfRetryInterval },
+      nodes: nodes.map(n => ({ id: n.id, type: n.type, label: n.label, category: n.category, operatorType: n.operatorType, x: n.x, y: n.y, config: n.config })),
+      connections: connections.map(c => ({ from: c.from, fromPort: c.fromPort, to: c.to, toPort: c.toPort, compatible: c.compatible })),
+    }, null, 2);
+  }, [wfName, wfDesc, wfMaxParallel, wfTimeout, wfFailStrategy, wfRetryMax, wfRetryInterval, nodes, connections]);
+
   /* ─── Right panel: render property panel ─── */
   const renderPropertyPanel = () => {
+    if (rightPanelCollapsed) return null;
     const panelWidth = 280;
 
     // No node selected → workflow global info
