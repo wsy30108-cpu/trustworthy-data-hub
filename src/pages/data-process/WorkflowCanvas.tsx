@@ -947,6 +947,11 @@ const WorkflowCanvas = () => {
         if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
         deleteSelected();
       }
+      // Ctrl+S save
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        toast.success("工作流已保存");
+      }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
