@@ -74,10 +74,12 @@ export const platformMenus: Record<string, MenuItem[]> = {
 };
 
 export const mockWorkspaces = [
-  { id: "ws-1", name: "AI数据团队空间", type: "团" as const },
-  { id: "ws-2", name: "NLP研发组", type: "团" as const },
-  { id: "ws-3", name: "个人空间", type: "个" as const },
-  { id: "ws-4", name: "北京AI研究院", type: "组" as const },
+  { id: "ws-1", name: "AI数据团队空间", type: "团" as const, desc: "大模型数据处理与标注", members: 24 },
+  { id: "ws-2", name: "NLP研发组", type: "团" as const, desc: "自然语言处理研究", members: 18 },
+  { id: "ws-3", name: "个人空间", type: "个" as const, desc: "个人实验与探索", members: 1 },
+  { id: "ws-4", name: "北京AI研究院", type: "组" as const, desc: "院级数据资产管理", members: 56 },
+  { id: "ws-5", name: "计算机视觉实验室", type: "团" as const, desc: "CV模型训练数据管理", members: 15 },
+  { id: "ws-6", name: "数据标注中心", type: "团" as const, desc: "标注任务管理与质检", members: 45 },
 ];
 
 export const mockUser = {
