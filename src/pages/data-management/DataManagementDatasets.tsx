@@ -961,10 +961,6 @@ const DataManagementDatasets = () => {
                       <button className="p-1 rounded hover:bg-muted/50" title="查看详情" onClick={() => navigateToVersionList(ds)}>
                         <Eye className="w-3.5 h-3.5 text-muted-foreground" />
                       </button>
-                      <button className="p-1 rounded hover:bg-muted/50" title="导入版本"
-                        onClick={() => setImportTarget({ name: ds.name, authLevel: ds.authLevel })}>
-                        <Download className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
                       <button className="p-1 rounded hover:bg-muted/50" title="取消接收" onClick={() => setConfirmDialog({
                         title: "取消接收分享", desc: `确认取消接收「${ds.name}」的分享吗？取消后您将无法再查看和使用该数据集。`,
                         onConfirm: () => { setShareDs(prev => prev.filter(d => d.id !== ds.id)); toast({ title: "已取消接收" }); }
