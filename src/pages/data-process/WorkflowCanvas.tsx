@@ -1062,6 +1062,115 @@ const WorkflowCanvas = () => {
     toast.success("已自动排列节点");
   }, [nodes, connections]);
 
+  /* ─── Debug mode ─── */
+  const startDebug = useCallback(() => {
+    if (nodes.length === 0) { toast.error("画布中没有节点"); return; }
+    setDebugMode(true);
+    setDebugElapsed(0);
+    setShowLogPanel(false);
+    setLogNodeId(null);
+    // Initialize all nodes as pending
+    const initStates: typeof debugNodeStates = {};
+    const initLogs: Record<string, string[]> = {};
+    nodes.forEach(n => {
+      initStates[n.id] = { status: "pending", count: 0, duration: 0 };
+      initLogs[n.id] = [];
+    });
+    setDebugNodeStates(initStates);
+    setDebugLogs(initLogs);
+
+    // Build execution order (topological)
+    const inDeg: Record<string, number> = {};
+    const adj: Record<string, string[]> = {};
+    nodes.forEach(n => { inDeg[n.id] = 0; adj[n.id] = []; });
+    connections.forEach(c => { adj[c.from]?.push(c.to); inDeg[c.to] = (inDeg[c.to] || 0) + 1; });
+    const order: string[] = [];
+    const queue = nodes.filter(n => inDeg[n.id] === 0).map(n => n.id);
+    const visited = new Set<string>();
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      order.push(id);
+      for (const next of adj[id] || []) {
+        inDeg[next]--;
+        if (inDeg[next] === 0) queue.push(next);
+      }
+    }
+    // Add unvisited
+    nodes.forEach(n => { if (!visited.has(n.id)) order.push(n.id); });
+
+    // Simulate sequential execution
+    let step = 0;
+    const simulate = () => {
+      if (step < order.length) {
+        const nodeId = order[step];
+        const mockCount = Math.floor(Math.random() * 10000) + 500;
+        const mockDuration = Math.floor(Math.random() * 30) + 2;
+        // Set current node running
+        setDebugNodeStates(prev => ({
+          ...prev,
+          [nodeId]: { status: "running", count: 0, duration: 0 },
+        }));
+        setDebugLogs(prev => ({
+          ...prev,
+          [nodeId]: [
+            ...(prev[nodeId] || []),
+            `[${new Date().toLocaleTimeString()}] 开始执行节点...`,
+            `[${new Date().toLocaleTimeString()}] 加载数据中...`,
+          ],
+        }));
+
+        // Finish after mockDuration seconds (compressed to 2-4s)
+        const finishDelay = 2000 + Math.random() * 2000;
+        setTimeout(() => {
+          setDebugNodeStates(prev => ({
+            ...prev,
+            [nodeId]: { status: "done", count: mockCount, duration: mockDuration },
+          }));
+          setDebugLogs(prev => ({
+            ...prev,
+            [nodeId]: [
+              ...(prev[nodeId] || []),
+              `[${new Date().toLocaleTimeString()}] 处理 ${mockCount} 条数据`,
+              `[${new Date().toLocaleTimeString()}] 节点执行完成 (${mockDuration}s)`,
+            ],
+          }));
+          step++;
+          simulate();
+        }, finishDelay);
+      }
+    };
+    simulate();
+    toast.info("工作流调试已启动");
+  }, [nodes, connections]);
+
+  const stopDebug = useCallback(() => {
+    setDebugMode(false);
+    if (debugTimerRef.current) { clearInterval(debugTimerRef.current); debugTimerRef.current = null; }
+    setShowLogPanel(false);
+    setLogNodeId(null);
+    toast.info("调试已停止");
+  }, []);
+
+  // Debug elapsed timer
+  useEffect(() => {
+    if (debugMode) {
+      debugTimerRef.current = setInterval(() => setDebugElapsed(prev => prev + 1), 1000);
+      return () => { if (debugTimerRef.current) clearInterval(debugTimerRef.current); };
+    }
+  }, [debugMode]);
+
+  const debugDoneCount = useMemo(() => Object.values(debugNodeStates).filter(s => s.status === "done").length, [debugNodeStates]);
+  const debugRunningCount = useMemo(() => Object.values(debugNodeStates).filter(s => s.status === "running").length, [debugNodeStates]);
+  const debugAllDone = debugMode && debugDoneCount === nodes.length && nodes.length > 0;
+  const formatElapsed = (s: number) => {
+    const h = String(Math.floor(s / 3600)).padStart(2, "0");
+    const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+    const sec = String(s % 60).padStart(2, "0");
+    return `${h}:${m}:${sec}`;
+  };
+
   /* ─── JSON representation ─── */
   const workflowJson = useMemo(() => {
     return JSON.stringify({
