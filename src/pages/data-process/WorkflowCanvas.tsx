@@ -59,6 +59,14 @@ interface Connection {
   compatible?: boolean;
 }
 
+interface ValidationError {
+  id: string;
+  type: "error" | "warning";
+  message: string;
+  nodeIds?: string[];
+  connectionIds?: string[];
+}
+
 interface Operator {
   type: string;
   label: string;
@@ -677,10 +685,14 @@ const WorkflowCanvas = () => {
   const [logNodeId, setLogNodeId] = useState<string | null>(null);
   const debugTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Validation
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [showValidationPanel, setShowValidationPanel] = useState(false);
+  const [highlightedNodes, setHighlightedNodes] = useState<Set<string>>(new Set());
+  const [highlightedConnections, setHighlightedConnections] = useState<Set<string>>(new Set());
+
   // Minimap drag
   const [minimapDragging, setMinimapDragging] = useState(false);
-
-  const toggleCat = (name: string) => {
     setExpandedCats(prev => {
       const next = new Set(prev);
       next.has(name) ? next.delete(name) : next.add(name);
@@ -1152,6 +1164,171 @@ const WorkflowCanvas = () => {
     setLogNodeId(null);
     toast.info("调试已停止");
   }, []);
+
+  /* ─── Workflow Validation ─── */
+  const validateWorkflow = useCallback((): boolean => {
+    const errors: ValidationError[] = [];
+    let errIdx = 0;
+
+    // 1. 输入节点配置：至少一个输入节点且必须配置数据源
+    const inputNodes = nodes.filter(n => n.category === "输入节点");
+    if (inputNodes.length === 0) {
+      errors.push({ id: `ve-${errIdx++}`, type: "error", message: "请先配置至少一个输入节点", nodeIds: [] });
+    } else {
+      // Check each input node has a data source configured
+      inputNodes.forEach(n => {
+        const hasSource = n.type === "file_input"
+          ? !!n.config._fileUploaded
+          : !!(n.config._dataset && n.config._version);
+        if (!hasSource) {
+          errors.push({ id: `ve-${errIdx++}`, type: "error", message: `输入数据源不存在：${n.label}`, nodeIds: [n.id] });
+        }
+      });
+    }
+
+    // 2. 输出节点配置：至少一个输出节点完整配置
+    const outputNodes = nodes.filter(n => n.category === "输出节点");
+    if (outputNodes.length === 0) {
+      errors.push({ id: `ve-${errIdx++}`, type: "error", message: "请先配置至少一个输出节点", nodeIds: [] });
+    }
+
+    // 3. 节点连通性：所有非孤立节点必须在 Input→Output 路径上
+    if (inputNodes.length > 0 && outputNodes.length > 0) {
+      // BFS from all input nodes forward
+      const reachableFromInput = new Set<string>();
+      const adjForward: Record<string, string[]> = {};
+      connections.forEach(c => { if (!adjForward[c.from]) adjForward[c.from] = []; adjForward[c.from].push(c.to); });
+      const fwdQueue = inputNodes.map(n => n.id);
+      fwdQueue.forEach(id => reachableFromInput.add(id));
+      while (fwdQueue.length > 0) {
+        const curr = fwdQueue.shift()!;
+        for (const next of adjForward[curr] || []) {
+          if (!reachableFromInput.has(next)) { reachableFromInput.add(next); fwdQueue.push(next); }
+        }
+      }
+      // BFS from all output nodes backward
+      const reachableFromOutput = new Set<string>();
+      const adjBackward: Record<string, string[]> = {};
+      connections.forEach(c => { if (!adjBackward[c.to]) adjBackward[c.to] = []; adjBackward[c.to].push(c.from); });
+      const bwdQueue = outputNodes.map(n => n.id);
+      bwdQueue.forEach(id => reachableFromOutput.add(id));
+      while (bwdQueue.length > 0) {
+        const curr = bwdQueue.shift()!;
+        for (const prev of adjBackward[curr] || []) {
+          if (!reachableFromOutput.has(prev)) { reachableFromOutput.add(prev); bwdQueue.push(prev); }
+        }
+      }
+      // Nodes that have any connections but are not on an Input→Output path
+      const connectedNodeIds = new Set<string>();
+      connections.forEach(c => { connectedNodeIds.add(c.from); connectedNodeIds.add(c.to); });
+      nodes.forEach(n => {
+        if (connectedNodeIds.has(n.id) || n.category === "输入节点" || n.category === "输出节点") {
+          if (!reachableFromInput.has(n.id) || !reachableFromOutput.has(n.id)) {
+            errors.push({ id: `ve-${errIdx++}`, type: "error", message: `存在未连接节点: ${n.label}`, nodeIds: [n.id] });
+          }
+        }
+      });
+      // Truly isolated nodes (no connections at all, not input/output)
+      nodes.forEach(n => {
+        if (!connectedNodeIds.has(n.id) && n.category !== "输入节点" && n.category !== "输出节点") {
+          errors.push({ id: `ve-${errIdx++}`, type: "error", message: `存在未连接节点: ${n.label}`, nodeIds: [n.id] });
+        }
+      });
+    }
+
+    // 4. 必填参数：所有算子的必填参数不为空
+    nodes.forEach(n => {
+      if (n.category === "输入节点" || n.category === "输出节点") return;
+      const params = operatorParams[n.type] || defaultOperatorParams;
+      const missing = params.filter(p => p.required && (n.config[p.key] === undefined || n.config[p.key] === ""));
+      if (missing.length > 0) {
+        errors.push({
+          id: `ve-${errIdx++}`, type: "error",
+          message: `节点 [${n.label}] 必填参数未填写: ${missing.map(p => p.label).join("、")}`,
+          nodeIds: [n.id],
+        });
+      }
+    });
+
+    // 5. 数据类型兼容性
+    connections.forEach(c => {
+      if (c.compatible === false) {
+        const fromNode = nodes.find(n => n.id === c.from);
+        const toNode = nodes.find(n => n.id === c.to);
+        errors.push({
+          id: `ve-${errIdx++}`, type: "error",
+          message: `节点 [${fromNode?.label}] 输出类型与节点 [${toNode?.label}] 输入类型不兼容`,
+          nodeIds: [c.from, c.to],
+          connectionIds: [c.id],
+        });
+      }
+    });
+
+    // 6. 环路检测
+    {
+      const inDeg: Record<string, number> = {};
+      const adj: Record<string, string[]> = {};
+      nodes.forEach(n => { inDeg[n.id] = 0; adj[n.id] = []; });
+      connections.forEach(c => { adj[c.from]?.push(c.to); inDeg[c.to] = (inDeg[c.to] || 0) + 1; });
+      const q = nodes.filter(n => inDeg[n.id] === 0).map(n => n.id);
+      const visited = new Set<string>();
+      while (q.length > 0) {
+        const id = q.shift()!;
+        visited.add(id);
+        for (const next of adj[id] || []) { inDeg[next]--; if (inDeg[next] === 0) q.push(next); }
+      }
+      if (visited.size < nodes.length) {
+        errors.push({ id: `ve-${errIdx++}`, type: "error", message: "工作流中存在循环依赖，请检查" });
+      }
+    }
+
+    // 7. 算子异常（mock: check version status）
+    const offlineOperators = ["deprecated_op"];
+    nodes.forEach(n => {
+      if (offlineOperators.includes(n.type)) {
+        errors.push({ id: `ve-${errIdx++}`, type: "error", message: `算子版本已更新请删除后重新添加或算子已下线：${n.label}`, nodeIds: [n.id] });
+      }
+    });
+
+    setValidationErrors(errors);
+    if (errors.length > 0) {
+      setShowValidationPanel(true);
+      // Highlight all error nodes
+      const allNodeIds = new Set<string>();
+      const allConnIds = new Set<string>();
+      errors.forEach(e => {
+        e.nodeIds?.forEach(id => allNodeIds.add(id));
+        e.connectionIds?.forEach(id => allConnIds.add(id));
+      });
+      setHighlightedNodes(allNodeIds);
+      setHighlightedConnections(allConnIds);
+      return false;
+    }
+    setShowValidationPanel(false);
+    setHighlightedNodes(new Set());
+    setHighlightedConnections(new Set());
+    return true;
+  }, [nodes, connections]);
+
+  const focusValidationError = useCallback((error: ValidationError) => {
+    // Clear previous highlights
+    setHighlightedNodes(new Set(error.nodeIds || []));
+    setHighlightedConnections(new Set(error.connectionIds || []));
+    // Select and pan to first related node
+    if (error.nodeIds && error.nodeIds.length > 0) {
+      const targetNode = nodes.find(n => n.id === error.nodeIds![0]);
+      if (targetNode && canvasRef.current) {
+        setSelectedNode(targetNode.id);
+        const rect = canvasRef.current.getBoundingClientRect();
+        setPan({
+          x: -(targetNode.x - rect.width / 2 / zoom + NODE_W / 2) * zoom,
+          y: -(targetNode.y - rect.height / 2 / zoom + NODE_H / 2) * zoom,
+        });
+      }
+    } else if (error.connectionIds && error.connectionIds.length > 0) {
+      setSelectedConnection(error.connectionIds[0]);
+    }
+  }, [nodes, zoom]);
 
   // Debug elapsed timer
   useEffect(() => {
@@ -1741,10 +1918,10 @@ const WorkflowCanvas = () => {
               </button>
             ) : (
               <>
-                <button onClick={startDebug} className="px-3 py-1.5 text-xs border border-primary text-primary rounded-md hover:bg-primary/10 flex items-center gap-1.5">
+                <button onClick={() => { if (validateWorkflow()) startDebug(); }} className="px-3 py-1.5 text-xs border border-primary text-primary rounded-md hover:bg-primary/10 flex items-center gap-1.5">
                   <Bug className="w-3.5 h-3.5" /> 调试
                 </button>
-                <button className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> 运行</button>
+                <button onClick={() => { if (validateWorkflow()) toast.success("校验通过，提交运行"); }} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> 运行</button>
               </>
             )}
           </div>
@@ -1941,19 +2118,22 @@ const WorkflowCanvas = () => {
                   const to = getPortPos(toNode, conn.toPort, true);
                   const isSelected = selectedConnection === conn.id;
                   const isIncompatible = conn.compatible === false;
+                  const isConnHighlighted = highlightedConnections.has(conn.id);
 
                   // Debug: check if data is flowing on this connection
                   const fromState = debugNodeStates[conn.from];
                   const isFlowing = debugMode && fromState && (fromState.status === "running" || fromState.status === "done");
                   const flowDone = debugMode && fromState?.status === "done";
 
-                  const strokeColor = isIncompatible
+                  const strokeColor = isConnHighlighted && !debugMode
                     ? "hsl(var(--destructive))"
-                    : isFlowing
-                      ? (flowDone ? "hsl(142 71% 45%)" : "hsl(var(--primary))")
-                      : isSelected
-                        ? "hsl(var(--primary))"
-                        : "hsl(var(--muted-foreground) / 0.4)";
+                    : isIncompatible
+                      ? "hsl(var(--destructive))"
+                      : isFlowing
+                        ? (flowDone ? "hsl(142 71% 45%)" : "hsl(var(--primary))")
+                        : isSelected
+                          ? "hsl(var(--primary))"
+                          : "hsl(var(--muted-foreground) / 0.4)";
                   const pathD = getPath(from, to);
                   return (
                     <g key={conn.id}>
@@ -1989,6 +2169,7 @@ const WorkflowCanvas = () => {
                 {/* Nodes */}
                 {nodes.map(node => {
                   const isSelected = selectedNode === node.id;
+                  const isHighlighted = highlightedNodes.has(node.id);
                   const color = catColors[node.category] || "hsl(var(--primary))";
                   const nodeDebug = debugNodeStates[node.id];
                   const debugBorderColor = debugMode && nodeDebug
@@ -1997,6 +2178,7 @@ const WorkflowCanvas = () => {
                       : nodeDebug.status === "error" ? "hsl(var(--destructive))"
                       : undefined
                     : undefined;
+                  const errorBorderColor = isHighlighted && !debugMode ? "hsl(var(--destructive))" : undefined;
                   return (
                     <g key={node.id}>
                       <foreignObject x={node.x} y={node.y} width={NODE_W} height={NODE_H + (debugMode && nodeDebug && nodeDebug.status !== "pending" ? 20 : 0)}>
@@ -2009,9 +2191,9 @@ const WorkflowCanvas = () => {
                               setSelectedConnection(null);
                               if (debugMode) { setLogNodeId(node.id); setShowLogPanel(true); }
                             }}
-                            className={`rounded-lg border-2 bg-card shadow-sm select-none transition-all ${debugMode ? "cursor-pointer" : ""} ${isSelected ? "shadow-lg" : "hover:shadow-md"} ${debugMode && nodeDebug?.status === "running" ? "animate-pulse" : ""}`}
+                            className={`rounded-lg border-2 bg-card shadow-sm select-none transition-all ${debugMode ? "cursor-pointer" : ""} ${isSelected ? "shadow-lg" : "hover:shadow-md"} ${debugMode && nodeDebug?.status === "running" ? "animate-pulse" : ""} ${isHighlighted && !debugMode ? "ring-2 ring-destructive/50 shadow-destructive/20 shadow-lg" : ""}`}
                             style={{
-                              borderColor: debugBorderColor || (isSelected ? color : "hsl(var(--border))"),
+                              borderColor: errorBorderColor || debugBorderColor || (isSelected ? color : "hsl(var(--border))"),
                               height: NODE_H,
                             }}
                           >
@@ -2144,6 +2326,35 @@ const WorkflowCanvas = () => {
                     rx={2}
                   />
                 </svg>
+              </div>
+            )}
+
+            {/* ─── Validation Results Panel ─── */}
+            {!debugMode && showValidationPanel && validationErrors.length > 0 && (
+              <div className="absolute bottom-0 left-0 right-0 bg-card border-t shadow-lg animate-fade-in z-10" style={{ height: 200 }}>
+                <div className="flex items-center justify-between px-3 py-1.5 border-b bg-destructive/5">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+                    <span className="text-xs font-medium text-foreground">
+                      校验结果 — {validationErrors.length} 项未通过
+                    </span>
+                  </div>
+                  <button onClick={() => { setShowValidationPanel(false); setHighlightedNodes(new Set()); setHighlightedConnections(new Set()); }} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="overflow-y-auto p-2 space-y-1" style={{ height: 160 }}>
+                  {validationErrors.map(err => (
+                    <button
+                      key={err.id}
+                      onClick={() => focusValidationError(err)}
+                      className="w-full flex items-start gap-2 px-3 py-2 text-left rounded-md hover:bg-muted/50 transition-colors group"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />
+                      <span className="text-xs text-foreground group-hover:text-primary transition-colors">{err.message}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
