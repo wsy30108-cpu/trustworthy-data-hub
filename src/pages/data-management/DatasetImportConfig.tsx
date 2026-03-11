@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, Upload, X, FileText, FileSpreadsheet, FileType, Code, Archive, Plus } from "lucide-react";
+import { ArrowLeft, Upload, X, FileText, FileSpreadsheet, FileType, Code, Archive, Plus, ChevronDown, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,6 +14,7 @@ interface VersionInfo { version: string; }
 type UploadMethod = "本地导入" | "平台已有数据集" | "在线 FTP 导入";
 type AnnotationStatus = "无标注信息" | "有标注信息";
 type FileFormat = "文本文档" | "Excel 表格" | "Word 文档" | "标记语言文件" | "JSON 文件" | "压缩包";
+type ZipSubFormat = "文本文档" | "Excel 表格" | "Word 文档" | "标记语言文件" | "JSON 文件";
 
 const FORMAT_EXTENSIONS: Record<FileFormat, string> = {
   "文本文档": ".txt",
@@ -33,14 +34,7 @@ const FORMAT_ICONS: Record<FileFormat, React.ReactNode> = {
   "压缩包": <Archive className="w-5 h-5" />,
 };
 
-const MODALITY_FILE_FILTER: Record<string, string[]> = {
-  "文本": ["仅文本"],
-  "图像": ["仅图片"],
-  "语音": ["仅音频"],
-  "视频": ["仅视频"],
-  "跨模态": ["全部格式", "仅文本", "仅图片", "仅音频", "仅视频"],
-  "表格": ["全部格式", "仅文本"],
-};
+const ZIP_SUB_FORMATS: ZipSubFormat[] = ["文本文档", "Excel 表格", "Word 文档", "标记语言文件", "JSON 文件"];
 
 /* ─── Section + Field ─── */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -55,6 +49,102 @@ function Field({ label, required, children, error }: { label: string; required?:
     </div>
   );
 }
+
+/* ─── Format Adapter Config (reusable for both direct and zip sub-format) ─── */
+function FormatAdapterConfig({ format, delimiter, setDelimiter, customDelimiter, setCustomDelimiter, encoding, setEncoding, sheetName, setSheetName, headerRow, setHeaderRow, dataStartRow, setDataStartRow, extractRange, setExtractRange, tagRule, setTagRule, tagNames, setTagNames }: {
+  format: string;
+  delimiter: string; setDelimiter: (v: string) => void;
+  customDelimiter: string; setCustomDelimiter: (v: string) => void;
+  encoding: string; setEncoding: (v: string) => void;
+  sheetName: string; setSheetName: (v: string) => void;
+  headerRow: string; setHeaderRow: (v: string) => void;
+  dataStartRow: string; setDataStartRow: (v: string) => void;
+  extractRange: string; setExtractRange: (v: string) => void;
+  tagRule: string; setTagRule: (v: string) => void;
+  tagNames: string; setTagNames: (v: string) => void;
+}) {
+  if (format === "文本文档") {
+    return (
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="分隔符" required>
+          <select value={delimiter} onChange={e => setDelimiter(e.target.value)} className="w-full h-9 px-3 text-sm border rounded-md bg-card">
+            {["换行符", "半角逗号", "制表符", "空格", "无", "自定义"].map(d => <option key={d}>{d}</option>)}
+          </select>
+          {delimiter === "自定义" && (
+            <Input value={customDelimiter} onChange={e => setCustomDelimiter(e.target.value)}
+              placeholder="请输入自定义分隔符" className="mt-2" />
+          )}
+        </Field>
+        <Field label="编码格式">
+          <select value={encoding} onChange={e => setEncoding(e.target.value)} className="w-full h-9 px-3 text-sm border rounded-md bg-card">
+            {["UTF-8", "GBK", "GB2312", "ISO-8859-1"].map(e => <option key={e}>{e}</option>)}
+          </select>
+        </Field>
+      </div>
+    );
+  }
+  if (format === "Excel 表格") {
+    return (
+      <div className="grid grid-cols-3 gap-4">
+        <Field label="工作表"><Input value={sheetName} onChange={e => setSheetName(e.target.value)} placeholder="Sheet1" /></Field>
+        <Field label="表头行号"><Input value={headerRow} onChange={e => setHeaderRow(e.target.value)} placeholder="1" /></Field>
+        <Field label="数据起始行号"><Input value={dataStartRow} onChange={e => setDataStartRow(e.target.value)} placeholder="2" /></Field>
+      </div>
+    );
+  }
+  if (format === "Word 文档") {
+    return (
+      <Field label="文本提取范围">
+        <div className="flex gap-3">
+          {["全文提取", "正文提取", "页眉页脚排除"].map(r => (
+            <label key={r} className="flex items-center gap-1.5 text-sm cursor-pointer">
+              <input type="radio" checked={extractRange === r} onChange={() => setExtractRange(r)} className="accent-primary" />{r}
+            </label>
+          ))}
+        </div>
+      </Field>
+    );
+  }
+  if (format === "标记语言文件") {
+    return (
+      <div className="space-y-3">
+        <Field label="标签提取规则">
+          <div className="flex gap-3">
+            {["无", "指定标签", "排除指定标签"].map(r => (
+              <label key={r} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="radio" checked={tagRule === r} onChange={() => setTagRule(r)} className="accent-primary" />{r}
+              </label>
+            ))}
+          </div>
+        </Field>
+        {tagRule !== "无" && (
+          <Field label={tagRule === "指定标签" ? "提取标签名" : "排除标签名"}>
+            <Input value={tagNames} onChange={e => setTagNames(e.target.value)} placeholder="如 <content>，多个用逗号分隔" />
+          </Field>
+        )}
+      </div>
+    );
+  }
+  if (format === "JSON 文件") {
+    return (
+      <p className="text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">
+        JSON 格式文件将自动按照单个 JSON 对象（{"{}"}）或 JSON 数组（[{"{}"},]）进行拆分处理
+      </p>
+    );
+  }
+  return null;
+}
+
+/* ─── Mock datasets for platform import ─── */
+const MOCK_PLATFORM_DATASETS = [
+  { id: "DS-001", name: "中文情感分析训练集", versions: ["V1.0", "V2.0", "V3.0"], source: "我的数据集" },
+  { id: "DS-002", name: "医疗影像CT扫描数据集", versions: ["V1.0", "V2.0", "V3.0", "V4.0", "V5.0"], source: "我的数据集" },
+  { id: "DS-003", name: "多语种平行翻译语料", versions: ["V1.0", "V2.0"], source: "我的数据集" },
+  { id: "DS-S001", name: "金融新闻语料库", versions: ["V1.0", "V2.0", "V3.0", "V4.0", "V5.0", "V6.0"], source: "我订阅的数据集" },
+  { id: "DS-S002", name: "开源医学影像数据集", versions: ["V1.0", "V2.0", "V3.0"], source: "我订阅的数据集" },
+  { id: "DS-H001", name: "内部标注训练集", versions: ["V1.0", "V2.0"], source: "分享给我的数据集" },
+  { id: "DS-H002", name: "产品图像分类数据集", versions: ["V1.0", "V2.0", "V3.0", "V4.0"], source: "分享给我的数据集" },
+];
 
 /* ═══════════════ Main Component ═══════════════ */
 export default function DatasetImportConfig({ dataset, version, onBack, onComplete }: {
@@ -75,6 +165,7 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
 
   // Text format config
   const [delimiter, setDelimiter] = useState("换行符");
+  const [customDelimiter, setCustomDelimiter] = useState("");
   const [encoding, setEncoding] = useState("UTF-8");
 
   // Excel config
@@ -90,16 +181,29 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
   const [tagNames, setTagNames] = useState("");
 
   // Zip config
-  const [zipFormatFilter, setZipFormatFilter] = useState<string[]>(["全部格式"]);
+  const [zipSubFormat, setZipSubFormat] = useState<ZipSubFormat>("文本文档");
   const [keepDirStructure, setKeepDirStructure] = useState(true);
   const [overwriteSameName, setOverwriteSameName] = useState(true);
   const [zipPassword, setZipPassword] = useState("");
 
+  // Zip sub-format adapter states
+  const [zipDelimiter, setZipDelimiter] = useState("换行符");
+  const [zipCustomDelimiter, setZipCustomDelimiter] = useState("");
+  const [zipEncoding, setZipEncoding] = useState("UTF-8");
+  const [zipSheetName, setZipSheetName] = useState("Sheet1");
+  const [zipHeaderRow, setZipHeaderRow] = useState("1");
+  const [zipDataStartRow, setZipDataStartRow] = useState("2");
+  const [zipExtractRange, setZipExtractRange] = useState("全文提取");
+  const [zipTagRule, setZipTagRule] = useState("无");
+  const [zipTagNames, setZipTagNames] = useState("");
+
   // Platform import
   const [sourceType, setSourceType] = useState("我的数据集");
-  const [sourceDataset, setSourceDataset] = useState("");
+  const [sourceDatasetId, setSourceDatasetId] = useState("");
   const [sourceVersion, setSourceVersion] = useState("");
   const [importDataRange, setImportDataRange] = useState("全部数据");
+  const [dsDropdownOpen, setDsDropdownOpen] = useState(false);
+  const [dsSearch, setDsSearch] = useState("");
 
   // FTP import
   const [ftpProtocol, setFtpProtocol] = useState("FTP");
@@ -122,7 +226,7 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
 
   const canSubmit = () => {
     if (uploadMethod === "本地导入") return uploadedFiles.length > 0;
-    if (uploadMethod === "平台已有数据集") return sourceDataset && sourceVersion;
+    if (uploadMethod === "平台已有数据集") return sourceDatasetId && sourceVersion;
     if (uploadMethod === "在线 FTP 导入") return ftpHost && ftpUser && ftpPass && ftpPath && ftpTested;
     return false;
   };
@@ -133,7 +237,13 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
     onComplete();
   };
 
-  const availableZipFilters = MODALITY_FILE_FILTER[dataset.modality] || ["全部格式"];
+  // Platform import helpers
+  const filteredPlatformDs = MOCK_PLATFORM_DATASETS.filter(d => {
+    if (d.source !== sourceType) return false;
+    if (dsSearch && !d.name.toLowerCase().includes(dsSearch.toLowerCase())) return false;
+    return true;
+  });
+  const selectedPlatformDs = MOCK_PLATFORM_DATASETS.find(d => d.id === sourceDatasetId);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -162,7 +272,7 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
             </div>
           </Field>
           <Field label="上传方式" required>
-            <select value={uploadMethod} onChange={e => setUploadMethod(e.target.value as UploadMethod)}
+            <select value={uploadMethod} onChange={e => { setUploadMethod(e.target.value as UploadMethod); setUploadedFiles([]); }}
               className="w-full h-9 px-3 text-sm border rounded-md bg-card">
               {(["本地导入", "平台已有数据集", "在线 FTP 导入"] as const).map(m => <option key={m}>{m}</option>)}
             </select>
@@ -193,74 +303,54 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
 
           {/* Format-specific config */}
           <Section title="三、格式适配配置">
-            {fileFormat === "文本文档" && (
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="分隔符" required>
-                  <select value={delimiter} onChange={e => setDelimiter(e.target.value)} className="w-full h-9 px-3 text-sm border rounded-md bg-card">
-                    {["换行符", "半角逗号", "制表符", "空格", "无", "自定义"].map(d => <option key={d}>{d}</option>)}
-                  </select>
-                </Field>
-                <Field label="编码格式">
-                  <select value={encoding} onChange={e => setEncoding(e.target.value)} className="w-full h-9 px-3 text-sm border rounded-md bg-card">
-                    {["UTF-8", "GBK", "GB2312", "ISO-8859-1"].map(e => <option key={e}>{e}</option>)}
-                  </select>
-                </Field>
-              </div>
-            )}
-            {fileFormat === "Excel 表格" && (
-              <div className="grid grid-cols-3 gap-4">
-                <Field label="工作表"><Input value={sheetName} onChange={e => setSheetName(e.target.value)} placeholder="Sheet1" /></Field>
-                <Field label="表头行号"><Input value={headerRow} onChange={e => setHeaderRow(e.target.value)} placeholder="1" /></Field>
-                <Field label="数据起始行号"><Input value={dataStartRow} onChange={e => setDataStartRow(e.target.value)} placeholder="2" /></Field>
-              </div>
-            )}
-            {fileFormat === "Word 文档" && (
-              <Field label="文本提取范围">
-                <div className="flex gap-3">
-                  {["全文提取", "正文提取", "页眉页脚排除"].map(r => (
-                    <label key={r} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                      <input type="radio" checked={extractRange === r} onChange={() => setExtractRange(r)} className="accent-primary" />{r}
-                    </label>
-                  ))}
-                </div>
-              </Field>
-            )}
-            {fileFormat === "标记语言文件" && (
-              <div className="space-y-3">
-                <Field label="标签提取规则">
-                  <div className="flex gap-3">
-                    {["无", "指定标签", "排除指定标签"].map(r => (
-                      <label key={r} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                        <input type="radio" checked={tagRule === r} onChange={() => setTagRule(r)} className="accent-primary" />{r}
+            {fileFormat !== "压缩包" ? (
+              <FormatAdapterConfig
+                format={fileFormat}
+                delimiter={delimiter} setDelimiter={setDelimiter}
+                customDelimiter={customDelimiter} setCustomDelimiter={setCustomDelimiter}
+                encoding={encoding} setEncoding={setEncoding}
+                sheetName={sheetName} setSheetName={setSheetName}
+                headerRow={headerRow} setHeaderRow={setHeaderRow}
+                dataStartRow={dataStartRow} setDataStartRow={setDataStartRow}
+                extractRange={extractRange} setExtractRange={setExtractRange}
+                tagRule={tagRule} setTagRule={setTagRule}
+                tagNames={tagNames} setTagNames={setTagNames}
+              />
+            ) : (
+              /* ─── Archive config ─── */
+              <div className="space-y-4">
+                <Field label="解压后文件格式过滤" required>
+                  <p className="text-xs text-muted-foreground mb-2">选择解压后需要保留的文件格式类型，选中后将展示对应的格式适配配置</p>
+                  <div className="flex flex-wrap gap-2">
+                    {ZIP_SUB_FORMATS.map(fmt => (
+                      <label key={fmt} className={cn(
+                        "flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm cursor-pointer transition-all",
+                        zipSubFormat === fmt ? "border-primary bg-primary/5 ring-1 ring-primary/20 text-primary font-medium" : "hover:border-primary/30 text-foreground"
+                      )}>
+                        <input type="radio" checked={zipSubFormat === fmt} onChange={() => setZipSubFormat(fmt)} className="accent-primary" />
+                        {fmt}
                       </label>
                     ))}
                   </div>
                 </Field>
-                {tagRule !== "无" && (
-                  <Field label={tagRule === "指定标签" ? "提取标签名" : "排除标签名"}>
-                    <Input value={tagNames} onChange={e => setTagNames(e.target.value)} placeholder="如 <content>，多个用逗号分隔" />
-                  </Field>
-                )}
-              </div>
-            )}
-            {fileFormat === "JSON 文件" && (
-              <p className="text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">
-                JSON 格式文件将自动按照单个 JSON 对象（{"{}"}）或 JSON 数组（[{"{}"},]）进行拆分处理
-              </p>
-            )}
-            {fileFormat === "压缩包" && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <Field label="解压后文件格式过滤" required>
-                    <select value={zipFormatFilter[0]} onChange={e => setZipFormatFilter([e.target.value])}
-                      className="w-full h-9 px-3 text-sm border rounded-md bg-card">
-                      {availableZipFilters.map(f => <option key={f}>{f}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="解压密码（可选）">
-                    <Input type="password" value={zipPassword} onChange={e => setZipPassword(e.target.value)} placeholder="未加密则留空" />
-                  </Field>
+
+                {/* Sub-format adapter config */}
+                <div className="border-l-2 border-primary/20 pl-4">
+                  <p className="text-xs text-muted-foreground mb-3">「{zipSubFormat}」格式适配配置</p>
+                  <FormatAdapterConfig
+                    format={zipSubFormat}
+                    delimiter={zipDelimiter} setDelimiter={setZipDelimiter}
+                    customDelimiter={zipCustomDelimiter} setCustomDelimiter={setZipCustomDelimiter}
+                    encoding={zipEncoding} setEncoding={setZipEncoding}
+                    sheetName={zipSheetName} setSheetName={setZipSheetName}
+                    headerRow={zipHeaderRow} setHeaderRow={setZipHeaderRow}
+                    dataStartRow={zipDataStartRow} setDataStartRow={setZipDataStartRow}
+                    extractRange={zipExtractRange} setExtractRange={setZipExtractRange}
+                    tagRule={zipTagRule} setTagRule={setZipTagRule}
+                    tagNames={zipTagNames} setTagNames={setZipTagNames}
+                  />
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="保留原目录结构">
                     <div className="flex gap-3">
@@ -270,6 +360,12 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
                         </label>
                       ))}
                     </div>
+                    {!keepDirStructure && (
+                      <div className="flex items-start gap-2 mt-2 p-2.5 rounded-md bg-amber-500/10 border border-amber-500/20">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <p className="text-xs text-amber-700">选择「否」将会把压缩包内所有文件夹中的数据扁平化放到数据集版本根目录中，文件夹层级结构将不会保留。</p>
+                      </div>
+                    )}
                   </Field>
                   <Field label="覆盖同名文件">
                     <div className="flex gap-3">
@@ -281,6 +377,9 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
                     </div>
                   </Field>
                 </div>
+                <Field label="解压密码（可选）">
+                  <Input type="password" value={zipPassword} onChange={e => setZipPassword(e.target.value)} placeholder="未加密则留空" className="max-w-xs" />
+                </Field>
               </div>
             )}
           </Section>
@@ -320,15 +419,51 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
         <Section title="二、平台数据集导入配置">
           <div className="grid grid-cols-3 gap-4">
             <Field label="数据集来源" required>
-              <select value={sourceType} onChange={e => setSourceType(e.target.value)} className="w-full h-9 px-3 text-sm border rounded-md bg-card">
+              <select value={sourceType} onChange={e => { setSourceType(e.target.value); setSourceDatasetId(""); setSourceVersion(""); }}
+                className="w-full h-9 px-3 text-sm border rounded-md bg-card">
                 {["我的数据集", "我订阅的数据集", "分享给我的数据集"].map(t => <option key={t}>{t}</option>)}
               </select>
             </Field>
             <Field label="选择数据集" required>
-              <Input value={sourceDataset} onChange={e => setSourceDataset(e.target.value)} placeholder="输入或选择数据集名称" />
+              <div className="relative">
+                <button type="button" onClick={() => setDsDropdownOpen(!dsDropdownOpen)}
+                  className="w-full h-9 px-3 text-sm border rounded-md bg-card text-left flex items-center justify-between gap-1 hover:border-primary/50 transition-colors">
+                  <span className={selectedPlatformDs ? "text-foreground" : "text-muted-foreground"}>
+                    {selectedPlatformDs ? selectedPlatformDs.name : "选择数据集"}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                </button>
+                {dsDropdownOpen && (
+                  <div className="absolute z-30 mt-1 w-full bg-popover border rounded-lg shadow-lg">
+                    <div className="p-2 border-b">
+                      <Input value={dsSearch} onChange={e => setDsSearch(e.target.value)} placeholder="搜索数据集..."
+                        className="h-8 text-sm" />
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      {filteredPlatformDs.length === 0 && <p className="text-xs text-muted-foreground text-center py-3">无匹配数据集</p>}
+                      {filteredPlatformDs.map(d => (
+                        <button key={d.id} onClick={() => { setSourceDatasetId(d.id); setSourceVersion(""); setDsDropdownOpen(false); setDsSearch(""); }}
+                          className={cn("w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center justify-between",
+                            sourceDatasetId === d.id && "bg-primary/5 text-primary")}>
+                          <div>
+                            <p className="font-medium">{d.name}</p>
+                            <p className="text-[11px] text-muted-foreground">{d.id} · {d.versions.length}个版本</p>
+                          </div>
+                          {sourceDatasetId === d.id && <span className="text-primary text-xs">✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </Field>
             <Field label="选择版本" required>
-              <Input value={sourceVersion} onChange={e => setSourceVersion(e.target.value)} placeholder="如 V2.0" />
+              <select value={sourceVersion} onChange={e => setSourceVersion(e.target.value)}
+                className="w-full h-9 px-3 text-sm border rounded-md bg-card" disabled={!selectedPlatformDs}>
+                <option value="">选择版本</option>
+                {selectedPlatformDs?.versions.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+              {!selectedPlatformDs && <p className="text-xs text-muted-foreground mt-1">请先选择数据集</p>}
             </Field>
           </div>
           <Field label="导入范围">
