@@ -345,13 +345,25 @@ function PaginationBar({ total, page, pageSize, onPageChange, onPageSizeChange }
   );
 }
 
+/* ─── Permissions ─── */
+interface VersionPermissions {
+  source: 'mine' | 'subscribed' | 'shared';
+  canRead: boolean;
+  canWrite: boolean;
+  canCreateVersion: boolean;
+  visibleVersions?: string[];
+}
+
 /* ═══════════════ Main Component ═══════════════ */
-export default function DatasetVersionList({ dataset, onBack, onViewDetail, onCreateVersion }: {
+export default function DatasetVersionList({ dataset, permissions, onBack, onViewDetail, onCreateVersion }: {
   dataset: DatasetInfo;
+  permissions?: VersionPermissions;
   onBack: () => void;
   onViewDetail: (version: DatasetVersion, dataset: DatasetInfo) => void;
   onCreateVersion: (dataset: DatasetInfo, versions: DatasetVersion[]) => void;
 }) {
+  const perms: VersionPermissions = permissions || { source: 'mine', canRead: true, canWrite: true, canCreateVersion: true };
+  const isMine = perms.source === 'mine';
   const { toast } = useToast();
   const [versions, setVersions] = useState<DatasetVersion[]>(MOCK_VERSIONS);
   const [page, setPage] = useState(1);
