@@ -29,10 +29,8 @@ const DataManagementDirectories = lazy(() => import("./pages/data-management/Dat
 
 const DataProcessWorkflows = lazy(() => import("./pages/data-process/DataProcessWorkflows"));
 const DataProcessTemplates = lazy(() => import("./pages/data-process/DataProcessTemplates"));
-const DataProcessTemplateStore = lazy(() => import("./pages/data-process/DataProcessTemplateStore"));
 const DataProcessRunRecords = lazy(() => import("./pages/data-process/DataProcessRunRecords"));
 const DataProcessOperators = lazy(() => import("./pages/data-process/DataProcessOperators"));
-const DataProcessOperatorStore = lazy(() => import("./pages/data-process/DataProcessOperatorStore"));
 const DataProcessFeatureExtract = lazy(() => import("./pages/data-process/DataProcessFeatureExtract"));
 const DataProcessQuality = lazy(() => import("./pages/data-process/DataProcessQuality"));
 const WorkflowCanvas = lazy(() => import("./pages/data-process/WorkflowCanvas"));
