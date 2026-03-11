@@ -892,10 +892,6 @@ const DataManagementDatasets = () => {
                       <button className="p-1 rounded hover:bg-muted/50" title="查看详情" onClick={() => navigateToVersionList(ds)}>
                         <Eye className="w-3.5 h-3.5 text-muted-foreground" />
                       </button>
-                      <button className="p-1 rounded hover:bg-muted/50" title="导入版本"
-                        onClick={() => setImportTarget({ name: ds.name, authLevel: ds.authLevel })}>
-                        <Download className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
                       <button className="p-1 rounded hover:bg-muted/50" title="取消订购" onClick={() => setConfirmDialog({
                         title: "取消订购", desc: `确认取消对「${ds.name}」的订购吗？取消后您将无法再查看和使用该数据集。`,
                         onConfirm: () => { setSubDs(prev => prev.filter(d => d.id !== ds.id)); toast({ title: "已取消订购" }); }
