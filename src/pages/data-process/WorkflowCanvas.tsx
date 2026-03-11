@@ -5,7 +5,8 @@ import {
   Trash2, Boxes, Settings2, ChevronDown, ChevronRight,
   X, PanelLeftClose, PanelLeftOpen, Search, Plus, Minus,
   Type, Image, Mic, Video, Layers, Database, FileOutput, Wrench,
-  AlertTriangle, CheckCircle2, HelpCircle, Eye, Upload, Map
+  AlertTriangle, CheckCircle2, HelpCircle, Eye, Upload, Map,
+  PanelRightClose, PanelRightOpen, Code2, LayoutGrid, AlignHorizontalDistributeCenter, Info
 } from "lucide-react";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
