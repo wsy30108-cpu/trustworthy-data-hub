@@ -889,6 +889,10 @@ const DataManagementDatasets = () => {
     if (shareDs.length === 0) {
       return <div className="rounded-lg border bg-card"><EmptyState message="暂无分享给您的数据集" guide="联系同事或空间管理员，申请分享数据集" /></div>;
     }
+    const navigateToVersionList = (ds: SharedDataset) => {
+      setCurrentDataset(ds);
+      setSubPage("versionList");
+    };
     return (
       <div className="rounded-lg border bg-card overflow-hidden">
         <div className="overflow-x-auto">
@@ -903,7 +907,9 @@ const DataManagementDatasets = () => {
             <tbody>
               {items.map(ds => (
                 <tr key={ds.id} className="border-b last:border-0 hover:bg-muted/20 group">
-                  <td className="py-3 px-3 font-medium text-foreground max-w-[200px] truncate">{ds.name}</td>
+                  <td className="py-3 px-3 font-medium max-w-[200px] truncate">
+                    <button className="text-primary hover:underline" onClick={() => navigateToVersionList(ds)}>{ds.name}</button>
+                  </td>
                   <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
                   <td className="py-3 px-3"><span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span></td>
                   <td className="py-3 px-3"><TagCell tags={ds.tags} /></td>
@@ -914,9 +920,13 @@ const DataManagementDatasets = () => {
                   <td className="py-3 px-3 text-muted-foreground text-xs">{ds.updatedAt}</td>
                   <td className="py-3 px-3">
                     <div className="flex items-center gap-1">
-                      <button className="p-1 rounded hover:bg-muted/50" title="查看详情"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                      <button className="p-1 rounded hover:bg-muted/50" title="查看详情" onClick={() => navigateToVersionList(ds)}>
+                        <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                      </button>
                       <button className="p-1 rounded hover:bg-muted/50" title="导入版本"
-                        onClick={() => setImportTarget({ name: ds.name, authLevel: ds.authLevel })}><Download className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        onClick={() => setImportTarget({ name: ds.name, authLevel: ds.authLevel })}>
+                        <Download className="w-3.5 h-3.5 text-muted-foreground" />
+                      </button>
                       <button className="p-1 rounded hover:bg-muted/50" title="取消接收" onClick={() => setConfirmDialog({
                         title: "取消接收分享", desc: `确认取消接收「${ds.name}」的分享吗？取消后您将无法再查看和使用该数据集。`,
                         onConfirm: () => { setShareDs(prev => prev.filter(d => d.id !== ds.id)); toast({ title: "已取消接收" }); }
