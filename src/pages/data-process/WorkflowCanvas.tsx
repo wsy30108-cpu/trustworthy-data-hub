@@ -1734,11 +1734,54 @@ const WorkflowCanvas = () => {
               </>
             )}
             <div className="w-px h-5 bg-border mx-1" />
-            <button className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted/50 text-muted-foreground flex items-center gap-1.5"><Save className="w-3.5 h-3.5" /> 保存</button>
-            <button className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> 运行</button>
+            <button className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted/50 text-muted-foreground flex items-center gap-1.5" disabled={debugMode}><Save className="w-3.5 h-3.5" /> 保存</button>
+            {debugMode ? (
+              <button onClick={stopDebug} className="px-3 py-1.5 text-xs bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 flex items-center gap-1.5">
+                <Square className="w-3.5 h-3.5" /> 停止调试
+              </button>
+            ) : (
+              <>
+                <button onClick={startDebug} className="px-3 py-1.5 text-xs border border-primary text-primary rounded-md hover:bg-primary/10 flex items-center gap-1.5">
+                  <Bug className="w-3.5 h-3.5" /> 调试
+                </button>
+                <button className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> 运行</button>
+              </>
+            )}
           </div>
         </div>
 
+        {/* ─── Debug Status Bar ─── */}
+        {debugMode && (
+          <div className="h-9 border-b bg-muted/50 flex items-center justify-between px-4 shrink-0 z-20 animate-fade-in">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                {debugAllDone ? (
+                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                )}
+                <span className="text-xs font-medium text-foreground">{debugAllDone ? "已完成" : "运行中"}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="w-3 h-3" />
+                <span>已耗时 {formatElapsed(debugElapsed)}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Activity className="w-3 h-3" />
+                <span>进度 {debugDoneCount}/{nodes.length} 节点</span>
+              </div>
+              {debugRunningCount > 0 && (
+                <div className="flex items-center gap-1.5 text-xs text-primary">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>{debugRunningCount} 个节点执行中</span>
+                </div>
+              )}
+            </div>
+            <button onClick={stopDebug} className="px-2.5 py-1 text-xs border border-destructive text-destructive rounded-md hover:bg-destructive/10 flex items-center gap-1">
+              <Square className="w-3 h-3" /> 停止运行
+            </button>
+          </div>
+        )}
         <div className="flex flex-1 overflow-hidden">
           {/* ─── Left: Operator panel ─── */}
           <div
