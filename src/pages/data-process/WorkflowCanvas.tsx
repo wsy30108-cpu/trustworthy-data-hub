@@ -1674,7 +1674,14 @@ const WorkflowCanvas = () => {
               <ArrowLeft className="w-4 h-4" />
             </button>
             <span className="text-sm font-medium text-foreground">{wfName}</span>
-            <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded">编辑中</span>
+            {debugMode ? (
+              <span className="text-xs text-primary-foreground px-2 py-0.5 bg-primary rounded flex items-center gap-1">
+                {debugAllDone ? <CheckCircle2 className="w-3 h-3" /> : <Loader2 className="w-3 h-3 animate-spin" />}
+                {debugAllDone ? "已完成" : "调试中"}
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded">编辑中</span>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <button className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="撤销"><Undo2 className="w-4 h-4" /></button>
