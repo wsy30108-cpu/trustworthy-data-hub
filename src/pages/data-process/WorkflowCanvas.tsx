@@ -96,7 +96,7 @@ const operatorCatalog: OperatorCategory[] = [
           { type: "python_lambda_mapper", label: "PythonLambda映射器", description: "Mapper，用于将Pythonlambda函数应用于数据样本。", inputs: ["data"], outputs: ["data"] },
           { type: "relation_identity_mapper", label: "关系标识映射器", description: "确定给定文本中两个实体之间的关系。", inputs: ["data"], outputs: ["data"] },
           { type: "reference_remove_mapper", label: "参考文献移除映射器", description: "删除LaTeX文档末尾的参考书目部分。", inputs: ["data"], outputs: ["data"] },
-          { type: "comment_remove_mapper", label: "注释移除映射器", description: "从文档中删除注释，当前仅支持"文本"格式。", inputs: ["data"], outputs: ["data"] },
+          { type: "comment_remove_mapper", label: "注释移除映射器", description: "从文档中删除注释，当前仅支持「文本」格式。", inputs: ["data"], outputs: ["data"] },
           { type: "header_remove_mapper", label: "页眉移除映射器", description: "删除LaTeX示例中文档开头的标题。", inputs: ["data"], outputs: ["data"] },
           { type: "long_word_remove_mapper", label: "长单词移除映射器", description: "映射器删除特定范围内的长词。", inputs: ["data"], outputs: ["data"] },
           { type: "non_chinese_remove_mapper", label: "非中文字符移除映射器", description: "从文本样本中删除非中文字符。", inputs: ["data"], outputs: ["data"] },
