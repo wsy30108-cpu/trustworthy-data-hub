@@ -345,15 +345,32 @@ function PaginationBar({ total, page, pageSize, onPageChange, onPageSizeChange }
   );
 }
 
+/* ─── Permissions ─── */
+interface VersionPermissions {
+  source: 'mine' | 'subscribed' | 'shared';
+  canRead: boolean;
+  canWrite: boolean;
+  canCreateVersion: boolean;
+  visibleVersions?: string[];
+}
+
 /* ═══════════════ Main Component ═══════════════ */
-export default function DatasetVersionList({ dataset, onBack, onViewDetail, onCreateVersion }: {
+export default function DatasetVersionList({ dataset, permissions, onBack, onViewDetail, onCreateVersion }: {
   dataset: DatasetInfo;
+  permissions?: VersionPermissions;
   onBack: () => void;
   onViewDetail: (version: DatasetVersion, dataset: DatasetInfo) => void;
   onCreateVersion: (dataset: DatasetInfo, versions: DatasetVersion[]) => void;
 }) {
+  const perms: VersionPermissions = permissions || { source: 'mine', canRead: true, canWrite: true, canCreateVersion: true };
+  const isMine = perms.source === 'mine';
   const { toast } = useToast();
-  const [versions, setVersions] = useState<DatasetVersion[]>(MOCK_VERSIONS);
+  const [versions, setVersions] = useState<DatasetVersion[]>(() => {
+    if (perms.visibleVersions) {
+      return MOCK_VERSIONS.filter(v => perms.visibleVersions!.includes(v.version));
+    }
+    return MOCK_VERSIONS;
+  });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -395,7 +412,19 @@ export default function DatasetVersionList({ dataset, onBack, onViewDetail, onCr
         </button>
         <div className="flex-1">
           <h1 className="text-lg font-semibold text-foreground">{dataset.name}</h1>
-          <p className="text-xs text-muted-foreground">数据集版本管理</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-muted-foreground">数据集版本管理</p>
+            {!isMine && (
+              <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium",
+                perms.source === 'subscribed' ? "bg-accent text-accent-foreground" : "bg-primary/10 text-primary"
+              )}>
+                {perms.source === 'subscribed' ? '订购' : '分享'}
+                {perms.canWrite && ' · 可写'}
+                {perms.canCreateVersion && ' · 可建版本'}
+                {!perms.canWrite && !perms.canCreateVersion && ' · 只读'}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -460,9 +489,11 @@ export default function DatasetVersionList({ dataset, onBack, onViewDetail, onCr
             <Button variant="outline" size="sm" onClick={resetFilters} className="h-8 gap-1.5 text-xs">
               <RotateCcw className="w-3 h-3" />重置
             </Button>
-            <Button size="sm" onClick={() => onCreateVersion(dataset, versions)} className="h-8 gap-1.5 text-xs">
-              <Plus className="w-3.5 h-3.5" />新增版本
-            </Button>
+            {perms.canCreateVersion && (
+              <Button size="sm" onClick={() => onCreateVersion(dataset, versions)} className="h-8 gap-1.5 text-xs">
+                <Plus className="w-3.5 h-3.5" />新增版本
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -533,22 +564,30 @@ export default function DatasetVersionList({ dataset, onBack, onViewDetail, onCr
                       <button className="p-1 rounded hover:bg-muted/50" title="导出" onClick={() => setExportTarget(v.version)}>
                         <Download className="w-3.5 h-3.5 text-muted-foreground" />
                       </button>
-                      <button className="p-1 rounded hover:bg-muted/50" title="清洗" onClick={() => toast({ title: `${v.version} 清洗任务已创建` })}>
-                        <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
-                      <button className="p-1 rounded hover:bg-muted/50" title="标注" onClick={() => toast({ title: `${v.version} 标注任务已创建` })}>
-                        <Tag className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
-                      <button className="p-1 rounded hover:bg-muted/50" title="分享" onClick={() => setShareTarget(v.version)}>
-                        <Share2 className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
-                      <button className="p-1 rounded hover:bg-muted/50" title="删除" onClick={() => setConfirmDialog({
-                        title: "删除版本",
-                        desc: `确认删除版本「${v.version}」吗？删除后版本内所有数据将无法恢复。`,
-                        onConfirm: () => { setVersions(prev => prev.filter(x => x.id !== v.id)); toast({ title: "版本已删除" }); }
-                      })}>
-                        <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
+                      {(isMine || perms.canWrite) && (
+                        <button className="p-1 rounded hover:bg-muted/50" title="清洗" onClick={() => toast({ title: `${v.version} 清洗任务已创建` })}>
+                          <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
+                      )}
+                      {(isMine || perms.canWrite) && (
+                        <button className="p-1 rounded hover:bg-muted/50" title="标注" onClick={() => toast({ title: `${v.version} 标注任务已创建` })}>
+                          <Tag className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
+                      )}
+                      {isMine && (
+                        <button className="p-1 rounded hover:bg-muted/50" title="分享" onClick={() => setShareTarget(v.version)}>
+                          <Share2 className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
+                      )}
+                      {isMine && (
+                        <button className="p-1 rounded hover:bg-muted/50" title="删除" onClick={() => setConfirmDialog({
+                          title: "删除版本",
+                          desc: `确认删除版本「${v.version}」吗？删除后版本内所有数据将无法恢复。`,
+                          onConfirm: () => { setVersions(prev => prev.filter(x => x.id !== v.id)); toast({ title: "版本已删除" }); }
+                        })}>
+                          <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
