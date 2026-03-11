@@ -693,6 +693,8 @@ const WorkflowCanvas = () => {
 
   // Minimap drag
   const [minimapDragging, setMinimapDragging] = useState(false);
+
+  const toggleCat = (name: string) => {
     setExpandedCats(prev => {
       const next = new Set(prev);
       next.has(name) ? next.delete(name) : next.add(name);
