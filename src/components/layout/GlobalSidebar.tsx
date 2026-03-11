@@ -53,59 +53,61 @@ export function GlobalSidebar() {
         </nav>
       </div>
 
-      {/* 空间切换器 */}
-      <div className="border-t">
-        {!collapsed && showWorkspaces && (
-          <div className="p-2 border-b max-h-48 overflow-y-auto animate-fade-in">
-            <div className="relative mb-2">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <input
-                value={wsSearch}
-                onChange={e => setWsSearch(e.target.value)}
-                placeholder="搜索空间..."
-                className="w-full pl-7 pr-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-              />
+      {/* 空间切换器 - 控制台下不显示 */}
+      {!isConsole && (
+        <div className="border-t">
+          {!collapsed && showWorkspaces && (
+            <div className="p-2 border-b max-h-48 overflow-y-auto animate-fade-in">
+              <div className="relative mb-2">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <input
+                  value={wsSearch}
+                  onChange={e => setWsSearch(e.target.value)}
+                  placeholder="搜索空间..."
+                  className="w-full pl-7 pr-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="space-y-0.5">
+                {filteredWorkspaces.map(ws => (
+                  <button
+                    key={ws.id}
+                    onClick={() => { setCurrentWorkspace(ws); setShowWorkspaces(false); }}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
+                      ws.id === currentWorkspace.id ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
+                    }`}
+                  >
+                    <span className={`w-5 h-5 rounded text-[10px] flex items-center justify-center font-medium ${typeColors[ws.type]}`}>
+                      {ws.type}
+                    </span>
+                    <span className="truncate">{ws.name}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => navigate("/console/spaces")}
+                className="w-full text-xs text-primary hover:underline mt-2 text-center"
+              >
+                空间管理 →
+              </button>
             </div>
-            <div className="space-y-0.5">
-              {filteredWorkspaces.map(ws => (
-                <button
-                  key={ws.id}
-                  onClick={() => { setCurrentWorkspace(ws); setShowWorkspaces(false); }}
-                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
-                    ws.id === currentWorkspace.id ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
-                  }`}
-                >
-                  <span className={`w-5 h-5 rounded text-[10px] flex items-center justify-center font-medium ${typeColors[ws.type]}`}>
-                    {ws.type}
-                  </span>
-                  <span className="truncate">{ws.name}</span>
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => navigate("/console/spaces")}
-              className="w-full text-xs text-primary hover:underline mt-2 text-center"
-            >
-              空间管理 →
-            </button>
-          </div>
-        )}
-
-        <div
-          className={`flex items-center gap-2 p-3 cursor-pointer hover:bg-muted/30 ${collapsed ? "justify-center px-2" : ""}`}
-          onClick={() => !collapsed && setShowWorkspaces(!showWorkspaces)}
-        >
-          <span className={`w-6 h-6 rounded text-[10px] flex items-center justify-center font-medium shrink-0 ${typeColors[currentWorkspace.type]}`}>
-            {currentWorkspace.type}
-          </span>
-          {!collapsed && (
-            <>
-              <span className="text-xs truncate flex-1">{currentWorkspace.name}</span>
-              {showWorkspaces ? <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" /> : <ChevronUp className="w-3 h-3 text-muted-foreground shrink-0" />}
-            </>
           )}
+
+          <div
+            className={`flex items-center gap-2 p-3 cursor-pointer hover:bg-muted/30 ${collapsed ? "justify-center px-2" : ""}`}
+            onClick={() => !collapsed && setShowWorkspaces(!showWorkspaces)}
+          >
+            <span className={`w-6 h-6 rounded text-[10px] flex items-center justify-center font-medium shrink-0 ${typeColors[currentWorkspace.type]}`}>
+              {currentWorkspace.type}
+            </span>
+            {!collapsed && (
+              <>
+                <span className="text-xs truncate flex-1">{currentWorkspace.name}</span>
+                {showWorkspaces ? <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" /> : <ChevronUp className="w-3 h-3 text-muted-foreground shrink-0" />}
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 折叠按钮 */}
       <button
