@@ -489,9 +489,11 @@ export default function DatasetVersionList({ dataset, permissions, onBack, onVie
             <Button variant="outline" size="sm" onClick={resetFilters} className="h-8 gap-1.5 text-xs">
               <RotateCcw className="w-3 h-3" />重置
             </Button>
-            <Button size="sm" onClick={() => onCreateVersion(dataset, versions)} className="h-8 gap-1.5 text-xs">
-              <Plus className="w-3.5 h-3.5" />新增版本
-            </Button>
+            {perms.canCreateVersion && (
+              <Button size="sm" onClick={() => onCreateVersion(dataset, versions)} className="h-8 gap-1.5 text-xs">
+                <Plus className="w-3.5 h-3.5" />新增版本
+              </Button>
+            )}
           </div>
         </div>
       </div>
