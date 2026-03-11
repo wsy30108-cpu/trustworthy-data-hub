@@ -641,11 +641,30 @@ const WorkflowCanvas = () => {
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [viewMode, setViewMode] = useState<"visual" | "json">("visual");
 
-  // Input sampling mode
+  // Accordion state
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(["文本"]));
+  const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
+
+  // Workflow global config
+  const [wfDesc, setWfDesc] = useState("");
+  const [wfMaxParallel, setWfMaxParallel] = useState(4);
+  const [wfTimeout, setWfTimeout] = useState(3600);
+  const [wfFailStrategy, setWfFailStrategy] = useState<"stop" | "skip" | "retry">("stop");
+  const [wfRetryMax, setWfRetryMax] = useState(3);
+  const [wfRetryInterval, setWfRetryInterval] = useState(60);
+
+  // Input/Output node config
+  const [inputSourceType, setInputSourceType] = useState<"dataset" | "file">("dataset");
+  const [inputDataset, setInputDataset] = useState("");
+  const [inputVersion, setInputVersion] = useState("");
+  const [inputSampleRatio, setInputSampleRatio] = useState(100);
   const [inputSamplingMode, setInputSamplingMode] = useState<"all" | "ratio" | "count">("all");
   const [inputSampleCount, setInputSampleCount] = useState(1000);
-
-  // Output write mode
+  const [outputTargetType, setOutputTargetType] = useState<"new" | "append">("new");
+  const [outputDataset, setOutputDataset] = useState("");
+  const [outputVersion, setOutputVersion] = useState("");
+  const [outputFormat, setOutputFormat] = useState("jsonl");
+  const [outputNewName, setOutputNewName] = useState("");
   const [outputWriteMode, setOutputWriteMode] = useState<"append" | "clear">("append");
   const [outputFormat, setOutputFormat] = useState("jsonl");
   const [outputNewName, setOutputNewName] = useState("");
