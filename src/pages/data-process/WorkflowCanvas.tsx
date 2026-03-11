@@ -67,6 +67,16 @@ interface ValidationError {
   connectionIds?: string[];
 }
 
+interface WorkflowInstance {
+  id: string;
+  snapshotVersion: string;
+  createdAt: string;
+  status: "pending" | "running" | "done" | "error";
+  nodes: CanvasNode[];
+  connections: Connection[];
+  config: Record<string, any>;
+}
+
 interface Operator {
   type: string;
   label: string;
