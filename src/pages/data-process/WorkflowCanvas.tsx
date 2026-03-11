@@ -67,6 +67,16 @@ interface ValidationError {
   connectionIds?: string[];
 }
 
+interface WorkflowInstance {
+  id: string;
+  snapshotVersion: string;
+  createdAt: string;
+  status: "pending" | "running" | "done" | "error";
+  nodes: CanvasNode[];
+  connections: Connection[];
+  config: Record<string, any>;
+}
+
 interface Operator {
   type: string;
   label: string;
@@ -691,6 +701,11 @@ const WorkflowCanvas = () => {
   const [highlightedNodes, setHighlightedNodes] = useState<Set<string>>(new Set());
   const [highlightedConnections, setHighlightedConnections] = useState<Set<string>>(new Set());
 
+  // Run submission & instances
+  const [panelMode, setPanelMode] = useState<"default" | "runSubmit" | "debugConfig">("default");
+  const [workflowInstances, setWorkflowInstances] = useState<WorkflowInstance[]>([]);
+  const [debugInputParams, setDebugInputParams] = useState<Record<string, any>>({});
+
   // Minimap drag
   const [minimapDragging, setMinimapDragging] = useState(false);
 
@@ -932,6 +947,11 @@ const WorkflowCanvas = () => {
         if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
         deleteSelected();
       }
+      // Ctrl+S save
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        toast.success("工作流已保存");
+      }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
@@ -1164,8 +1184,33 @@ const WorkflowCanvas = () => {
     if (debugTimerRef.current) { clearInterval(debugTimerRef.current); debugTimerRef.current = null; }
     setShowLogPanel(false);
     setLogNodeId(null);
+    setPanelMode("default");
     toast.info("调试已停止");
   }, []);
+
+  /* ─── Submit run instance ─── */
+  const submitRunInstance = useCallback(() => {
+    const now = new Date();
+    const snapshotVersion = `SNAP-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}-${String(now.getHours()).padStart(2,"0")}${String(now.getMinutes()).padStart(2,"0")}${String(now.getSeconds()).padStart(2,"0")}`;
+    const instance: WorkflowInstance = {
+      id: `inst-${Date.now()}`,
+      snapshotVersion,
+      createdAt: now.toISOString(),
+      status: "pending",
+      nodes: JSON.parse(JSON.stringify(nodes)),
+      connections: JSON.parse(JSON.stringify(connections)),
+      config: { maxParallel: wfMaxParallel, timeout: wfTimeout, failStrategy: wfFailStrategy, retryMax: wfRetryMax, retryInterval: wfRetryInterval },
+    };
+    setWorkflowInstances(prev => [instance, ...prev]);
+    setPanelMode("default");
+    toast.success(`实例 ${snapshotVersion} 已提交运行`);
+  }, [nodes, connections, wfMaxParallel, wfTimeout, wfFailStrategy, wfRetryMax, wfRetryInterval]);
+
+  /* ─── Submit debug with params ─── */
+  const submitDebugRun = useCallback(() => {
+    setPanelMode("default");
+    startDebug();
+  }, [startDebug]);
 
   /* ─── Workflow Validation ─── */
   const validateWorkflow = useCallback((): boolean => {
@@ -1361,10 +1406,212 @@ const WorkflowCanvas = () => {
     }, null, 2);
   }, [wfName, wfDesc, wfMaxParallel, wfTimeout, wfFailStrategy, wfRetryMax, wfRetryInterval, nodes, connections]);
 
+  /* ─── Computed: estimated data & duration ─── */
+  const estimatedDataCount = useMemo(() => {
+    const inputNodes = nodes.filter(n => n.category === "输入节点");
+    return inputNodes.length * 5000 + Math.floor(Math.random() * 3000);
+  }, [nodes]);
+  const estimatedDuration = useMemo(() => {
+    const nodeCount = nodes.length;
+    return Math.max(30, nodeCount * 15 + Math.floor(Math.random() * 60));
+  }, [nodes]);
+
   /* ─── Right panel: render property panel ─── */
   const renderPropertyPanel = () => {
     if (rightPanelCollapsed) return null;
-    const panelWidth = 280;
+    const panelWidth = 300;
+
+    // Run submission confirmation panel
+    if (panelMode === "runSubmit") {
+      const now = new Date();
+      const snapshotTs = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
+      return (
+        <div className="border-l bg-card shrink-0 flex flex-col overflow-hidden" style={{ width: panelWidth }}>
+          <div className="p-3 border-b flex items-center justify-between">
+            <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+              <Play className="w-3.5 h-3.5 text-primary" />实例提交确认
+            </span>
+            <button onClick={() => setPanelMode("default")} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-4">
+            {/* Snapshot version */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">快照信息</p>
+              <div className="bg-muted/30 rounded-md p-2.5 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-[10px] text-muted-foreground">快照版本</span>
+                  <span className="text-[10px] font-mono text-foreground">SNAP-{snapshotTs.replace(/[-: ]/g, "").slice(0, 14)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[10px] text-muted-foreground">保存时间</span>
+                  <span className="text-[10px] text-foreground">{snapshotTs}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Data estimation */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">预估信息</p>
+              <div className="bg-muted/30 rounded-md p-2.5 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-[10px] text-muted-foreground">预计处理数据量</span>
+                  <span className="text-[10px] text-foreground">{estimatedDataCount.toLocaleString()} 条</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[10px] text-muted-foreground">预计耗时</span>
+                  <span className="text-[10px] text-foreground">约 {Math.floor(estimatedDuration / 60)}分{estimatedDuration % 60}秒</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Execution config summary */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">执行配置摘要</p>
+              <div className="bg-muted/30 rounded-md p-2.5 space-y-2 text-[10px]">
+                <div className="flex justify-between"><span className="text-muted-foreground">节点数</span><span className="text-foreground">{nodes.length}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">连线数</span><span className="text-foreground">{connections.length}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">最大并行数</span><span className="text-foreground">{wfMaxParallel}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">超时时间</span><span className="text-foreground">{wfTimeout}s</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">失败策略</span><span className="text-foreground">{wfFailStrategy === "stop" ? "停止" : wfFailStrategy === "skip" ? "跳过" : "重试"}</span></div>
+                {wfFailStrategy === "retry" && (
+                  <>
+                    <div className="flex justify-between"><span className="text-muted-foreground">最大重试次数</span><span className="text-foreground">{wfRetryMax}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">重试间隔</span><span className="text-foreground">{wfRetryInterval}s</span></div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Notice */}
+            <div className="bg-primary/5 border border-primary/20 rounded-md p-2.5">
+              <div className="flex items-start gap-2">
+                <Info className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  提交后将基于当前画布配置创建独立实例，后续对工作流的编辑不会影响本次执行。
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-2 pt-2">
+              <Button size="sm" className="w-full text-xs h-8" onClick={submitRunInstance}>
+                <Play className="w-3 h-3 mr-1.5" /> 确认提交运行
+              </Button>
+              <Button size="sm" variant="outline" className="w-full text-xs h-8" onClick={() => setPanelMode("default")}>
+                取消
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Debug config panel
+    if (panelMode === "debugConfig") {
+      const inputNodes = nodes.filter(n => n.category === "输入节点");
+      return (
+        <div className="border-l bg-card shrink-0 flex flex-col overflow-hidden" style={{ width: panelWidth }}>
+          <div className="p-3 border-b flex items-center justify-between">
+            <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+              <Bug className="w-3.5 h-3.5 text-primary" />调试配置
+            </span>
+            <button onClick={() => setPanelMode("default")} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-4">
+            {/* Input params */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">输入参数调整</p>
+              <p className="text-[9px] text-muted-foreground">可在调试前修改输入参数，不影响原始配置</p>
+
+              {inputNodes.map(n => (
+                <div key={n.id} className="border rounded-md p-2.5 space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <Database className="w-3 h-3" style={{ color: catColors["输入节点"] }} />
+                    <span className="text-[10px] font-medium text-foreground">{n.label}</span>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">采样模式</label>
+                    <select
+                      value={debugInputParams[n.id]?.samplingMode || "all"}
+                      onChange={e => setDebugInputParams(prev => ({ ...prev, [n.id]: { ...prev[n.id], samplingMode: e.target.value } }))}
+                      className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    >
+                      <option value="all">全量</option>
+                      <option value="ratio">按比例采样</option>
+                      <option value="count">按条数采样</option>
+                    </select>
+                  </div>
+                  {debugInputParams[n.id]?.samplingMode === "ratio" && (
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">采样比例 (%)</label>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <Slider
+                          value={[debugInputParams[n.id]?.ratio ?? 10]}
+                          min={1} max={100} step={1}
+                          onValueChange={([v]) => setDebugInputParams(prev => ({ ...prev, [n.id]: { ...prev[n.id], ratio: v } }))}
+                          className="flex-1"
+                        />
+                        <span className="text-xs text-foreground w-8 text-center">{debugInputParams[n.id]?.ratio ?? 10}%</span>
+                      </div>
+                    </div>
+                  )}
+                  {debugInputParams[n.id]?.samplingMode === "count" && (
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">前 N 条</label>
+                      <input
+                        type="number"
+                        value={debugInputParams[n.id]?.count ?? 100}
+                        onChange={e => setDebugInputParams(prev => ({ ...prev, [n.id]: { ...prev[n.id], count: parseInt(e.target.value) || 0 } }))}
+                        min={1}
+                        className="w-full mt-0.5 px-2 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30"
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {inputNodes.length === 0 && (
+                <p className="text-[10px] text-muted-foreground">无输入节点</p>
+              )}
+            </div>
+
+            {/* Execution config summary */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">执行配置</p>
+              <div className="bg-muted/30 rounded-md p-2.5 space-y-2 text-[10px]">
+                <div className="flex justify-between"><span className="text-muted-foreground">最大并行数</span><span className="text-foreground">{wfMaxParallel}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">超时时间</span><span className="text-foreground">{wfTimeout}s</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">失败策略</span><span className="text-foreground">{wfFailStrategy === "stop" ? "停止" : wfFailStrategy === "skip" ? "跳过" : "重试"}</span></div>
+              </div>
+            </div>
+
+            {/* Notice */}
+            <div className="bg-primary/5 border border-primary/20 rounded-md p-2.5">
+              <div className="flex items-start gap-2">
+                <Info className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  调试运行将使用上述参数执行工作流，画布将进入只读监控模式。
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-2 pt-2">
+              <Button size="sm" className="w-full text-xs h-8" onClick={submitDebugRun}>
+                <Bug className="w-3 h-3 mr-1.5" /> 提交调试
+              </Button>
+              <Button size="sm" variant="outline" className="w-full text-xs h-8" onClick={() => setPanelMode("default")}>
+                取消
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     // No node selected → workflow global info
     if (!selectedNodeData) {
@@ -1913,17 +2160,17 @@ const WorkflowCanvas = () => {
               </>
             )}
             <div className="w-px h-5 bg-border mx-1" />
-            <button className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted/50 text-muted-foreground flex items-center gap-1.5" disabled={debugMode}><Save className="w-3.5 h-3.5" /> 保存</button>
+            <button onClick={() => { toast.success("工作流已保存"); }} className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted/50 text-muted-foreground flex items-center gap-1.5" disabled={debugMode}><Save className="w-3.5 h-3.5" /> 保存</button>
             {debugMode ? (
               <button onClick={stopDebug} className="px-3 py-1.5 text-xs bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 flex items-center gap-1.5">
                 <Square className="w-3.5 h-3.5" /> 停止调试
               </button>
             ) : (
               <>
-                <button onClick={() => { if (validateWorkflow()) startDebug(); }} className="px-3 py-1.5 text-xs border border-primary text-primary rounded-md hover:bg-primary/10 flex items-center gap-1.5">
+                <button onClick={() => { if (validateWorkflow()) { setPanelMode("debugConfig"); setRightPanelCollapsed(false); } }} className="px-3 py-1.5 text-xs border border-primary text-primary rounded-md hover:bg-primary/10 flex items-center gap-1.5">
                   <Bug className="w-3.5 h-3.5" /> 调试
                 </button>
-                <button onClick={() => { if (validateWorkflow()) toast.success("校验通过，提交运行"); }} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> 运行</button>
+                <button onClick={() => { if (validateWorkflow()) { setPanelMode("runSubmit"); setRightPanelCollapsed(false); } }} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> 运行</button>
               </>
             )}
           </div>
