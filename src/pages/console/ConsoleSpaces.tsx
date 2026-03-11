@@ -227,7 +227,7 @@ const ConsoleSpaces = () => {
               {filtered.map(s => (
                 <tr key={s.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium">
-                    <button onClick={() => setShowDetail(s.id)} className="text-primary hover:underline">{s.name}</button>
+                    <button onClick={() => setShowDetail(s)} className="text-primary hover:underline">{s.name}</button>
                   </td>
                   <td className="py-3 px-4 text-muted-foreground font-mono text-xs">{s.identifier}</td>
                   <td className="py-3 px-4">
