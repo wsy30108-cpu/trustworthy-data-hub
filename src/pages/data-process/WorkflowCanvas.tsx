@@ -2166,6 +2166,7 @@ const WorkflowCanvas = () => {
                 {/* Nodes */}
                 {nodes.map(node => {
                   const isSelected = selectedNode === node.id;
+                  const isHighlighted = highlightedNodes.has(node.id);
                   const color = catColors[node.category] || "hsl(var(--primary))";
                   const nodeDebug = debugNodeStates[node.id];
                   const debugBorderColor = debugMode && nodeDebug
@@ -2174,6 +2175,7 @@ const WorkflowCanvas = () => {
                       : nodeDebug.status === "error" ? "hsl(var(--destructive))"
                       : undefined
                     : undefined;
+                  const errorBorderColor = isHighlighted && !debugMode ? "hsl(var(--destructive))" : undefined;
                   return (
                     <g key={node.id}>
                       <foreignObject x={node.x} y={node.y} width={NODE_W} height={NODE_H + (debugMode && nodeDebug && nodeDebug.status !== "pending" ? 20 : 0)}>
@@ -2186,9 +2188,9 @@ const WorkflowCanvas = () => {
                               setSelectedConnection(null);
                               if (debugMode) { setLogNodeId(node.id); setShowLogPanel(true); }
                             }}
-                            className={`rounded-lg border-2 bg-card shadow-sm select-none transition-all ${debugMode ? "cursor-pointer" : ""} ${isSelected ? "shadow-lg" : "hover:shadow-md"} ${debugMode && nodeDebug?.status === "running" ? "animate-pulse" : ""}`}
+                            className={`rounded-lg border-2 bg-card shadow-sm select-none transition-all ${debugMode ? "cursor-pointer" : ""} ${isSelected ? "shadow-lg" : "hover:shadow-md"} ${debugMode && nodeDebug?.status === "running" ? "animate-pulse" : ""} ${isHighlighted && !debugMode ? "ring-2 ring-destructive/50 shadow-destructive/20 shadow-lg" : ""}`}
                             style={{
-                              borderColor: debugBorderColor || (isSelected ? color : "hsl(var(--border))"),
+                              borderColor: errorBorderColor || debugBorderColor || (isSelected ? color : "hsl(var(--border))"),
                               height: NODE_H,
                             }}
                           >
