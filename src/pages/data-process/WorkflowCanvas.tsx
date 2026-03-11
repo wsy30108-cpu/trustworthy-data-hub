@@ -1924,6 +1924,7 @@ const WorkflowCanvas = () => {
               </div>
             )}
           </div>
+          )}
 
           {/* ─── Right: Properties panel (always visible) ─── */}
           {renderPropertyPanel()}
