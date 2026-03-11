@@ -2400,6 +2400,6 @@ const WorkflowCanvas = () => {
       </div>
     </TooltipProvider>
   );
-;
+};
 
 export default WorkflowCanvas;
