@@ -2326,6 +2326,35 @@ const WorkflowCanvas = () => {
               </div>
             )}
 
+            {/* ─── Validation Results Panel ─── */}
+            {!debugMode && showValidationPanel && validationErrors.length > 0 && (
+              <div className="absolute bottom-0 left-0 right-0 bg-card border-t shadow-lg animate-fade-in z-10" style={{ height: 200 }}>
+                <div className="flex items-center justify-between px-3 py-1.5 border-b bg-destructive/5">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+                    <span className="text-xs font-medium text-foreground">
+                      校验结果 — {validationErrors.length} 项未通过
+                    </span>
+                  </div>
+                  <button onClick={() => { setShowValidationPanel(false); setHighlightedNodes(new Set()); setHighlightedConnections(new Set()); }} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="overflow-y-auto p-2 space-y-1" style={{ height: 160 }}>
+                  {validationErrors.map(err => (
+                    <button
+                      key={err.id}
+                      onClick={() => focusValidationError(err)}
+                      className="w-full flex items-start gap-2 px-3 py-2 text-left rounded-md hover:bg-muted/50 transition-colors group"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />
+                      <span className="text-xs text-foreground group-hover:text-primary transition-colors">{err.message}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* ─── Debug Log Panel ─── */}
             {debugMode && showLogPanel && logNodeId && (
               <div className="absolute bottom-0 left-0 right-0 bg-card border-t shadow-lg animate-fade-in" style={{ height: 200 }}>
