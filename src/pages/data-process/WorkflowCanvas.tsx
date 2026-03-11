@@ -1990,20 +1990,53 @@ const WorkflowCanvas = () => {
                 {nodes.map(node => {
                   const isSelected = selectedNode === node.id;
                   const color = catColors[node.category] || "hsl(var(--primary))";
+                  const nodeDebug = debugNodeStates[node.id];
+                  const debugBorderColor = debugMode && nodeDebug
+                    ? nodeDebug.status === "running" ? "hsl(var(--primary))"
+                      : nodeDebug.status === "done" ? "hsl(142 71% 45%)"
+                      : nodeDebug.status === "error" ? "hsl(var(--destructive))"
+                      : undefined
+                    : undefined;
                   return (
                     <g key={node.id}>
-                      <foreignObject x={node.x} y={node.y} width={NODE_W} height={NODE_H}>
-                        <div
-                          onMouseDown={e => startNodeDrag(e, node.id)}
-                          onClick={e => { e.stopPropagation(); setSelectedNode(node.id); setSelectedConnection(null); }}
-                          className={`h-full rounded-lg border-2 bg-card shadow-sm select-none transition-shadow ${isSelected ? "shadow-lg" : "hover:shadow-md"}`}
-                          style={{ borderColor: isSelected ? color : "hsl(var(--border))" }}
-                        >
-                          <div className="h-1.5 rounded-t-md" style={{ background: color }} />
-                          <div className="px-3 py-2">
-                            <div className="text-xs font-medium text-foreground truncate">{node.label}</div>
-                            <div className="text-[10px] text-muted-foreground mt-0.5">{node.category} · {node.operatorType}</div>
+                      <foreignObject x={node.x} y={node.y} width={NODE_W} height={NODE_H + (debugMode && nodeDebug && nodeDebug.status !== "pending" ? 20 : 0)}>
+                        <div className="relative">
+                          <div
+                            onMouseDown={e => { if (!debugMode) startNodeDrag(e, node.id); }}
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedNode(node.id);
+                              setSelectedConnection(null);
+                              if (debugMode) { setLogNodeId(node.id); setShowLogPanel(true); }
+                            }}
+                            className={`rounded-lg border-2 bg-card shadow-sm select-none transition-all ${debugMode ? "cursor-pointer" : ""} ${isSelected ? "shadow-lg" : "hover:shadow-md"} ${debugMode && nodeDebug?.status === "running" ? "animate-pulse" : ""}`}
+                            style={{
+                              borderColor: debugBorderColor || (isSelected ? color : "hsl(var(--border))"),
+                              height: NODE_H,
+                            }}
+                          >
+                            <div className="h-1.5 rounded-t-md" style={{ background: debugBorderColor || color }} />
+                            <div className="px-3 py-2">
+                              <div className="text-xs font-medium text-foreground truncate">{node.label}</div>
+                              <div className="text-[10px] text-muted-foreground mt-0.5">{node.category} · {node.operatorType}</div>
+                            </div>
+                            {/* Debug status icon */}
+                            {debugMode && nodeDebug && (
+                              <div className="absolute top-1 right-1">
+                                {nodeDebug.status === "running" && <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />}
+                                {nodeDebug.status === "done" && <CheckCircle2 className="w-3.5 h-3.5" style={{ color: "hsl(142 71% 45%)" }} />}
+                                {nodeDebug.status === "error" && <AlertTriangle className="w-3.5 h-3.5 text-destructive" />}
+                              </div>
+                            )}
                           </div>
+                          {/* Debug stats badge below node */}
+                          {debugMode && nodeDebug && nodeDebug.status !== "pending" && (
+                            <div className="flex items-center justify-center gap-2 mt-0.5 text-[9px] text-muted-foreground">
+                              <span>{nodeDebug.count.toLocaleString()} 条</span>
+                              <span>·</span>
+                              <span>{nodeDebug.duration}s</span>
+                            </div>
+                          )}
                         </div>
                       </foreignObject>
 
