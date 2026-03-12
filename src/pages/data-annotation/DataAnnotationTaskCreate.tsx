@@ -688,7 +688,13 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   );
 };
 
-// Missing import for Search
-import { Search } from "lucide-react";
+const typeColors: Record<string, string> = {
+  "文本类": "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  "图像类": "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+  "音频类": "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+  "视频类": "bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
+  "表格类": "bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300",
+  "跨模态类": "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300",
+};
 
 export default DataAnnotationTaskCreate;
