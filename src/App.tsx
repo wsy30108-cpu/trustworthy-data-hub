@@ -38,6 +38,7 @@ const WorkflowCanvas = lazy(() => import("./pages/data-process/WorkflowCanvas"))
 
 const DataAnnotationTasks = lazy(() => import("./pages/data-annotation/DataAnnotationTasks"));
 const DataAnnotationTaskHall = lazy(() => import("./pages/data-annotation/DataAnnotationTaskHall"));
+const DataAnnotationMyTasks = lazy(() => import("./pages/data-annotation/DataAnnotationMyTasks"));
 const DataAnnotationTools = lazy(() => import("./pages/data-annotation/DataAnnotationTools"));
 const DataAnnotationPerformance = lazy(() => import("./pages/data-annotation/DataAnnotationPerformance"));
 const DataAnnotationStatistics = lazy(() => import("./pages/data-annotation/DataAnnotationStatistics"));
@@ -102,7 +103,7 @@ const App = () => (
                   <Route path="/data-annotation/tasks" element={<DataAnnotationTasks />} />
                   <Route path="/data-annotation/task-logs" element={<DataAnnotationTasks />} />
                   <Route path="/data-annotation/task-hall" element={<DataAnnotationTaskHall />} />
-                  <Route path="/data-annotation/my-tasks" element={<DataAnnotationTasks />} />
+                  <Route path="/data-annotation/my-tasks" element={<DataAnnotationMyTasks />} />
                   <Route path="/data-annotation/tools" element={<DataAnnotationTools />} />
                   <Route path="/data-annotation/model-config" element={<DataAnnotationTools />} />
                   <Route path="/data-annotation/performance" element={<DataAnnotationPerformance />} />
