@@ -294,7 +294,12 @@ const DataProcessWorkflows = () => {
                     <Checkbox checked={selectedIds.includes(wf.id)} onCheckedChange={() => toggleOne(wf.id)} />
                   </td>
                   <td className="p-3">
-                    <div className="font-medium text-foreground">{wf.name}</div>
+                    <button
+                      onClick={() => navigate(`/data-process/workflow-canvas?name=${encodeURIComponent(wf.name)}`)}
+                      className="font-medium text-foreground hover:text-primary hover:underline transition-colors text-left block w-full truncate"
+                    >
+                      {wf.name}
+                    </button>
                     {wf.desc && <div className="text-xs text-muted-foreground mt-0.5 truncate max-w-[240px]">{wf.desc}</div>}
                   </td>
                   <td className="p-3">
@@ -318,7 +323,7 @@ const DataProcessWorkflows = () => {
                           <Play className="w-4 h-4" />
                         </button>
                       )}
-                      <button onClick={() => {/* copy logic */}} className="p-1.5 rounded hover:bg-muted/50 text-muted-foreground" title="复制">
+                      <button onClick={() => {/* copy logic */ }} className="p-1.5 rounded hover:bg-muted/50 text-muted-foreground" title="复制">
                         <Copy className="w-4 h-4" />
                       </button>
                       <DropdownMenu>

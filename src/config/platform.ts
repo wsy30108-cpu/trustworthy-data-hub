@@ -4,7 +4,10 @@ import {
   FileSearch, FolderOpen, Share2, ClipboardList, Hammer,
   ListChecks, Trophy, PieChart, Play, BookOpen, Store,
   Boxes, Sparkles, GaugeCircle, FileText, ShieldCheck, Bell,
-  Search, Upload, Download
+  Search, Upload, Download,
+  Layout,
+  UserCheck,
+  Cpu,
 } from "lucide-react";
 
 export interface SubPlatform {
@@ -33,41 +36,188 @@ export const subPlatforms: SubPlatform[] = [
 
 export const platformMenus: Record<string, MenuItem[]> = {
   "002": [
-    { id: "dashboard", label: "概览", icon: BarChart3, route: "/console/dashboard" },
-    { id: "spaces", label: "空间管理", icon: Boxes, route: "/console/spaces" },
-    { id: "orgs", label: "组织管理", icon: Building2, route: "/console/organizations" },
-    { id: "members", label: "成员管理", icon: Users, route: "/console/members" },
-    { id: "roles", label: "角色管理", icon: ShieldCheck, route: "/console/roles" },
-    { id: "system", label: "系统设置", icon: Settings, route: "/console/system" },
-    { id: "storage", label: "存储管理", icon: HardDrive, route: "/console/storage" },
-    { id: "datasource", label: "数据源配置", icon: Database, route: "/console/datasource" },
-    { id: "catalog", label: "数据目录管理", icon: FolderTree, route: "/console/catalog" },
+    {
+      id: "dashboard-group",
+      label: "概览",
+      icon: BarChart3,
+      route: "#",
+      children: [
+        { id: "dashboard", label: "概览", icon: BarChart3, route: "/console/dashboard" },
+      ]
+    },
+    {
+      id: "spaces-group",
+      label: "空间管理",
+      icon: Boxes,
+      route: "#",
+      children: [
+        { id: "spaces", label: "空间管理", icon: Boxes, route: "/console/spaces" },
+      ]
+    },
+    {
+      id: "permission-control",
+      label: "权限管控",
+      icon: ShieldCheck,
+      route: "#",
+      children: [
+        { id: "orgs", label: "组织管理", icon: Building2, route: "/console/organizations" },
+        { id: "members", label: "成员管理", icon: Users, route: "/console/members" },
+        { id: "roles", label: "角色管理", icon: ShieldCheck, route: "/console/roles" },
+      ]
+    },
+    {
+      id: "data-access",
+      label: "数据接入",
+      icon: HardDrive,
+      route: "#",
+      children: [
+        { id: "storage", label: "存储管理", icon: HardDrive, route: "/console/storage" },
+        { id: "datasource", label: "数据源配置", icon: Database, route: "/console/datasource" },
+      ]
+    },
+    {
+      id: "biz-support",
+      label: "业务支撑",
+      icon: Settings,
+      route: "#",
+      children: [
+        { id: "catalog", label: "数据目录", icon: FolderTree, route: "/console/catalog" },
+        { id: "system", label: "系统设置", icon: Settings, route: "/console/system" },
+      ]
+    },
   ],
   "003": [
-    { id: "datasets", label: "数据集管理", icon: Database, route: "/data-management/datasets" },
-    { id: "file-search", label: "文件检索", icon: FileSearch, route: "/data-management/file-search" },
-    { id: "directories", label: "数据目录", icon: FolderOpen, route: "/data-management/directories" },
+    {
+      id: "data-mgmt-group",
+      label: "数据管理",
+      icon: Database,
+      route: "#",
+      children: [
+        { id: "datasets", label: "数据集管理", icon: Database, route: "/data-management/datasets" },
+      ]
+    },
+    {
+      id: "data-search-group",
+      label: "数据检索",
+      icon: FileSearch,
+      route: "#",
+      children: [
+        { id: "file-search", label: "文件检索", icon: FileSearch, route: "/data-management/file-search" },
+      ]
+    },
+    {
+      id: "data-catalog-group",
+      label: "数据目录",
+      icon: FolderOpen,
+      route: "#",
+      children: [
+        { id: "directories", label: "数据目录", icon: FolderOpen, route: "/data-management/directories" },
+      ]
+    },
   ],
   "004": [
-    { id: "workflows", label: "工作流", icon: Workflow, route: "/data-process/workflows" },
-    { id: "templates", label: "模板列表", icon: BookOpen, route: "/data-process/templates" },
-    { id: "run-records", label: "运行记录", icon: Play, route: "/data-process/run-records" },
-    { id: "operators", label: "算子管理", icon: Boxes, route: "/data-process/operators" },
-    { id: "feature-extract", label: "特征抽取", icon: Sparkles, route: "/data-process/feature-extract" },
-    { id: "quality", label: "质量评估", icon: GaugeCircle, route: "/data-process/quality" },
+    {
+      id: "data-dev",
+      label: "数据开发",
+      icon: Workflow,
+      route: "#",
+      children: [
+        { id: "workflows", label: "工作流", icon: Workflow, route: "/data-process/workflows" },
+        { id: "run-records", label: "运行记录", icon: Play, route: "/data-process/run-records" },
+        { id: "templates", label: "工作流模板", icon: BookOpen, route: "/data-process/templates" },
+        { id: "operators", label: "算子管理", icon: Boxes, route: "/data-process/operators" },
+      ]
+    },
+    {
+      id: "feature-eng",
+      label: "特征工程",
+      icon: Sparkles,
+      route: "#",
+      children: [
+        { id: "feature-extract", label: "特征抽取", icon: Sparkles, route: "/data-process/feature-extract" },
+      ]
+    },
+    {
+      id: "data-quality",
+      label: "数据质量",
+      icon: GaugeCircle,
+      route: "#",
+      children: [
+        { id: "quality", label: "质量评估", icon: GaugeCircle, route: "/data-process/quality" },
+      ]
+    },
   ],
   "005": [
-    { id: "tasks", label: "标注任务", icon: ClipboardList, route: "/data-annotation/tasks" },
-    { id: "task-hall", label: "任务大厅", icon: ListChecks, route: "/data-annotation/task-hall" },
-    { id: "tools", label: "标注工具", icon: Hammer, route: "/data-annotation/tools" },
-    { id: "performance", label: "我的绩效", icon: Trophy, route: "/data-annotation/performance" },
-    { id: "statistics", label: "统计分析", icon: PieChart, route: "/data-annotation/statistics" },
+    {
+      id: "summary",
+      label: "标注概览",
+      icon: PieChart,
+      route: "#",
+      children: [
+        { id: "statistics", label: "概览", icon: PieChart, route: "/data-annotation/statistics" },
+      ]
+    },
+    {
+      id: "project-manage",
+      label: "项目管理",
+      icon: ClipboardList,
+      route: "#",
+      children: [
+        { id: "tasks", label: "标注任务", icon: ClipboardList, route: "/data-annotation/tasks" },
+        { id: "task-logs", label: "任务日志", icon: FileText, route: "/data-annotation/task-logs" },
+      ]
+    },
+    {
+      id: "workbench",
+      label: "工作台",
+      icon: Layout,
+      route: "#",
+      children: [
+        { id: "task-hall", label: "任务大厅", icon: ListChecks, route: "/data-annotation/task-hall" },
+        { id: "my-tasks", label: "我的任务", icon: UserCheck, route: "/data-annotation/my-tasks" },
+        { id: "performance", label: "我的绩效", icon: Trophy, route: "/data-annotation/performance" },
+      ]
+    },
+    {
+      id: "manage-center",
+      label: "管理中心",
+      icon: Hammer,
+      route: "#",
+      children: [
+        { id: "tools", label: "标注工具", icon: Hammer, route: "/data-annotation/tools" },
+        { id: "model-config", label: "模型配置", icon: Cpu, route: "/data-annotation/model-config" },
+      ]
+    },
   ],
   "006": [
-    { id: "marketplace", label: "数据集市", icon: ShoppingBag, route: "/data-service/marketplace" },
-    { id: "listing-mgmt", label: "上架管理", icon: Upload, route: "/data-service/listing" },
-    { id: "approval", label: "审批管理", icon: ShieldCheck, route: "/data-service/approval" },
-    { id: "my-applications", label: "我的申请", icon: FileText, route: "/data-service/my-applications" },
+    {
+      id: "supply-group",
+      label: "数据供给",
+      icon: Upload,
+      route: "#",
+      children: [
+        { id: "listing-mgmt", label: "上架管理", icon: Upload, route: "/data-service/listing" },
+      ]
+    },
+    {
+      id: "open-group",
+      label: "数据开放",
+      icon: ShoppingBag,
+      route: "#",
+      children: [
+        { id: "marketplace", label: "数据集市", icon: ShoppingBag, route: "/data-service/marketplace" },
+      ]
+    },
+    {
+      id: "approval-mgmt-group",
+      label: "审批管理",
+      icon: ShieldCheck,
+      route: "#",
+      children: [
+        { id: "my-applications", label: "我的申请", icon: FileText, route: "/data-service/my-applications" },
+        { id: "approval", label: "审批管理", icon: ShieldCheck, route: "/data-service/approval" },
+      ]
+    },
   ],
 };
 

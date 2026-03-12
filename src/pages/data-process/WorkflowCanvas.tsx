@@ -2,8 +2,8 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Play, Save, Undo2, Redo2, ZoomIn, ZoomOut, Maximize2,
-  Trash2, Boxes, Settings2, ChevronDown, ChevronRight,
-  X, PanelLeftClose, PanelLeftOpen, Search, Plus, Minus,
+  Trash2, Boxes, Settings2, ChevronDown, ChevronRight, Copy, ChevronUp,
+  X, PanelLeftClose, PanelLeftOpen, Search, Plus, Minus, Edit3,
   Type, Image, Mic, Video, Layers, Database, FileOutput, Wrench,
   AlertTriangle, CheckCircle2, HelpCircle, Eye, Upload, Map,
   PanelRightClose, PanelRightOpen, Code2, LayoutGrid, AlignHorizontalDistributeCenter, Info,
@@ -48,6 +48,8 @@ interface CanvasNode {
   config: Record<string, any>;
   description?: string;
   dataType?: string; // data type for port compatibility
+  customLabel?: string;
+  isCollapsed?: boolean;
 }
 
 interface Connection {
@@ -447,22 +449,43 @@ const operatorCatalog: OperatorCategory[] = [
   },
 ];
 
-const NODE_W = 180;
-const NODE_H = 72;
+const NODE_W = 300;
+const NODE_H = 100; // Base height for head + variable preview
 const PORT_R = 6;
 
+/* ─── Icons by Category ─── */
+const getCategoryIcon = (category: string) => {
+  switch (category) {
+    case "输入节点": return Database;
+    case "输出节点": return FileOutput;
+    case "文本": return Type;
+    case "图像": return Image;
+    case "音频": return Mic;
+    case "视频": return Video;
+    case "自定义节点": return Wrench;
+    default: return Boxes;
+  }
+};
+
 /* ─── Helpers ─── */
-let nodeCounter = 0;
-const genId = () => `node-${++nodeCounter}`;
+const genId = () => `node-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
 const getPortPos = (node: CanvasNode, portName: string, isInput: boolean): Position => {
   const ports = isInput ? node.inputs : node.outputs;
   const idx = ports.indexOf(portName);
   const total = ports.length;
-  const spacing = NODE_W / (total + 1);
+
+  // Calculate vertical center distribution
+  const headerHeight = 44;
+  const bodyPadding = 12;
+  const availableH = node.isCollapsed ? (headerHeight - 2 * bodyPadding) : (NODE_H + (node.inputs.length + node.outputs.length) * 20 - headerHeight);
+
+  // For simplicity, we'll use a fixed vertical spacing on left/right edges
+  const yOffset = headerHeight + (idx + 1) * 24;
+
   return {
-    x: node.x + spacing * (idx + 1),
-    y: isInput ? node.y : node.y + NODE_H,
+    x: isInput ? node.x : node.x + NODE_W,
+    y: node.y + (total === 1 ? (headerHeight + 20) : yOffset),
   };
 };
 
@@ -476,6 +499,7 @@ const catColors: Record<string, string> = {
   "输出节点": "hsl(var(--destructive))",
   "自定义节点": "hsl(30 70% 50%)",
 };
+
 
 /* ─── Mock datasets ─── */
 const mockDatasets = [
@@ -634,16 +658,114 @@ const ParamFormField = ({ param, value, onChange }: { param: ParamDef; value: an
 };
 
 /* ─── Component ─── */
-const WorkflowCanvas = () => {
+const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isReadOnly = isReadOnlyProp ?? searchParams.get("mode") === "view";
   const wfName = searchParams.get("name") || "新建工作流";
+  const templateId = searchParams.get("template");
+
+  /* ─── Mock Data for Loading ─── */
+  const MOCK_WORKFLOW_DATA: Record<string, { nodes: CanvasNode[], connections: Connection[] }> = {
+    "中文文本清洗标准流程": {
+      nodes: [
+        { id: "node-1", type: "dataset_input", label: "输入数据集", category: "输入节点", operatorType: "输入", x: 100, y: 100, inputs: [], outputs: ["data"], config: { _dataset: "ds1", _version: "v1" } },
+        { id: "node-2", type: "doc_dedup", label: "文档去重", category: "文本", operatorType: "去重", x: 350, y: 100, inputs: ["data"], outputs: ["data"], config: {} },
+        { id: "node-3", type: "email_clean_mapper", label: "邮箱清洗", category: "文本", operatorType: "映射", x: 600, y: 100, inputs: ["data"], outputs: ["data"], config: {} },
+        { id: "node-4", type: "dataset_output", label: "输出数据集", category: "输出节点", operatorType: "输出", x: 850, y: 100, inputs: ["data"], outputs: [], config: { _dataset: "ds1", _version: "new" } },
+      ],
+      connections: [
+        { id: "conn-1", from: "node-1", fromPort: "data", to: "node-2", toPort: "data", compatible: true },
+        { id: "conn-2", from: "node-2", fromPort: "data", to: "node-3", toPort: "data", compatible: true },
+        { id: "conn-3", from: "node-3", fromPort: "data", to: "node-4", toPort: "data", compatible: true },
+      ]
+    },
+    "T-001": {
+      nodes: [
+        { id: "node-1", type: "dataset_input", label: "模板输入", category: "输入节点", operatorType: "输入", x: 100, y: 100, inputs: [], outputs: ["data"], config: {} },
+        { id: "node-2", type: "whitespace_norm_mapper", label: "空白符归一化", category: "文本", operatorType: "映射", x: 350, y: 100, inputs: ["data"], outputs: ["data"], config: {} },
+        { id: "node-3", type: "text_length_filter", label: "长度过滤", category: "文本", operatorType: "过滤", x: 600, y: 100, inputs: ["data"], outputs: ["data", "rejected"], config: { min_len: 10 } },
+        { id: "node-4", type: "dataset_output", label: "模板输出", category: "输出节点", operatorType: "输出", x: 850, y: 100, inputs: ["data"], outputs: [], config: {} },
+      ],
+      connections: [
+        { id: "conn-1", from: "node-1", fromPort: "data", to: "node-2", toPort: "data", compatible: true },
+        { id: "conn-2", from: "node-2", fromPort: "data", to: "node-3", toPort: "data", compatible: true },
+        { id: "conn-3", from: "node-3", fromPort: "data", to: "node-4", toPort: "data", compatible: true },
+      ]
+    }
+  };
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
+
+  // ─── Auto layout (topological sort + layered positioning) ───
+  const autoLayout = useCallback((inputNodes?: CanvasNode[], inputConns?: Connection[]) => {
+    const targetNodes = inputNodes || nodes;
+    const targetConns = inputConns || connections;
+    if (targetNodes.length === 0) return;
+
+    // Build adjacency & in-degree
+    const inDeg: Record<string, number> = {};
+    const adj: Record<string, string[]> = {};
+    targetNodes.forEach(n => { inDeg[n.id] = 0; adj[n.id] = []; });
+    targetConns.forEach(c => {
+      if (adj[c.from]) adj[c.from].push(c.to);
+      inDeg[c.to] = (inDeg[c.to] || 0) + 1;
+    });
+
+    // Topological sort
+    const queue = targetNodes.filter(n => (inDeg[n.id] || 0) === 0).map(n => n.id);
+    const layers: string[][] = [];
+    const visited = new Set<string>();
+    while (queue.length > 0) {
+      const layer = [...queue];
+      layers.push(layer);
+      queue.length = 0;
+      for (const id of layer) {
+        visited.add(id);
+        for (const next of adj[id] || []) {
+          inDeg[next]--;
+          if (inDeg[next] === 0 && !visited.has(next)) queue.push(next);
+        }
+      }
+    }
+    const remaining = targetNodes.filter(n => !visited.has(n.id)).map(n => n.id);
+    if (remaining.length) layers.push(remaining);
+
+    const H_GAP = 400;
+    const V_GAP = 200;
+    const startX = 100;
+    const startY = 150;
+    const posMap: Record<string, Position> = {};
+    layers.forEach((layer, li) => {
+      layer.forEach((nid, ni) => {
+        posMap[nid] = { x: startX + li * H_GAP, y: startY + ni * V_GAP };
+      });
+    });
+
+    if (inputNodes) {
+      return targetNodes.map(n => posMap[n.id] ? { ...n, x: posMap[n.id].x, y: posMap[n.id].y } : n);
+    } else {
+      setNodes(prev => prev.map(n => posMap[n.id] ? { ...n, x: posMap[n.id].x, y: posMap[n.id].y } : n));
+      setPan({ x: 0, y: 0 });
+      setZoom(1);
+    }
+  }, [nodes, connections]);
+
+  // Load initial data
+  useEffect(() => {
+    const data = MOCK_WORKFLOW_DATA[wfName] || MOCK_WORKFLOW_DATA[templateId || ""];
+    if (data) {
+      const positionedNodes = autoLayout(data.nodes, data.connections) as CanvasNode[];
+      setNodes(positionedNodes);
+      setConnections(data.connections);
+      setPan({ x: 0, y: 0 });
+      setZoom(1);
+    }
+  }, [wfName, templateId]);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [draggingNode, setDraggingNode] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
@@ -658,6 +780,8 @@ const WorkflowCanvas = () => {
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [editingLabel, setEditingLabel] = useState("");
   const [viewMode, setViewMode] = useState<"visual" | "json">("visual");
 
   // Accordion state
@@ -775,6 +899,7 @@ const WorkflowCanvas = () => {
 
   /* Add node at canvas center */
   const addNodeAtCenter = useCallback((op: Operator, categoryName: string, typeName: string) => {
+    if (isReadOnly) return;
     const center = getCanvasCenter();
     const newNode: CanvasNode = {
       id: genId(),
@@ -796,6 +921,7 @@ const WorkflowCanvas = () => {
   /* ─── Drop from palette ─── */
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    if (isReadOnly) return;
     const data = e.dataTransfer.getData("application/operator");
     if (!data) return;
     const op = JSON.parse(data);
@@ -820,6 +946,7 @@ const WorkflowCanvas = () => {
   /* ─── Node drag ─── */
   const startNodeDrag = (e: React.MouseEvent, nodeId: string) => {
     e.stopPropagation();
+    if (isReadOnly) return;
     const node = nodes.find(n => n.id === nodeId)!;
     const pos = screenToCanvas(e.clientX, e.clientY);
     setDraggingNode(nodeId);
@@ -831,6 +958,7 @@ const WorkflowCanvas = () => {
   /* ─── Connection with validation ─── */
   const startConnect = (e: React.MouseEvent, nodeId: string, port: string) => {
     e.stopPropagation();
+    if (isReadOnly) return;
     const node = nodes.find(n => n.id === nodeId)!;
     const pos = getPortPos(node, port, false);
     setConnecting({ nodeId, port, pos });
@@ -927,8 +1055,8 @@ const WorkflowCanvas = () => {
     setZoom(prev => Math.min(2, Math.max(0.25, prev - e.deltaY * 0.001)));
   };
 
-  /* ─── Delete ─── */
   const deleteSelected = () => {
+    if (isReadOnly) return;
     if (selectedNode) {
       setNodes(prev => prev.filter(n => n.id !== selectedNode));
       setConnections(prev => prev.filter(c => c.from !== selectedNode && c.to !== selectedNode));
@@ -937,6 +1065,35 @@ const WorkflowCanvas = () => {
     if (selectedConnection) {
       setConnections(prev => prev.filter(c => c.id !== selectedConnection));
       setSelectedConnection(null);
+    }
+  };
+
+  const copyNode = (nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    const newNode = {
+      ...node,
+      id: genId(),
+      x: node.x + 30,
+      y: node.y + 30,
+    };
+    setNodes(prev => [...prev, newNode]);
+    toast.success("已复制节点");
+  };
+
+  const toggleNodeCollapsed = (nodeId: string) => {
+    setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, isCollapsed: !n.isCollapsed } : n));
+  };
+
+  const startRename = (nodeId: string, label: string) => {
+    setEditingNodeId(nodeId);
+    setEditingLabel(label);
+  };
+
+  const saveRename = () => {
+    if (editingNodeId) {
+      setNodes(prev => prev.map(n => n.id === editingNodeId ? { ...n, customLabel: editingLabel } : n));
+      setEditingNodeId(null);
     }
   };
 
@@ -959,9 +1116,9 @@ const WorkflowCanvas = () => {
 
   /* ─── Connection path ─── */
   const getPath = (from: Position, to: Position) => {
-    const dy = Math.abs(to.y - from.y);
-    const cp = Math.max(50, dy * 0.5);
-    return `M ${from.x} ${from.y} C ${from.x} ${from.y + cp}, ${to.x} ${to.y - cp}, ${to.x} ${to.y}`;
+    const dx = Math.abs(to.x - from.x);
+    const cp = Math.max(50, dx * 0.5);
+    return `M ${from.x} ${from.y} C ${from.x + cp} ${from.y}, ${to.x - cp} ${to.y}, ${to.x} ${to.y}`;
   };
 
   const selectedNodeData = nodes.find(n => n.id === selectedNode);
@@ -1028,12 +1185,12 @@ const WorkflowCanvas = () => {
   /* ─── Filter catalog by search ─── */
   const filteredCatalog = operatorSearch
     ? operatorCatalog.map(cat => ({
-        ...cat,
-        types: cat.types.map(t => ({
-          ...t,
-          operators: t.operators.filter(op => op.label.includes(operatorSearch) || op.description.includes(operatorSearch)),
-        })).filter(t => t.operators.length > 0),
-      })).filter(cat => cat.types.length > 0)
+      ...cat,
+      types: cat.types.map(t => ({
+        ...t,
+        operators: t.operators.filter(op => op.label.includes(operatorSearch) || op.description.includes(operatorSearch)),
+      })).filter(t => t.operators.length > 0),
+    })).filter(cat => cat.types.length > 0)
     : operatorCatalog;
 
   /* ─── Get node params ─── */
@@ -1042,59 +1199,11 @@ const WorkflowCanvas = () => {
   };
 
   const updateNodeConfig = (nodeId: string, key: string, value: any) => {
+    if (isReadOnly) return;
     setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, config: { ...n.config, [key]: value } } : n));
   };
 
-  /* ─── Auto layout (topological sort + layered positioning) ─── */
-  const autoLayout = useCallback(() => {
-    if (nodes.length === 0) return;
-    // Build adjacency & in-degree
-    const inDeg: Record<string, number> = {};
-    const adj: Record<string, string[]> = {};
-    nodes.forEach(n => { inDeg[n.id] = 0; adj[n.id] = []; });
-    connections.forEach(c => {
-      adj[c.from]?.push(c.to);
-      inDeg[c.to] = (inDeg[c.to] || 0) + 1;
-    });
-    // Topological sort (BFS / Kahn)
-    const queue = nodes.filter(n => inDeg[n.id] === 0).map(n => n.id);
-    const layers: string[][] = [];
-    const visited = new Set<string>();
-    while (queue.length > 0) {
-      const layer = [...queue];
-      layers.push(layer);
-      queue.length = 0;
-      for (const id of layer) {
-        visited.add(id);
-        for (const next of adj[id] || []) {
-          inDeg[next]--;
-          if (inDeg[next] === 0 && !visited.has(next)) queue.push(next);
-        }
-      }
-    }
-    // Place unvisited nodes (disconnected) in last layer
-    const remaining = nodes.filter(n => !visited.has(n.id)).map(n => n.id);
-    if (remaining.length) layers.push(remaining);
-
-    const H_GAP = 240;
-    const V_GAP = 100;
-    const startX = 80;
-    const startY = 80;
-    const posMap: Record<string, Position> = {};
-    layers.forEach((layer, li) => {
-      layer.forEach((nid, ni) => {
-        posMap[nid] = {
-          x: startX + li * H_GAP,
-          y: startY + ni * V_GAP,
-        };
-      });
-    });
-    setNodes(prev => prev.map(n => posMap[n.id] ? { ...n, x: posMap[n.id].x, y: posMap[n.id].y } : n));
-    // Reset pan to see layout
-    setPan({ x: 0, y: 0 });
-    setZoom(1);
-    toast.success("已自动排列节点");
-  }, [nodes, connections]);
+  /* ─── Auto layout (removed old version) ─── */
 
   /* ─── Debug mode ─── */
   const startDebug = useCallback(() => {
@@ -1155,8 +1264,8 @@ const WorkflowCanvas = () => {
           ],
         }));
 
-        // Finish after mockDuration seconds (compressed to 2-4s)
-        const finishDelay = 2000 + Math.random() * 2000;
+        // Finish after mockDuration seconds (compressed for demo)
+        const finishDelay = 1200 + Math.random() * 1000;
         setTimeout(() => {
           setDebugNodeStates(prev => ({
             ...prev,
@@ -1188,10 +1297,23 @@ const WorkflowCanvas = () => {
     toast.info("调试已停止");
   }, []);
 
+  // Clear persistent execution status when user edits the canvas
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    if (!debugMode && Object.keys(debugNodeStates).length > 0) {
+      setDebugNodeStates({});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, connections]);
+
   /* ─── Submit run instance ─── */
   const submitRunInstance = useCallback(() => {
     const now = new Date();
-    const snapshotVersion = `SNAP-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}-${String(now.getHours()).padStart(2,"0")}${String(now.getMinutes()).padStart(2,"0")}${String(now.getSeconds()).padStart(2,"0")}`;
+    const snapshotVersion = `SNAP-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
     const instance: WorkflowInstance = {
       id: `inst-${Date.now()}`,
       snapshotVersion,
@@ -1424,7 +1546,7 @@ const WorkflowCanvas = () => {
     // Run submission confirmation panel
     if (panelMode === "runSubmit") {
       const now = new Date();
-      const snapshotTs = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
+      const snapshotTs = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
       return (
         <div className="border-l bg-card shrink-0 flex flex-col overflow-hidden" style={{ width: panelWidth }}>
           <div className="p-3 border-b flex items-center justify-between">
@@ -2092,7 +2214,7 @@ const WorkflowCanvas = () => {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="h-screen flex flex-col bg-background overflow-hidden">
+      <div className="h-[calc(100vh-var(--header-height)-3rem)] flex flex-col bg-background overflow-hidden">
         {/* ─── Toolbar ─── */}
         <div className="h-12 border-b bg-card flex items-center justify-between px-4 shrink-0 z-20">
           <div className="flex items-center gap-3">
@@ -2100,7 +2222,9 @@ const WorkflowCanvas = () => {
               <ArrowLeft className="w-4 h-4" />
             </button>
             <span className="text-sm font-medium text-foreground">{wfName}</span>
-            {debugMode ? (
+            {isReadOnly ? (
+              <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded">预览模式</span>
+            ) : debugMode ? (
               <span className="text-xs text-primary-foreground px-2 py-0.5 bg-primary rounded flex items-center gap-1">
                 {debugAllDone ? <CheckCircle2 className="w-3 h-3" /> : <Loader2 className="w-3 h-3 animate-spin" />}
                 {debugAllDone ? "已完成" : "调试中"}
@@ -2110,9 +2234,13 @@ const WorkflowCanvas = () => {
             )}
           </div>
           <div className="flex items-center gap-1">
-            <button className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="撤销"><Undo2 className="w-4 h-4" /></button>
-            <button className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="重做"><Redo2 className="w-4 h-4" /></button>
-            <div className="w-px h-5 bg-border mx-1" />
+            {!isReadOnly && (
+              <>
+                <button className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="撤销"><Undo2 className="w-4 h-4" /></button>
+                <button className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="重做"><Redo2 className="w-4 h-4" /></button>
+                <div className="w-px h-5 bg-border mx-1" />
+              </>
+            )}
             <button onClick={() => setZoom(z => Math.min(2, z + 0.1))} className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="放大"><ZoomIn className="w-4 h-4" /></button>
             <span className="text-xs text-muted-foreground w-10 text-center">{Math.round(zoom * 100)}%</span>
             <button onClick={() => setZoom(z => Math.max(0.25, z - 0.1))} className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="缩小"><ZoomOut className="w-4 h-4" /></button>
@@ -2128,7 +2256,7 @@ const WorkflowCanvas = () => {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button onClick={autoLayout} className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="自动排列">
+                <button onClick={() => { autoLayout(); }} className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground" title="自动排列">
                   <AlignHorizontalDistributeCenter className="w-4 h-4" />
                 </button>
               </TooltipTrigger>
@@ -2153,167 +2281,143 @@ const WorkflowCanvas = () => {
               </TooltipTrigger>
               <TooltipContent>{rightPanelCollapsed ? "展开属性面板" : "收起属性面板"}</TooltipContent>
             </Tooltip>
-            {(selectedNode || selectedConnection) && (
+            {(selectedNode || selectedConnection) && !isReadOnly && (
               <>
                 <div className="w-px h-5 bg-border mx-1" />
                 <button onClick={deleteSelected} className="p-2 rounded-md hover:bg-destructive/10 text-destructive" title="删除"><Trash2 className="w-4 h-4" /></button>
               </>
             )}
-            <div className="w-px h-5 bg-border mx-1" />
-            <button onClick={() => { toast.success("工作流已保存"); }} className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted/50 text-muted-foreground flex items-center gap-1.5" disabled={debugMode}><Save className="w-3.5 h-3.5" /> 保存</button>
-            {debugMode ? (
-              <button onClick={stopDebug} className="px-3 py-1.5 text-xs bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 flex items-center gap-1.5">
-                <Square className="w-3.5 h-3.5" /> 停止调试
-              </button>
-            ) : (
+            {!isReadOnly && (
               <>
-                <button onClick={() => { if (validateWorkflow()) { setPanelMode("debugConfig"); setRightPanelCollapsed(false); } }} className="px-3 py-1.5 text-xs border border-primary text-primary rounded-md hover:bg-primary/10 flex items-center gap-1.5">
-                  <Bug className="w-3.5 h-3.5" /> 调试
-                </button>
-                <button onClick={() => { if (validateWorkflow()) { setPanelMode("runSubmit"); setRightPanelCollapsed(false); } }} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> 运行</button>
+                <div className="w-px h-5 bg-border mx-1" />
+                <button onClick={() => { toast.success("工作流已保存"); }} className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted/50 text-muted-foreground flex items-center gap-1.5" disabled={debugMode}><Save className="w-3.5 h-3.5" /> 保存</button>
+                {debugMode ? (
+                  <button onClick={stopDebug} className="px-3 py-1.5 text-xs bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 flex items-center gap-1.5">
+                    <Square className="w-3.5 h-3.5" /> 停止调试
+                  </button>
+                ) : (
+                  <>
+                    <button onClick={() => { if (validateWorkflow()) { setPanelMode("debugConfig"); setRightPanelCollapsed(false); } }} className="px-3 py-1.5 text-xs border border-primary text-primary rounded-md hover:bg-primary/10 flex items-center gap-1.5">
+                      <Bug className="w-3.5 h-3.5" /> 调试
+                    </button>
+                    <button onClick={() => { if (validateWorkflow()) { setPanelMode("runSubmit"); setRightPanelCollapsed(false); } }} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> 运行</button>
+                  </>
+                )}
               </>
             )}
           </div>
         </div>
 
-        {/* ─── Debug Status Bar ─── */}
-        {debugMode && (
-          <div className="h-9 border-b bg-muted/50 flex items-center justify-between px-4 shrink-0 z-20 animate-fade-in">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5">
-                {debugAllDone ? (
-                  <span className="w-2 h-2 rounded-full bg-green-500" />
-                ) : (
-                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                )}
-                <span className="text-xs font-medium text-foreground">{debugAllDone ? "已完成" : "运行中"}</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Clock className="w-3 h-3" />
-                <span>已耗时 {formatElapsed(debugElapsed)}</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Activity className="w-3 h-3" />
-                <span>进度 {debugDoneCount}/{nodes.length} 节点</span>
-              </div>
-              {debugRunningCount > 0 && (
-                <div className="flex items-center gap-1.5 text-xs text-primary">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>{debugRunningCount} 个节点执行中</span>
-                </div>
-              )}
-            </div>
-            <button onClick={stopDebug} className="px-2.5 py-1 text-xs border border-destructive text-destructive rounded-md hover:bg-destructive/10 flex items-center gap-1">
-              <Square className="w-3 h-3" /> 停止运行
-            </button>
-          </div>
-        )}
+        {/* Debug Status Bar and Execution Summary Overlay removed as requested by user */}
+
         <div className="flex flex-1 overflow-hidden">
           {/* ─── Left: Operator panel ─── */}
-          <div
-            className="border-r bg-card shrink-0 flex flex-col overflow-hidden transition-all duration-200"
-            style={{ width: panelCollapsed ? 48 : 260 }}
-          >
-            {panelCollapsed ? (
-              <div className="flex flex-col items-center py-2 gap-1">
-                <button onClick={() => setPanelCollapsed(false)} className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground mb-2" title="展开算子面板">
-                  <PanelLeftOpen className="w-4 h-4" />
-                </button>
-                {operatorCatalog.map(cat => (
-                  <Tooltip key={cat.name}>
-                    <TooltipTrigger asChild>
-                      <button onClick={() => { setPanelCollapsed(false); setExpandedCats(new Set([cat.name])); }}
-                        className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground">
-                        <cat.icon className="w-4 h-4" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">{cat.name}</TooltipContent>
-                  </Tooltip>
-                ))}
-              </div>
-            ) : (
-              <>
-                <div className="p-3 border-b flex items-center gap-2">
-                  <button onClick={() => setPanelCollapsed(true)} className="p-1.5 rounded-md hover:bg-muted/50 text-muted-foreground shrink-0" title="折叠面板">
-                    <PanelLeftClose className="w-3.5 h-3.5" />
+          {!isReadOnly && (
+            <div
+              className="border-r bg-card shrink-0 flex flex-col overflow-hidden transition-all duration-200"
+              style={{ width: panelCollapsed ? 48 : 260 }}
+            >
+              {panelCollapsed ? (
+                <div className="flex flex-col items-center py-2 gap-1">
+                  <button onClick={() => setPanelCollapsed(false)} className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground mb-2" title="展开算子面板">
+                    <PanelLeftOpen className="w-4 h-4" />
                   </button>
-                  <div className="relative flex-1">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                    <input value={operatorSearch} onChange={e => setOperatorSearch(e.target.value)}
-                      placeholder="搜索算子..."
-                      className="w-full pl-7 pr-3 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
-                  </div>
-                </div>
-                <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-                  {filteredCatalog.map(cat => {
-                    const catExpanded = expandedCats.has(cat.name);
-                    return (
-                      <div key={cat.name}>
-                        <button onClick={() => toggleCat(cat.name)}
-                          className="w-full flex items-center gap-2 px-2 py-2 text-xs font-semibold text-foreground hover:bg-muted/50 rounded-md">
-                          {catExpanded ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
-                          <cat.icon className="w-3.5 h-3.5 shrink-0" style={{ color: catColors[cat.name] }} />
-                          <span>{cat.name}</span>
-                          <span className="ml-auto text-[10px] text-muted-foreground font-normal">
-                            {cat.types.reduce((s, t) => s + t.operators.length, 0)}
-                          </span>
+                  {operatorCatalog.map(cat => (
+                    <Tooltip key={cat.name}>
+                      <TooltipTrigger asChild>
+                        <button onClick={() => { setPanelCollapsed(false); setExpandedCats(new Set([cat.name])); }}
+                          className="p-2 rounded-md hover:bg-muted/50 text-muted-foreground">
+                          <cat.icon className="w-4 h-4" />
                         </button>
-                        {catExpanded && (
-                          <div className="ml-2 space-y-0.5">
-                            {cat.types.map(opType => {
-                              const typeKey = `${cat.name}-${opType.name}`;
-                              const typeExpanded = expandedTypes.has(typeKey) || !!operatorSearch;
-                              return (
-                                <div key={typeKey}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button onClick={() => toggleType(typeKey)}
-                                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/30">
-                                        {typeExpanded ? <ChevronDown className="w-2.5 h-2.5 shrink-0" /> : <ChevronRight className="w-2.5 h-2.5 shrink-0" />}
-                                        <span>{opType.name}</span>
-                                        <span className="ml-auto text-[10px]">{opType.operators.length}</span>
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-[200px]">{opType.hint}</TooltipContent>
-                                  </Tooltip>
-                                  {typeExpanded && (
-                                    <div className="ml-3 space-y-0.5 mt-0.5">
-                                      {opType.operators.map(op => (
-                                        <Tooltip key={op.type}>
-                                          <TooltipTrigger asChild>
-                                            <div draggable
-                                              onDragStart={e => {
-                                                e.dataTransfer.setData("application/operator", JSON.stringify({
-                                                  ...op, category: cat.name, operatorType: opType.name,
-                                                }));
-                                                e.dataTransfer.effectAllowed = "copy";
-                                              }}
-                                              onDoubleClick={() => addNodeAtCenter(op, cat.name, opType.name)}
-                                              className="flex items-center gap-2 px-2 py-1.5 text-xs text-foreground rounded-md hover:bg-muted/50 cursor-grab active:cursor-grabbing border border-transparent hover:border-border select-none">
-                                              <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: catColors[cat.name] || "hsl(var(--primary))" }} />
-                                              <span className="truncate">{op.label}</span>
-                                            </div>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="right" className="max-w-[240px]">{op.description}</TooltipContent>
-                                        </Tooltip>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                      </TooltipTrigger>
+                      <TooltipContent side="right">{cat.name}</TooltipContent>
+                    </Tooltip>
+                  ))}
                 </div>
-                <div className="p-3 border-t text-[10px] text-muted-foreground text-center">
-                  拖拽或双击算子添加到画布
-                </div>
-              </>
-            )}
-          </div>
+              ) : (
+                <>
+                  <div className="p-3 border-b flex items-center gap-2">
+                    <button onClick={() => setPanelCollapsed(true)} className="p-1.5 rounded-md hover:bg-muted/50 text-muted-foreground shrink-0" title="折叠面板">
+                      <PanelLeftClose className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="relative flex-1">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                      <input value={operatorSearch} onChange={e => setOperatorSearch(e.target.value)}
+                        placeholder="搜索算子..."
+                        className="w-full pl-7 pr-3 py-1.5 text-xs border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary/30" />
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+                    {filteredCatalog.map(cat => {
+                      const catExpanded = expandedCats.has(cat.name);
+                      return (
+                        <div key={cat.name}>
+                          <button onClick={() => toggleCat(cat.name)}
+                            className="w-full flex items-center gap-2 px-2 py-2 text-xs font-semibold text-foreground hover:bg-muted/50 rounded-md">
+                            {catExpanded ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
+                            <cat.icon className="w-3.5 h-3.5 shrink-0" style={{ color: catColors[cat.name] }} />
+                            <span>{cat.name}</span>
+                            <span className="ml-auto text-[10px] text-muted-foreground font-normal">
+                              {cat.types.reduce((s, t) => s + t.operators.length, 0)}
+                            </span>
+                          </button>
+                          {catExpanded && (
+                            <div className="ml-2 space-y-0.5">
+                              {cat.types.map(opType => {
+                                const typeKey = `${cat.name}-${opType.name}`;
+                                const typeExpanded = expandedTypes.has(typeKey) || !!operatorSearch;
+                                return (
+                                  <div key={typeKey}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button onClick={() => toggleType(typeKey)}
+                                          className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/30">
+                                          {typeExpanded ? <ChevronDown className="w-2.5 h-2.5 shrink-0" /> : <ChevronRight className="w-2.5 h-2.5 shrink-0" />}
+                                          <span>{opType.name}</span>
+                                          <span className="ml-auto text-[10px]">{opType.operators.length}</span>
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="right" className="max-w-[200px]">{opType.hint}</TooltipContent>
+                                    </Tooltip>
+                                    {typeExpanded && (
+                                      <div className="ml-3 space-y-0.5 mt-0.5">
+                                        {opType.operators.map(op => (
+                                          <Tooltip key={op.type}>
+                                            <TooltipTrigger asChild>
+                                              <div draggable
+                                                onDragStart={e => {
+                                                  e.dataTransfer.setData("application/operator", JSON.stringify({
+                                                    ...op, category: cat.name, operatorType: opType.name,
+                                                  }));
+                                                  e.dataTransfer.effectAllowed = "copy";
+                                                }}
+                                                onDoubleClick={() => addNodeAtCenter(op, cat.name, opType.name)}
+                                                className="flex items-center gap-2 px-2 py-1.5 text-xs text-foreground rounded-md hover:bg-muted/50 cursor-grab active:cursor-grabbing border border-transparent hover:border-border select-none">
+                                                <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: catColors[cat.name] || "hsl(var(--primary))" }} />
+                                                <span className="truncate">{op.label}</span>
+                                              </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="right" className="max-w-[240px]">{op.description}</TooltipContent>
+                                          </Tooltip>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="p-3 border-t text-[10px] text-muted-foreground text-center">
+                    拖拽或双击算子添加到画布
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {/* ─── Center: Canvas or JSON ─── */}
           {viewMode === "json" ? (
@@ -2329,318 +2433,430 @@ const WorkflowCanvas = () => {
               />
             </div>
           ) : (
-          <div
-            ref={canvasRef}
-            className="flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing"
-            style={{ background: "hsl(var(--muted) / 0.3)" }}
-            onMouseDown={startPan}
-            onDrop={handleDrop}
-            onDragOver={e => e.preventDefault()}
-            onWheel={handleWheel}
-          >
-            {/* Grid background */}
-            <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.4 }}>
-              <defs>
-                <pattern id="grid" width={20 * zoom} height={20 * zoom} patternUnits="userSpaceOnUse"
-                  x={pan.x % (20 * zoom)} y={pan.y % (20 * zoom)}>
-                  <circle cx="1" cy="1" r="0.8" fill="hsl(var(--muted-foreground) / 0.3)" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
-            </svg>
+            <div
+              ref={canvasRef}
+              className="flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing"
+              style={{ background: "hsl(var(--muted) / 0.3)" }}
+              onMouseDown={startPan}
+              onDrop={handleDrop}
+              onDragOver={e => e.preventDefault()}
+              onWheel={handleWheel}
+            >
+              {/* Grid background */}
+              <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.4 }}>
+                <defs>
+                  <pattern id="grid" width={20 * zoom} height={20 * zoom} patternUnits="userSpaceOnUse"
+                    x={pan.x % (20 * zoom)} y={pan.y % (20 * zoom)}>
+                    <circle cx="1" cy="1" r="0.8" fill="hsl(var(--muted-foreground) / 0.3)" />
+                  </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#grid)" />
+              </svg>
 
-            {/* Nodes & connections layer */}
-            <svg ref={svgRef} className="absolute inset-0 w-full h-full" style={{ overflow: "visible" }}>
-              {/* Flow animation defs */}
-              <defs>
-                <marker id="flowDot" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="4" markerHeight="4">
-                  <circle cx="3" cy="3" r="3" fill="hsl(var(--primary))" />
-                </marker>
-              </defs>
-              <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
-                {/* Connections */}
-                {connections.map(conn => {
-                  const fromNode = nodes.find(n => n.id === conn.from);
-                  const toNode = nodes.find(n => n.id === conn.to);
-                  if (!fromNode || !toNode) return null;
-                  const from = getPortPos(fromNode, conn.fromPort, false);
-                  const to = getPortPos(toNode, conn.toPort, true);
-                  const isSelected = selectedConnection === conn.id;
-                  const isIncompatible = conn.compatible === false;
-                  const isConnHighlighted = highlightedConnections.has(conn.id);
-
-                  // Debug: check if data is flowing on this connection
-                  const fromState = debugNodeStates[conn.from];
-                  const isFlowing = debugMode && fromState && (fromState.status === "running" || fromState.status === "done");
-                  const flowDone = debugMode && fromState?.status === "done";
-
-                  const strokeColor = isConnHighlighted && !debugMode
-                    ? "hsl(var(--destructive))"
-                    : isIncompatible
-                      ? "hsl(var(--destructive))"
-                      : isFlowing
-                        ? (flowDone ? "hsl(142 71% 45%)" : "hsl(var(--primary))")
-                        : isSelected
-                          ? "hsl(var(--primary))"
-                          : "hsl(var(--muted-foreground) / 0.4)";
-                  const pathD = getPath(from, to);
-                  return (
-                    <g key={conn.id}>
-                      <path d={pathD} fill="none" stroke="transparent" strokeWidth={12} className="cursor-pointer"
-                        onClick={(e) => { e.stopPropagation(); setSelectedConnection(conn.id); setSelectedNode(null); }} />
-                      <path d={pathD} fill="none" stroke={strokeColor}
-                        strokeWidth={isSelected ? 2.5 : 2}
-                        strokeDasharray={isIncompatible ? "6 3" : undefined}
-                        className="pointer-events-none transition-colors" />
-                      {/* Flow animation dot */}
-                      {isFlowing && !flowDone && (
-                        <circle r={3} fill="hsl(var(--primary))" className="pointer-events-none">
-                          <animateMotion dur="1.5s" repeatCount="indefinite" path={pathD} />
-                        </circle>
-                      )}
-                      {isIncompatible && (
-                        <g transform={`translate(${(from.x + to.x) / 2 - 6}, ${(from.y + to.y) / 2 - 6})`}>
-                          <circle cx={6} cy={6} r={8} fill="hsl(var(--background))" />
-                          <text x={6} y={10} textAnchor="middle" className="text-[10px] fill-destructive font-bold">!</text>
-                        </g>
-                      )}
-                      <circle cx={to.x} cy={to.y} r={3} fill={strokeColor} className="pointer-events-none" />
-                    </g>
-                  );
-                })}
-
-                {/* Connecting line in progress */}
-                {connecting && (
-                  <path d={getPath(connecting.pos, mousePos)} fill="none" stroke="hsl(var(--primary))"
-                    strokeWidth={2} strokeDasharray="6 3" className="pointer-events-none" />
-                )}
-
-                {/* Nodes */}
-                {nodes.map(node => {
-                  const isSelected = selectedNode === node.id;
-                  const isHighlighted = highlightedNodes.has(node.id);
-                  const color = catColors[node.category] || "hsl(var(--primary))";
-                  const nodeDebug = debugNodeStates[node.id];
-                  const debugBorderColor = debugMode && nodeDebug
-                    ? nodeDebug.status === "running" ? "hsl(var(--primary))"
-                      : nodeDebug.status === "done" ? "hsl(142 71% 45%)"
-                      : nodeDebug.status === "error" ? "hsl(var(--destructive))"
-                      : undefined
-                    : undefined;
-                  const errorBorderColor = isHighlighted && !debugMode ? "hsl(var(--destructive))" : undefined;
-                  return (
-                    <g key={node.id}>
-                      <foreignObject x={node.x} y={node.y} width={NODE_W} height={NODE_H + (debugMode && nodeDebug && nodeDebug.status !== "pending" ? 20 : 0)}>
-                        <div className="relative">
-                          <div
-                            onMouseDown={e => { if (!debugMode) startNodeDrag(e, node.id); }}
-                            onClick={e => {
-                              e.stopPropagation();
-                              setSelectedNode(node.id);
-                              setSelectedConnection(null);
-                              if (debugMode) { setLogNodeId(node.id); setShowLogPanel(true); }
-                            }}
-                            className={`rounded-lg border-2 bg-card shadow-sm select-none transition-all ${debugMode ? "cursor-pointer" : ""} ${isSelected ? "shadow-lg" : "hover:shadow-md"} ${debugMode && nodeDebug?.status === "running" ? "animate-pulse" : ""} ${isHighlighted && !debugMode ? "ring-2 ring-destructive/50 shadow-destructive/20 shadow-lg" : ""}`}
-                            style={{
-                              borderColor: errorBorderColor || debugBorderColor || (isSelected ? color : "hsl(var(--border))"),
-                              height: NODE_H,
-                            }}
-                          >
-                            <div className="h-1.5 rounded-t-md" style={{ background: debugBorderColor || color }} />
-                            <div className="px-3 py-2">
-                              <div className="text-xs font-medium text-foreground truncate">{node.label}</div>
-                              <div className="text-[10px] text-muted-foreground mt-0.5">{node.category} · {node.operatorType}</div>
-                            </div>
-                            {/* Debug status icon */}
-                            {debugMode && nodeDebug && (
-                              <div className="absolute top-1 right-1">
-                                {nodeDebug.status === "running" && <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />}
-                                {nodeDebug.status === "done" && <CheckCircle2 className="w-3.5 h-3.5" style={{ color: "hsl(142 71% 45%)" }} />}
-                                {nodeDebug.status === "error" && <AlertTriangle className="w-3.5 h-3.5 text-destructive" />}
-                              </div>
-                            )}
-                          </div>
-                          {/* Debug stats badge below node */}
-                          {debugMode && nodeDebug && nodeDebug.status !== "pending" && (
-                            <div className="flex items-center justify-center gap-2 mt-0.5 text-[9px] text-muted-foreground">
-                              <span>{nodeDebug.count.toLocaleString()} 条</span>
-                              <span>·</span>
-                              <span>{nodeDebug.duration}s</span>
-                            </div>
-                          )}
-                        </div>
-                      </foreignObject>
-
-                      {/* Input ports */}
-                      {node.inputs.map(port => {
-                        const pos = getPortPos(node, port, true);
-                        return (
-                          <g key={`in-${port}`} onMouseUp={() => finishConnect(node.id, port)} className="cursor-pointer">
-                            <circle cx={pos.x} cy={pos.y} r={PORT_R + 3} fill="transparent" />
-                            <circle cx={pos.x} cy={pos.y} r={PORT_R} fill="hsl(var(--background))" stroke={color} strokeWidth={2} />
-                            <text x={pos.x} y={pos.y - 10} textAnchor="middle" className="text-[8px] fill-muted-foreground pointer-events-none">{port}</text>
-                          </g>
-                        );
-                      })}
-
-                      {/* Output ports */}
-                      {node.outputs.map(port => {
-                        const pos = getPortPos(node, port, false);
-                        return (
-                          <g key={`out-${port}`} onMouseDown={e => startConnect(e, node.id, port)} className="cursor-crosshair">
-                            <circle cx={pos.x} cy={pos.y} r={PORT_R + 3} fill="transparent" />
-                            <circle cx={pos.x} cy={pos.y} r={PORT_R} fill={color} stroke={color} strokeWidth={2} />
-                            <text x={pos.x} y={pos.y + 16} textAnchor="middle" className="text-[8px] fill-muted-foreground pointer-events-none">{port}</text>
-                          </g>
-                        );
-                      })}
-                    </g>
-                  );
-                })}
-              </g>
-            </svg>
-
-            {/* Empty state */}
-            {nodes.length === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="text-center">
-                  <Boxes className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground/50">从左侧拖拽或双击算子到画布开始编排工作流</p>
-                </div>
-              </div>
-            )}
-
-            {/* Zoom indicator */}
-            <div className="absolute bottom-4 left-4 px-2 py-1 rounded bg-card/80 backdrop-blur text-[10px] text-muted-foreground border"
-              style={{ bottom: showMinimap && nodes.length > 0 ? MINIMAP_H + 24 : 16 }}>
-              节点: {nodes.length} · 连线: {connections.length}
-            </div>
-
-            {/* ─── Minimap ─── */}
-            {showMinimap && minimapData && minimapViewport && (
-              <div className="absolute bottom-3 left-3 rounded-lg border bg-card/90 backdrop-blur shadow-lg overflow-hidden"
-                style={{ width: MINIMAP_W, height: MINIMAP_H }}>
-                <svg
-                  width={MINIMAP_W}
-                  height={MINIMAP_H}
-                  className="cursor-pointer"
-                  onMouseDown={handleMinimapMouseDown}
-                  onMouseMove={handleMinimapMouseMove}
-                >
-                  {/* Background */}
-                  <rect width={MINIMAP_W} height={MINIMAP_H} fill="hsl(var(--muted) / 0.5)" />
-
+              {/* Nodes & connections layer */}
+              <svg ref={svgRef} className="absolute inset-0 w-full h-full" style={{ overflow: "visible" }}>
+                {/* Flow animation defs */}
+                <defs>
+                  <marker id="flowDot" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="4" markerHeight="4">
+                    <circle cx="3" cy="3" r="3" fill="hsl(var(--primary))" />
+                  </marker>
+                </defs>
+                <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
                   {/* Connections */}
                   {connections.map(conn => {
                     const fromNode = nodes.find(n => n.id === conn.from);
                     const toNode = nodes.find(n => n.id === conn.to);
-                    if (!fromNode || !toNode || !minimapData) return null;
-                    const { minX, minY, scale } = minimapData;
-                    const fx = (fromNode.x + NODE_W / 2 - minX) * scale;
-                    const fy = (fromNode.y + NODE_H / 2 - minY) * scale;
-                    const tx = (toNode.x + NODE_W / 2 - minX) * scale;
-                    const ty = (toNode.y + NODE_H / 2 - minY) * scale;
+                    if (!fromNode || !toNode) return null;
+                    const from = getPortPos(fromNode, conn.fromPort, false);
+                    const to = getPortPos(toNode, conn.toPort, true);
+                    const isSelected = selectedConnection === conn.id;
+                    const isIncompatible = conn.compatible === false;
+                    const isConnHighlighted = highlightedConnections.has(conn.id);
+
+                    // Debug: check if data is flowing on this connection
+                    const fromState = debugNodeStates[conn.from];
+                    const isFlowing = debugMode && fromState && (fromState.status === "running" || fromState.status === "done");
+                    const flowDone = debugMode && fromState?.status === "done";
+
+                    const strokeColor = isConnHighlighted && !debugMode
+                      ? "hsl(var(--destructive))"
+                      : isIncompatible
+                        ? "hsl(var(--destructive))"
+                        : isFlowing
+                          ? (flowDone ? "hsl(142 71% 45%)" : "hsl(var(--primary))")
+                          : isSelected
+                            ? "hsl(var(--primary))"
+                            : "hsl(var(--muted-foreground) / 0.4)";
+                    const pathD = getPath(from, to);
                     return (
-                      <line key={conn.id} x1={fx} y1={fy} x2={tx} y2={ty}
-                        stroke={conn.compatible === false ? "hsl(var(--destructive))" : "hsl(var(--muted-foreground) / 0.3)"}
-                        strokeWidth={1} />
+                      <g key={conn.id}>
+                        <path d={pathD} fill="none" stroke="transparent" strokeWidth={12} className="cursor-pointer"
+                          onClick={(e) => { e.stopPropagation(); setSelectedConnection(conn.id); setSelectedNode(null); }} />
+                        <path d={pathD} fill="none" stroke={strokeColor}
+                          strokeWidth={isSelected ? 2.5 : 2}
+                          strokeDasharray={isIncompatible ? "6 3" : undefined}
+                          className="pointer-events-none transition-colors" />
+                        {/* Flow animation dot */}
+                        {isFlowing && !flowDone && (
+                          <circle r={3} fill="hsl(var(--primary))" className="pointer-events-none">
+                            <animateMotion dur="1.5s" repeatCount="indefinite" path={pathD} />
+                          </circle>
+                        )}
+                        {isIncompatible && (
+                          <g transform={`translate(${(from.x + to.x) / 2 - 6}, ${(from.y + to.y) / 2 - 6})`}>
+                            <circle cx={6} cy={6} r={8} fill="hsl(var(--background))" />
+                            <text x={6} y={10} textAnchor="middle" className="text-[10px] fill-destructive font-bold">!</text>
+                          </g>
+                        )}
+                        <circle cx={to.x} cy={to.y} r={3} fill={strokeColor} className="pointer-events-none" />
+                      </g>
                     );
                   })}
+
+                  {/* Connecting line in progress */}
+                  {connecting && (
+                    <path d={getPath(connecting.pos, mousePos)} fill="none" stroke="hsl(var(--primary))"
+                      strokeWidth={2} strokeDasharray="6 3" className="pointer-events-none" />
+                  )}
 
                   {/* Nodes */}
                   {nodes.map(node => {
-                    if (!minimapData) return null;
-                    const { minX, minY, scale } = minimapData;
-                    const nx = (node.x - minX) * scale;
-                    const ny = (node.y - minY) * scale;
-                    const nw = NODE_W * scale;
-                    const nh = NODE_H * scale;
+                    const isSelected = selectedNode === node.id;
+                    const isHighlighted = highlightedNodes.has(node.id);
+                    const color = catColors[node.category] || "hsl(var(--primary))";
+                    const nodeDebug = debugNodeStates[node.id];
+                    const debugBorderColor = debugMode && nodeDebug
+                      ? nodeDebug.status === "running" ? "hsl(var(--primary))"
+                        : nodeDebug.status === "done" ? "hsl(142 71% 45%)"
+                          : nodeDebug.status === "error" ? "hsl(var(--destructive))"
+                            : undefined
+                      : undefined;
+                    const errorBorderColor = isHighlighted && !debugMode ? "hsl(var(--destructive))" : undefined;
                     return (
-                      <rect key={node.id} x={nx} y={ny} width={Math.max(nw, 4)} height={Math.max(nh, 3)}
-                        rx={1}
-                        fill={catColors[node.category] || "hsl(var(--primary))"}
-                        opacity={selectedNode === node.id ? 1 : 0.7} />
+                      <g key={node.id}>
+                        <foreignObject
+                          x={node.x - 20}
+                          y={node.y - 50}
+                          width={NODE_W + 40}
+                          height={node.isCollapsed ? 160 : 360}
+                          className="overflow-visible"
+                        >
+                          <div className="p-[20px] pt-[50px] w-full h-full group relative pointer-events-none">
+                            {/* External Actions (Top Right) - Visible on hover, positioned absolutely to the card body */}
+                            <div className="absolute top-[18px] right-[20px] flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-background border rounded-md shadow p-1 z-10 pointer-events-auto">
+                              <Tooltip delayDuration={300}>
+                                <TooltipTrigger asChild>
+                                  <button onClick={(e) => { e.stopPropagation(); copyNode(node.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground"><Copy className="w-3.5 h-3.5" /></button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">复制节点</TooltipContent>
+                              </Tooltip>
+                              <Tooltip delayDuration={300}>
+                                <TooltipTrigger asChild>
+                                  <button onClick={(e) => { e.stopPropagation(); setNodes(prev => prev.filter(n => n.id !== node.id)); }} className="p-1 hover:bg-muted rounded text-muted-foreground"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">删除节点</TooltipContent>
+                              </Tooltip>
+                            </div>
+
+                            <div
+                              onMouseDown={e => { if (!debugMode) startNodeDrag(e, node.id); }}
+                              onClick={e => {
+                                e.stopPropagation();
+                                setSelectedNode(node.id);
+                                setSelectedConnection(null);
+                                if (debugMode) { setLogNodeId(node.id); setShowLogPanel(true); }
+                              }}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                if (!debugMode) startRename(node.id, node.customLabel || node.label);
+                              }}
+                              className={`rounded-lg border bg-card shadow-sm select-none transition-all duration-200 pointer-events-auto ${debugMode ? "cursor-pointer" : "cursor-grab"} ${isSelected ? "border-primary ring-1 ring-primary/20 shadow-lg" : "border-border hover:border-primary/50 hover:shadow-md"} ${debugMode && nodeDebug?.status === "running" ? "ring-2 ring-primary ring-offset-1" : ""} ${nodeDebug?.status === "error" ? "border-destructive ring-1 ring-destructive/20" : ""}`}
+                              style={{ width: NODE_W }}
+                            >
+                              {/* Header */}
+                              <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/5 rounded-t-lg">
+                                <div className="p-1.5 rounded text-white shrink-0" style={{ background: color }}>
+                                  {(() => {
+                                    const Icon = getCategoryIcon(node.category);
+                                    return <Icon className="w-4 h-4" />;
+                                  })()}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  {editingNodeId === node.id ? (
+                                    <input
+                                      autoFocus
+                                      className="w-full bg-background border rounded px-1 text-[13px] font-bold focus:outline-none"
+                                      value={editingLabel}
+                                      onChange={(e) => setEditingLabel(e.target.value)}
+                                      onBlur={saveRename}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") saveRename();
+                                        if (e.key === "Escape") setEditingNodeId(null);
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                    />
+                                  ) : (
+                                    <div className="text-[13px] font-bold text-foreground truncate h-5 flex items-center">
+                                      {node.customLabel || node.label}
+                                    </div>
+                                  )}
+                                  <div className="text-[9px] text-muted-foreground uppercase font-medium tracking-wider leading-none mt-0.5">{node.operatorType}</div>
+                                </div>
+
+                                {/* Right side of Header: Stats & Actions */}
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {nodeDebug && nodeDebug.status !== "pending" && (
+                                    <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground whitespace-nowrap pointer-events-none pr-1 border-r border-border/50">
+                                      {nodeDebug.status === "done" && (
+                                        <>
+                                          <span className="flex items-center" title="处理数据量"><Activity className="w-2.5 h-2.5 mr-0.5 text-primary/70" />{nodeDebug.count.toLocaleString()}</span>
+                                          <span className="flex items-center" title="执行耗时"><Clock className="w-2.5 h-2.5 mr-0.5 text-primary/70" />{nodeDebug.duration}s</span>
+                                        </>
+                                      )}
+                                      <div className="flex items-center justify-center ml-0.5">
+                                        {nodeDebug.status === "running" && <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />}
+                                        {nodeDebug.status === "done" && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
+                                        {nodeDebug.status === "error" && <X className="w-3.5 h-3.5 text-destructive" />}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <button onClick={(e) => { e.stopPropagation(); toggleNodeCollapsed(node.id); }} className="p-[2px] hover:bg-muted rounded text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {node.isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Body (Vertical Sections, Horizontal Variables on Right) */}
+                              {!node.isCollapsed && (
+                                <div className="px-3 py-3 space-y-2 animate-in slide-in-from-top-1 duration-200">
+                                  {/* Row 1: Inputs */}
+                                  <div className="flex items-center gap-2 overflow-hidden w-full">
+                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium whitespace-nowrap shrink-0">
+                                      <Terminal className="w-2.5 h-2.5" /> 输入
+                                    </div>
+                                    <div className="flex-1 min-w-0 text-left">
+                                      <Tooltip delayDuration={300}>
+                                        <TooltipTrigger asChild>
+                                          <div className="w-full truncate text-[10px] text-blue-600 font-mono cursor-default bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/50">
+                                            {(node.inputs.length > 0 ? node.inputs : ["data"]).map(v => `{{${v}}}`).join('  ')}
+                                          </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom" className="max-w-[250px] flex flex-wrap gap-1">
+                                          {(node.inputs.length > 0 ? node.inputs : ["data"]).map(v => (
+                                            <span key={v} className="px-1.5 py-0.5 rounded bg-blue-50/50 text-blue-600 text-[10px] font-mono border border-blue-100/50 whitespace-nowrap">
+                                              {"{{"}{v}{"}}"}
+                                            </span>
+                                          ))}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  </div>
+                                  {/* Row 2: Outputs */}
+                                  <div className="flex items-center gap-2 overflow-hidden w-full">
+                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium whitespace-nowrap shrink-0">
+                                      <Activity className="w-2.5 h-2.5" /> 输出
+                                    </div>
+                                    <div className="flex-1 min-w-0 text-left">
+                                      <Tooltip delayDuration={300}>
+                                        <TooltipTrigger asChild>
+                                          <div className="w-full truncate text-[10px] text-blue-600 font-mono cursor-default bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/50">
+                                            {(node.outputs.length > 0 ? node.outputs : ["data"]).map(v => `{{${v}}}`).join('  ')}
+                                          </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom" className="max-w-[250px] flex flex-wrap gap-1">
+                                          {(node.outputs.length > 0 ? node.outputs : ["data"]).map(v => (
+                                            <span key={v} className="px-1.5 py-0.5 rounded bg-blue-50/50 text-blue-600 text-[10px] font-mono border border-blue-100/50 whitespace-nowrap">
+                                              {"{{"}{v}{"}}"}
+                                            </span>
+                                          ))}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  </div>
+
+                                  {nodeDebug?.status === "error" && (
+                                    <div className="text-[11px] text-destructive bg-destructive/5 p-2 rounded border border-destructive/10 mt-2 flex items-center gap-2">
+                                      <AlertTriangle className="w-3 h-3 shrink-0" />
+                                      <span>算子执行异常</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </foreignObject>
+
+                        {/* Input ports (Left) */}
+                        {node.inputs.map(port => {
+                          const pos = getPortPos(node, port, true);
+                          return (
+                            <g key={`in-${port}`} onMouseUp={() => finishConnect(node.id, port)} className="cursor-pointer">
+                              <circle cx={pos.x} cy={pos.y} r={PORT_R + 3} fill="transparent" />
+                              <circle cx={pos.x} cy={pos.y} r={PORT_R} fill="hsl(var(--background))" stroke={color} strokeWidth={2} className="hover:r-[8px] transition-all" />
+                            </g>
+                          );
+                        })}
+
+                        {/* Output ports (Right) */}
+                        {node.outputs.map(port => {
+                          const pos = getPortPos(node, port, false);
+                          return (
+                            <g key={`out-${port}`} onMouseDown={e => startConnect(e, node.id, port)} className="cursor-crosshair">
+                              <circle cx={pos.x} cy={pos.y} r={PORT_R + 3} fill="transparent" />
+                              <circle cx={pos.x} cy={pos.y} r={PORT_R} fill={color} stroke={color} strokeWidth={2} className="hover:r-[8px] transition-all" />
+                            </g>
+                          );
+                        })}
+                      </g>
                     );
                   })}
+                </g>
+              </svg>
 
-                  {/* Viewport rectangle */}
-                  <rect
-                    x={Math.max(0, minimapViewport.x)}
-                    y={Math.max(0, minimapViewport.y)}
-                    width={Math.min(minimapViewport.w, MINIMAP_W)}
-                    height={Math.min(minimapViewport.h, MINIMAP_H)}
-                    fill="hsl(var(--primary) / 0.1)"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={1.5}
-                    rx={2}
-                  />
-                </svg>
-              </div>
-            )}
-
-            {/* ─── Validation Results Panel ─── */}
-            {!debugMode && showValidationPanel && validationErrors.length > 0 && (
-              <div className="absolute bottom-0 left-0 right-0 bg-card border-t shadow-lg animate-fade-in z-10" style={{ height: 200 }}>
-                <div className="flex items-center justify-between px-3 py-1.5 border-b bg-destructive/5">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
-                    <span className="text-xs font-medium text-foreground">
-                      校验结果 — {validationErrors.length} 项未通过
-                    </span>
+              {/* Empty state */}
+              {nodes.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="text-center">
+                    <Boxes className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground/50">从左侧拖拽或双击算子到画布开始编排工作流</p>
                   </div>
-                  <button onClick={() => { setShowValidationPanel(false); setHighlightedNodes(new Set()); setHighlightedConnections(new Set()); }} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
                 </div>
-                <div className="overflow-y-auto p-2 space-y-1" style={{ height: 160 }}>
-                  {validationErrors.map(err => (
-                    <button
-                      key={err.id}
-                      onClick={() => focusValidationError(err)}
-                      className="w-full flex items-start gap-2 px-3 py-2 text-left rounded-md hover:bg-muted/50 transition-colors group"
-                    >
-                      <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />
-                      <span className="text-xs text-foreground group-hover:text-primary transition-colors">{err.message}</span>
+              )}
+
+              {/* Zoom indicator */}
+              <div className="absolute bottom-4 left-4 px-2 py-1 rounded bg-card/80 backdrop-blur text-[10px] text-muted-foreground border"
+                style={{ bottom: showMinimap && nodes.length > 0 ? MINIMAP_H + 24 : 16 }}>
+                节点: {nodes.length} · 连线: {connections.length}
+              </div>
+
+              {/* ─── Minimap ─── */}
+              {showMinimap && minimapData && minimapViewport && (
+                <div className="absolute bottom-3 left-3 rounded-lg border bg-card/90 backdrop-blur shadow-lg overflow-hidden"
+                  style={{ width: MINIMAP_W, height: MINIMAP_H }}>
+                  <svg
+                    width={MINIMAP_W}
+                    height={MINIMAP_H}
+                    className="cursor-pointer"
+                    onMouseDown={handleMinimapMouseDown}
+                    onMouseMove={handleMinimapMouseMove}
+                  >
+                    {/* Background */}
+                    <rect width={MINIMAP_W} height={MINIMAP_H} fill="hsl(var(--muted) / 0.5)" />
+
+                    {/* Connections */}
+                    {connections.map(conn => {
+                      const fromNode = nodes.find(n => n.id === conn.from);
+                      const toNode = nodes.find(n => n.id === conn.to);
+                      if (!fromNode || !toNode || !minimapData) return null;
+                      const { minX, minY, scale } = minimapData;
+                      const fx = (fromNode.x + NODE_W / 2 - minX) * scale;
+                      const fy = (fromNode.y + NODE_H / 2 - minY) * scale;
+                      const tx = (toNode.x + NODE_W / 2 - minX) * scale;
+                      const ty = (toNode.y + NODE_H / 2 - minY) * scale;
+                      return (
+                        <line key={conn.id} x1={fx} y1={fy} x2={tx} y2={ty}
+                          stroke={conn.compatible === false ? "hsl(var(--destructive))" : "hsl(var(--muted-foreground) / 0.3)"}
+                          strokeWidth={1} />
+                      );
+                    })}
+
+                    {/* Nodes */}
+                    {nodes.map(node => {
+                      if (!minimapData) return null;
+                      const { minX, minY, scale } = minimapData;
+                      const nx = (node.x - minX) * scale;
+                      const ny = (node.y - minY) * scale;
+                      const nw = NODE_W * scale;
+                      const nh = NODE_H * scale;
+                      return (
+                        <rect key={node.id} x={nx} y={ny} width={Math.max(nw, 4)} height={Math.max(nh, 3)}
+                          rx={1}
+                          fill={catColors[node.category] || "hsl(var(--primary))"}
+                          opacity={selectedNode === node.id ? 1 : 0.7} />
+                      );
+                    })}
+
+                    {/* Viewport rectangle */}
+                    <rect
+                      x={Math.max(0, minimapViewport.x)}
+                      y={Math.max(0, minimapViewport.y)}
+                      width={Math.min(minimapViewport.w, MINIMAP_W)}
+                      height={Math.min(minimapViewport.h, MINIMAP_H)}
+                      fill="hsl(var(--primary) / 0.1)"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={1.5}
+                      rx={2}
+                    />
+                  </svg>
+                </div>
+              )}
+
+              {/* ─── Validation Results Panel ─── */}
+              {!debugMode && showValidationPanel && validationErrors.length > 0 && (
+                <div className="absolute bottom-0 left-0 right-0 bg-card border-t shadow-lg animate-fade-in z-10" style={{ height: 200 }}>
+                  <div className="flex items-center justify-between px-3 py-1.5 border-b bg-destructive/5">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+                      <span className="text-xs font-medium text-foreground">
+                        校验结果 — {validationErrors.length} 项未通过
+                      </span>
+                    </div>
+                    <button onClick={() => { setShowValidationPanel(false); setHighlightedNodes(new Set()); setHighlightedConnections(new Set()); }} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
+                      <X className="w-3.5 h-3.5" />
                     </button>
-                  ))}
+                  </div>
+                  <div className="overflow-y-auto p-2 space-y-1" style={{ height: 160 }}>
+                    {validationErrors.map(err => (
+                      <button
+                        key={err.id}
+                        onClick={() => focusValidationError(err)}
+                        className="w-full flex items-start gap-2 px-3 py-2 text-left rounded-md hover:bg-muted/50 transition-colors group"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />
+                        <span className="text-xs text-foreground group-hover:text-primary transition-colors">{err.message}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* ─── Debug Log Panel ─── */}
-            {debugMode && showLogPanel && logNodeId && (
-              <div className="absolute bottom-0 left-0 right-0 bg-card border-t shadow-lg animate-fade-in" style={{ height: 200 }}>
-                <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
-                  <div className="flex items-center gap-2">
-                    <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-xs font-medium text-foreground">
-                      {nodes.find(n => n.id === logNodeId)?.label || logNodeId} — 实时日志
-                    </span>
-                    {debugNodeStates[logNodeId]?.status === "running" && (
-                      <Loader2 className="w-3 h-3 text-primary animate-spin" />
-                    )}
-                    {debugNodeStates[logNodeId]?.status === "done" && (
-                      <CheckCircle2 className="w-3 h-3" style={{ color: "hsl(142 71% 45%)" }} />
+              {/* ─── Debug Log Panel ─── */}
+              {debugMode && showLogPanel && logNodeId && (
+                <div className="absolute bottom-0 left-0 right-0 bg-card border-t shadow-lg animate-fade-in" style={{ height: 200 }}>
+                  <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-xs font-medium text-foreground">
+                        {nodes.find(n => n.id === logNodeId)?.label || logNodeId} — 实时日志
+                      </span>
+                      {debugNodeStates[logNodeId]?.status === "running" && (
+                        <Loader2 className="w-3 h-3 text-primary animate-spin" />
+                      )}
+                      {debugNodeStates[logNodeId]?.status === "done" && (
+                        <CheckCircle2 className="w-3 h-3" style={{ color: "hsl(142 71% 45%)" }} />
+                      )}
+                    </div>
+                    <button onClick={() => setShowLogPanel(false)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="overflow-y-auto p-3 font-mono text-[11px] text-foreground/80 space-y-0.5" style={{ height: 160 }}>
+                    {(debugLogs[logNodeId] || []).length === 0 ? (
+                      <p className="text-muted-foreground">等待执行...</p>
+                    ) : (
+                      (debugLogs[logNodeId] || []).map((line, i) => (
+                        <div key={i} className="leading-relaxed">
+                          <span className="text-muted-foreground">{line}</span>
+                        </div>
+                      ))
                     )}
                   </div>
-                  <button onClick={() => setShowLogPanel(false)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
                 </div>
-                <div className="overflow-y-auto p-3 font-mono text-[11px] text-foreground/80 space-y-0.5" style={{ height: 160 }}>
-                  {(debugLogs[logNodeId] || []).length === 0 ? (
-                    <p className="text-muted-foreground">等待执行...</p>
-                  ) : (
-                    (debugLogs[logNodeId] || []).map((line, i) => (
-                      <div key={i} className="leading-relaxed">
-                        <span className="text-muted-foreground">{line}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
           )}
 
           {/* ─── Right: Properties panel (always visible) ─── */}

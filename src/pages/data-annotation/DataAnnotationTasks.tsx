@@ -126,10 +126,9 @@ const DataAnnotationTasks = () => {
                   </div>
                 </td>
                 <td className="py-3 px-4">
-                  <span className={`status-tag ${
-                    task.status === "已完成" ? "status-tag-success" :
-                    task.status === "进行中" ? "status-tag-info" : "status-tag-warning"
-                  }`}>{task.status}</span>
+                  <span className={`status-tag ${task.status === "已完成" ? "status-tag-success" :
+                      task.status === "进行中" ? "status-tag-info" : "status-tag-warning"
+                    }`}>{task.status}</span>
                 </td>
                 <td className="py-3 px-4 text-muted-foreground">{task.creator}</td>
                 <td className="py-3 px-4 text-muted-foreground text-xs">{task.createdAt}</td>

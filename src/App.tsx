@@ -29,6 +29,7 @@ const DataManagementDirectories = lazy(() => import("./pages/data-management/Dat
 
 const DataProcessWorkflows = lazy(() => import("./pages/data-process/DataProcessWorkflows"));
 const DataProcessTemplates = lazy(() => import("./pages/data-process/DataProcessTemplates"));
+const TemplateDetail = lazy(() => import("./pages/data-process/TemplateDetail"));
 const DataProcessRunRecords = lazy(() => import("./pages/data-process/DataProcessRunRecords"));
 const DataProcessOperators = lazy(() => import("./pages/data-process/DataProcessOperators"));
 const DataProcessFeatureExtract = lazy(() => import("./pages/data-process/DataProcessFeatureExtract"));
@@ -65,7 +66,7 @@ const App = () => (
           <Suspense fallback={<Loading />}>
             <Routes>
               <Route path="/" element={<HomePage />} />
-              
+
               {/* Protected routes */}
               <Route element={<ProtectedRoute />}>
                 <Route element={<PlatformLayout />}>
@@ -81,28 +82,32 @@ const App = () => (
                   <Route path="/console/storage" element={<ConsoleStorage />} />
                   <Route path="/console/datasource" element={<ConsoleDatasource />} />
                   <Route path="/console/catalog" element={<ConsoleCatalog />} />
-                  
+
                   {/* 003 数据管理 */}
                   <Route path="/data-management/datasets" element={<DataManagementDatasets />} />
                   <Route path="/data-management/file-search" element={<DataManagementFileSearch />} />
                   <Route path="/data-management/directories" element={<DataManagementDirectories />} />
-                  
+
                   {/* 004 数据处理 */}
                   <Route path="/data-process/workflows" element={<DataProcessWorkflows />} />
                   <Route path="/data-process/workflow-canvas" element={<WorkflowCanvas />} />
                   <Route path="/data-process/templates" element={<DataProcessTemplates />} />
+                  <Route path="/data-process/templates/:id" element={<TemplateDetail />} />
                   <Route path="/data-process/run-records" element={<DataProcessRunRecords />} />
                   <Route path="/data-process/operators" element={<DataProcessOperators />} />
                   <Route path="/data-process/feature-extract" element={<DataProcessFeatureExtract />} />
                   <Route path="/data-process/quality" element={<DataProcessQuality />} />
-                  
+
                   {/* 005 数据标注 */}
                   <Route path="/data-annotation/tasks" element={<DataAnnotationTasks />} />
+                  <Route path="/data-annotation/task-logs" element={<DataAnnotationTasks />} />
                   <Route path="/data-annotation/task-hall" element={<DataAnnotationTaskHall />} />
+                  <Route path="/data-annotation/my-tasks" element={<DataAnnotationTasks />} />
                   <Route path="/data-annotation/tools" element={<DataAnnotationTools />} />
+                  <Route path="/data-annotation/model-config" element={<DataAnnotationTools />} />
                   <Route path="/data-annotation/performance" element={<DataAnnotationPerformance />} />
                   <Route path="/data-annotation/statistics" element={<DataAnnotationStatistics />} />
-                  
+
                   {/* 006 数据服务 */}
                   <Route path="/data-service/marketplace" element={<DataServiceMarketplace />} />
                   <Route path="/data-service/listing" element={<DataServiceListing />} />
@@ -110,7 +115,7 @@ const App = () => (
                   <Route path="/data-service/my-applications" element={<DataServiceMyApplications />} />
                 </Route>
               </Route>
-              
+
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
