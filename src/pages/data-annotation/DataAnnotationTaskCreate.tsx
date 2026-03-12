@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import {
-  ArrowLeft, Check, ChevronRight, Plus, X, Trash2, Upload, Eye, Info,
+  ArrowLeft, Check, ChevronRight, Plus, X, Trash2, Upload, Eye, Info, Search,
   AlertTriangle, FileText, Settings, Users, Shield, BookOpen, Zap, ChevronDown,
   Database, Type, Image, Mic, Video, Table2, Layers
 } from "lucide-react";

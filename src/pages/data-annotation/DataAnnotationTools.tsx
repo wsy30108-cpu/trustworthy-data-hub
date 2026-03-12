@@ -116,7 +116,7 @@ const DataAnnotationTools = () => {
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-2">
                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-lg">{t.icon}</div>
-                {t.isPreset && <Lock className="w-3 h-3 text-muted-foreground" title="预置工具" />}
+                {t.isPreset && <Lock className="w-3 h-3 text-muted-foreground" />}
               </div>
               {!t.isPreset && (
                 <button onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === t.id ? null : t.id); }}
