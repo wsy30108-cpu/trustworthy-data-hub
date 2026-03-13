@@ -42,6 +42,7 @@ const DataAnnotationMyTasks = lazy(() => import("./pages/data-annotation/DataAnn
 const DataAnnotationTools = lazy(() => import("./pages/data-annotation/DataAnnotationTools"));
 const DataAnnotationPerformance = lazy(() => import("./pages/data-annotation/DataAnnotationPerformance"));
 const DataAnnotationStatistics = lazy(() => import("./pages/data-annotation/DataAnnotationStatistics"));
+const AnnotationToolEditor = lazy(() => import("./pages/data-annotation/AnnotationToolEditor"));
 
 const DataServiceMarketplace = lazy(() => import("./pages/data-service/DataServiceMarketplace"));
 const DataServiceListing = lazy(() => import("./pages/data-service/DataServiceListing"));
