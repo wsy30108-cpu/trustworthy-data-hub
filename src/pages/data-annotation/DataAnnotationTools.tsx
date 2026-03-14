@@ -33,7 +33,7 @@ const mockTools: Tool[] = [
   { id: "TL-008", name: "音频转写标注", type: "音频类", desc: "音频播放+文本转写标注工具", objects: ["音频", "文本"], methods: ["文本输入"], isPreset: true, usageCount: 45, creator: "系统", updatedAt: "2026-02-01", icon: "🎵", sharedTo: "", activeTasks: [] },
   { id: "TL-009", name: "视频追踪标注", type: "视频类", desc: "视频目标追踪与检测标注", objects: ["视频"], methods: ["矩形框", "追踪"], isPreset: true, usageCount: 18, creator: "系统", updatedAt: "2026-02-01", icon: "🎬", sharedTo: "", activeTasks: [] },
   { id: "TL-010", name: "表格数据标注", type: "表格类", desc: "结构化表格数据标注工具", objects: ["表格"], methods: ["单选", "输入框"], isPreset: true, usageCount: 8, creator: "系统", updatedAt: "2026-02-01", icon: "📊", sharedTo: "", activeTasks: [] },
-  { id: "TL-011", name: "图文跨模态标注", type: "跨模态类", desc: "图像+文本联合标注工具", objects: ["图像", "文本"], methods: ["单选", "输入框"], isPreset: true, usageCount: 15, creator: "系统", updatedAt: "2026-02-01", icon: "🔀", sharedTo: "shared-team" },
+  { id: "TL-011", name: "图文跨模态标注", type: "跨模态类", desc: "图像+文本联合标注工具", objects: ["图像", "文本"], methods: ["单选", "输入框"], isPreset: true, usageCount: 15, creator: "系统", updatedAt: "2026-02-01", icon: "🔀", sharedTo: "shared-team", activeTasks: [] },
 ];
 
 const typeColors: Record<string, string> = {
