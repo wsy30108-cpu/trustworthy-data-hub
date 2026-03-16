@@ -172,11 +172,11 @@ const DataAnnotationTasks = () => {
         </div>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="px-3 py-2 text-sm border rounded-lg bg-card">
           <option>全部类型</option>
-          {["文本类","图像类","音频类","视频类","表格类","跨模态类"].map(t => <option key={t}>{t}</option>)}
+          {["文本类", "图像类", "音频类", "视频类", "表格类", "跨模态类"].map(t => <option key={t}>{t}</option>)}
         </select>
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 text-sm border rounded-lg bg-card">
           <option>全部状态</option>
-          {["草稿","已发布","进行中","已完成","已下线"].map(s => <option key={s}>{s}</option>)}
+          {["草稿", "已发布", "进行中", "已完成", "已下线"].map(s => <option key={s}>{s}</option>)}
         </select>
         <button onClick={() => setShowFilters(!showFilters)} className={`px-3 py-2 text-sm border rounded-lg flex items-center gap-1 ${showFilters ? "bg-primary/10 border-primary text-primary" : "bg-card text-muted-foreground hover:text-foreground"}`}>
           <Filter className="w-4 h-4" /> 高级筛选
@@ -241,7 +241,11 @@ const DataAnnotationTasks = () => {
                     <span className="text-xs text-muted-foreground">{task.acceptProgress}%</span>
                   </div>
                 </td>
-                <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[task.status]}`}>{task.status}</span></td>
+                <td className="py-3 px-4">
+                  <span className={`status-tag ${task.status === "已完成" ? "status-tag-success" :
+                      task.status === "进行中" ? "status-tag-info" : "status-tag-warning"
+                    }`}>{task.status}</span>
+                </td>
                 <td className="py-3 px-4 text-muted-foreground">{task.creator}</td>
                 <td className="py-3 px-4 text-muted-foreground text-xs">{task.createdAt}</td>
                 <td className="py-3 px-4">

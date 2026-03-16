@@ -4,7 +4,7 @@ import { GlobalSidebar } from "./GlobalSidebar";
 
 export function PlatformLayout() {
   return (
-    <div className="min-h-screen">
+    <div>
       <GlobalHeader />
       <GlobalSidebar />
       <main className="shell-main p-6">

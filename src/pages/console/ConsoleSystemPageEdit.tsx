@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Save, Eye, Edit3 } from "lucide-react";
+import { renderMarkdown } from "@/lib/markdown";
 
 const PAGE_CONFIGS: Record<string, { title: string; defaultContent: string }> = {
   about: {
@@ -134,28 +135,7 @@ const PAGE_CONFIGS: Record<string, { title: string; defaultContent: string }> = 
   },
 };
 
-// Simple markdown to HTML renderer
-const renderMarkdown = (md: string): string => {
-  let html = md
-    // Headers
-    .replace(/^### (.+)$/gm, '<h3 class="text-base font-semibold mt-5 mb-2">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 class="text-lg font-semibold mt-6 mb-3 pb-1 border-b border-border">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold mt-4 mb-4">$1</h1>')
-    // Bold
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    // Inline code
-    .replace(/`([^`]+)`/g, '<code class="px-1.5 py-0.5 bg-muted rounded text-sm">$1</code>')
-    // Unordered lists
-    .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc text-sm leading-relaxed">$1</li>')
-    // Ordered lists
-    .replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal text-sm leading-relaxed">$1</li>')
-    // Paragraphs - wrap non-tag lines
-    .replace(/^(?!<[hlu]|<li|<ol|<code|<strong)(.+)$/gm, '<p class="text-sm leading-relaxed text-muted-foreground mb-2">$1</p>')
-    // Empty lines
-    .replace(/^\s*$/gm, "");
 
-  return html;
-};
 
 const ConsoleSystemPageEdit = () => {
   const navigate = useNavigate();

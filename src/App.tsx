@@ -45,7 +45,9 @@ const DataAnnotationStatistics = lazy(() => import("./pages/data-annotation/Data
 const AnnotationToolEditor = lazy(() => import("./pages/data-annotation/AnnotationToolEditor"));
 
 const DataServiceMarketplace = lazy(() => import("./pages/data-service/DataServiceMarketplace"));
+const DatasetDetail = lazy(() => import("./pages/data-service/DatasetDetail"));
 const DataServiceListing = lazy(() => import("./pages/data-service/DataServiceListing"));
+const DataServiceListingCreate = lazy(() => import("./pages/data-service/DataServiceListingCreate"));
 const DataServiceApproval = lazy(() => import("./pages/data-service/DataServiceApproval"));
 const DataServiceMyApplications = lazy(() => import("./pages/data-service/DataServiceMyApplications"));
 
@@ -113,7 +115,9 @@ const App = () => (
 
                   {/* 006 数据服务 */}
                   <Route path="/data-service/marketplace" element={<DataServiceMarketplace />} />
+                  <Route path="/data-service/marketplace/:id" element={<DatasetDetail />} />
                   <Route path="/data-service/listing" element={<DataServiceListing />} />
+                  <Route path="/data-service/listing/create" element={<DataServiceListingCreate />} />
                   <Route path="/data-service/approval" element={<DataServiceApproval />} />
                   <Route path="/data-service/my-applications" element={<DataServiceMyApplications />} />
                 </Route>

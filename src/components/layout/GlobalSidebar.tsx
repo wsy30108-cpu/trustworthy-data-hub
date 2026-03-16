@@ -145,8 +145,8 @@ export function GlobalSidebar() {
         </nav>
       </div>
 
-      {/* 空间切换器 - 控制台下不显示 */}
-      {!isConsole && (
+      {/* 空间切换器 - 控制台和数据服务下不显示 */}
+      {!isConsole && activePlatform?.id !== "006" && (
         <div className="border-t relative" ref={wsRef}>
           {/* Expanded workspace panel */}
           {!collapsed && showWorkspaces && (

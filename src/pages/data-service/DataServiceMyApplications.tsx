@@ -1,13 +1,6 @@
 import { useState } from "react";
 import { Search, Eye, RotateCcw, XCircle, CheckCircle, Clock, Undo2 } from "lucide-react";
-
-const mockApplications = [
-  { id: "APP-001", dataset: "中文通用NER标注数据集", permission: "查看+下载", reason: "NLP实体识别模型训练", status: "已通过", applyTime: "2026-02-20 10:00", reviewer: "张明", reviewTime: "2026-02-20 14:30", opinion: "已核实，通过" },
-  { id: "APP-002", dataset: "ImageNet-21K精选子集", permission: "下载", reason: "图像分类模型预训练", status: "待审批", applyTime: "2026-03-05 09:15", reviewer: null, reviewTime: null, opinion: null },
-  { id: "APP-003", dataset: "金融行业研报摘要数据", permission: "查看", reason: "金融NLP数据调研", status: "已拒绝", applyTime: "2026-03-01 11:00", reviewer: "李芳", reviewTime: "2026-03-01 16:00", opinion: "申请理由不充分，请补充具体的模型训练计划和数据使用范围说明" },
-  { id: "APP-004", dataset: "中英文平行语料v3", permission: "查看+下载", reason: "机器翻译模型训练", status: "已通过", applyTime: "2026-02-15 15:30", reviewer: "张明", reviewTime: "2026-02-15 17:00", opinion: "数据用途合理" },
-  { id: "APP-005", dataset: "中文语音转写ASR数据集", permission: "下载", reason: "语音识别模型微调", status: "已撤回", applyTime: "2026-02-28 09:00", reviewer: null, reviewTime: null, opinion: null },
-];
+import { useApplicationStore } from "@/stores/useApplicationStore";
 
 const statusConfig: Record<string, { icon: any; tagClass: string }> = {
   "待审批": { icon: Clock, tagClass: "status-tag-warning" },
@@ -20,9 +13,12 @@ const DataServiceMyApplications = () => {
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("全部");
 
-  const filtered = mockApplications.filter(a => {
+  const applications = useApplicationStore(state => state.applications);
+  const withdrawApplication = useApplicationStore(state => state.withdrawApplication);
+
+  const filtered = applications.filter(a => {
     if (statusFilter !== "全部" && a.status !== statusFilter) return false;
-    if (searchText && !a.dataset.includes(searchText)) return false;
+    if (searchText && !a.dataset.toLowerCase().includes(searchText.toLowerCase())) return false;
     return true;
   });
 
@@ -37,10 +33,10 @@ const DataServiceMyApplications = () => {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "全部申请", value: mockApplications.length.toString(), color: "text-foreground" },
-          { label: "待审批", value: mockApplications.filter(a => a.status === "待审批").length.toString(), color: "text-warning" },
-          { label: "已通过", value: mockApplications.filter(a => a.status === "已通过").length.toString(), color: "text-success" },
-          { label: "已拒绝", value: mockApplications.filter(a => a.status === "已拒绝").length.toString(), color: "text-destructive" },
+          { label: "全部申请", value: applications.length.toString(), color: "text-foreground" },
+          { label: "待审批", value: applications.filter(a => a.status === "待审批").length.toString(), color: "text-warning" },
+          { label: "已通过", value: applications.filter(a => a.status === "已通过").length.toString(), color: "text-success" },
+          { label: "已拒绝", value: applications.filter(a => a.status === "已拒绝").length.toString(), color: "text-destructive" },
         ].map((s, i) => (
           <div key={i} className="stat-card">
             <p className="text-xs text-muted-foreground mb-1">{s.label}</p>
@@ -98,7 +94,7 @@ const DataServiceMyApplications = () => {
                     <div className="flex items-center justify-center gap-1">
                       <button className="p-1 rounded hover:bg-muted/50" title="查看详情"><Eye className="w-4 h-4 text-muted-foreground" /></button>
                       {a.status === "待审批" && (
-                        <button className="p-1 rounded hover:bg-muted/50" title="撤回"><Undo2 className="w-4 h-4 text-warning" /></button>
+                        <button onClick={() => withdrawApplication(a.id)} className="p-1 rounded hover:bg-muted/50" title="撤回"><Undo2 className="w-4 h-4 text-warning" /></button>
                       )}
                       {a.status === "已拒绝" && (
                         <button className="p-1 rounded hover:bg-muted/50" title="重新申请"><RotateCcw className="w-4 h-4 text-primary" /></button>
