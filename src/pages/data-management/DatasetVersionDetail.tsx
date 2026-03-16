@@ -27,10 +27,12 @@ interface FileItem {
 
 /* ─── Mock Data ─── */
 const MOCK_FILES: FileItem[] = [
-  { id: "f1", name: "training_data/", isFolder: true, size: "—", status: "导入完成", creator: "张明", createdAt: "2026-03-01", children: [
-    { id: "f1-1", name: "batch_001.json", isFolder: false, size: "245MB", status: "导入完成", creator: "张明", createdAt: "2026-03-01" },
-    { id: "f1-2", name: "batch_002.json", isFolder: false, size: "312MB", status: "导入完成", creator: "张明", createdAt: "2026-03-01" },
-  ]},
+  {
+    id: "f1", name: "training_data/", isFolder: true, size: "—", status: "导入完成", creator: "张明", createdAt: "2026-03-01", children: [
+      { id: "f1-1", name: "batch_001.json", isFolder: false, size: "245MB", status: "导入完成", creator: "张明", createdAt: "2026-03-01" },
+      { id: "f1-2", name: "batch_002.json", isFolder: false, size: "312MB", status: "导入完成", creator: "张明", createdAt: "2026-03-01" },
+    ]
+  },
   { id: "f2", name: "validation_data.jsonl", isFolder: false, size: "89MB", status: "导入完成", creator: "张明", createdAt: "2026-03-02" },
   { id: "f3", name: "test_samples.txt", isFolder: false, size: "12MB", status: "导入完成", creator: "李芳", createdAt: "2026-03-03" },
   { id: "f4", name: "metadata.json", isFolder: false, size: "2.1KB", status: "导入完成", creator: "张明", createdAt: "2026-03-01" },
@@ -151,7 +153,7 @@ function ImportDetailDialog({ open, onClose, file }: { open: boolean; onClose: (
             <div><span className="text-muted-foreground">导入状态：</span>
               <span className={cn("font-medium",
                 file.status === "导入完成" ? "text-green-600" :
-                file.status.includes("失败") ? "text-destructive" : "text-blue-600"
+                  file.status.includes("失败") ? "text-destructive" : "text-blue-600"
               )}>{file.status}</span>
             </div>
           </div>
@@ -352,12 +354,6 @@ export default function DatasetVersionDetail({ dataset, version, onBack, onUploa
             <RefreshCw className="w-3.5 h-3.5" />重新导入 ({selectedFailedCount})
           </Button>
         )}
-        <div className="ml-auto">
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"
-            onClick={() => toast({ title: version.publishStatus === "未发布" ? "发布任务已创建" : "更新发布成功" })}>
-            {version.publishStatus === "未发布" ? "发布到数据集市" : "更新发布到数据集市"}
-          </Button>
-        </div>
       </div>
 
       {/* Filter */}
@@ -424,7 +420,7 @@ export default function DatasetVersionDetail({ dataset, version, onBack, onUploa
                       {statusIcon(f.status)}
                       <span className={cn("text-xs",
                         f.status === "导入完成" ? "text-green-600" :
-                        f.status.includes("失败") ? "text-destructive" : "text-blue-600"
+                          f.status.includes("失败") ? "text-destructive" : "text-blue-600"
                       )}>{f.status}</span>
                       {f.statusMessage && (
                         <div className="hidden group-hover/status:block absolute left-0 top-full mt-1 z-40 p-2 bg-popover border rounded-md shadow-lg max-w-[300px]">
