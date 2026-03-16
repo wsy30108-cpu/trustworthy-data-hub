@@ -26,6 +26,9 @@ const DatasetDetail = () => {
         ...dataset,
         repoId: dataset.id, // 用户要求显示数据集 ID
         description: dataset.desc,
+        industryDomain: dataset.industryDomain,
+        technicalDomain: dataset.technicalDomain,
+        modality: dataset.type,
         // 使用 tasks 作为主要标签展示，以保持与集市卡片一致
         displayTags: dataset.tasks,
         license: "Apache 2.0" // 维持原有的协议展示或从 tags 中提取
@@ -64,6 +67,19 @@ const DatasetDetail = () => {
                                 </div>
                             </div>
                             <div className="flex flex-wrap gap-2 mb-4">
+                                <span className="px-2 py-1 bg-primary/5 text-primary text-[10px] items-center gap-1.5 rounded-md border border-primary/10 flex font-bold uppercase">
+                                    <Database className="w-3 h-3" /> {ds.modality}
+                                </span>
+                                {ds.industryDomain?.map(dom => (
+                                    <span key={dom} className="px-2 py-1 bg-indigo-50 text-indigo-600 text-[10px] items-center gap-1.5 rounded-md border border-indigo-100 flex font-bold">
+                                        <Tag className="w-3 h-3" /> {dom}
+                                    </span>
+                                ))}
+                                {ds.technicalDomain?.map(dom => (
+                                    <span key={dom} className="px-2 py-1 bg-emerald-50 text-emerald-600 text-[10px] items-center gap-1.5 rounded-md border border-emerald-100 flex font-bold">
+                                        <Tag className="w-3 h-3" /> {dom}
+                                    </span>
+                                ))}
                                 {ds.displayTags.map(tag => (
                                     <span key={tag} className="px-2 py-1 bg-slate-50 text-slate-500 text-[10px] items-center gap-1.5 rounded-md border border-slate-100 flex">
                                         <CheckCircle2 className="w-3 h-3 text-primary/60" /> {tag}
@@ -128,18 +144,26 @@ const DatasetDetail = () => {
 
                             <h2 className="text-3xl font-bold text-slate-900 mb-8">{ds.name}</h2>
 
-                            <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                I. 基准介绍
-                            </h3>
-                            <p className="text-slate-600 leading-relaxed mb-8">
-                                {ds.description}
-                            </p>
+                            <div className="bg-slate-50 rounded-2xl p-8 border border-slate-100 mb-10">
+                                <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    <FileText className="w-5 h-5 text-primary" /> 数据集简介
+                                </h3>
+                                <p className="text-slate-600 leading-relaxed italic border-l-4 border-primary/20 pl-6 py-2 bg-white/50 rounded-r-xl mb-6">
+                                    {ds.description}
+                                </p>
+                                <p className="text-slate-500 text-sm leading-relaxed">
+                                    该数据集为 {ds.modality} 模态的高质量合规数据，主要面向 {ds.industryDomain?.join("、")} 行业，
+                                    适用于 {ds.technicalDomain?.join("、")} 等技术领域的研究与模型生产。
+                                </p>
+                            </div>
 
-                            <p className="text-slate-600 font-bold mb-2">数据集介绍：</p>
-                            <ul className="list-disc pl-6 space-y-2 text-slate-600 mb-8">
-                                <li>ReasoningMath.jsonl 为数据文件，总计开源100道题，包括了序号 (id), 难度 (difficulty), 学科分类 (subject), 题目 (question), 最终解答 (final_answer)。</li>
-                                <li>Selected Problem Appendix.xlsx 为部分题目详解附录，总计开源30道题，包括了序号，思维链分析标准，解题分析标准。</li>
-                                <li>SKYLENAGE Technical Report.pdf 为技术报告。</li>
+                            <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                <FileText className="w-5 h-5 text-primary" /> 结构说明 & 技术报告
+                            </h3>
+                            <ul className="list-disc pl-6 space-y-3 text-slate-600 mb-8">
+                                <li><strong>数据文件:</strong> 包含序号 (id), 难度 (difficulty), 学科分类 (subject), 题目 (question), 最终解答 (final_answer) 等核心字段。</li>
+                                <li><strong>详解附录:</strong> 提供部分题目的思维链分析、解题分析标准。</li>
+                                <li><strong>技术报告:</strong> 包含数据采集流程、预处理策略、质量评估分布等。</li>
                             </ul>
 
                             <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
@@ -251,6 +275,10 @@ const DatasetDetail = () => {
                                     reason: formData.get('reason') as string,
                                     company: formData.get('company') as string,
                                     email: formData.get('email') as string,
+                                    modality: ds.modality,
+                                    industryDomain: ds.industryDomain,
+                                    technicalDomain: ds.technicalDomain,
+                                    description: ds.description,
                                 });
                                 setIsApplyModalOpen(false);
                                 toast.success("申请提交成功！可在“我的申请”中查看进度。");

@@ -16,6 +16,11 @@ export interface Application {
     reviewer: string | null;
     reviewTime: string | null;
     opinion: string | null;
+    // Metadata for context
+    modality?: string;
+    industryDomain?: string[];
+    technicalDomain?: string[];
+    description?: string;
     // Custom fields
     company?: string;
     email?: string;
@@ -32,8 +37,8 @@ interface ApplicationState {
 }
 
 const initialApplications: Application[] = [
-    { id: "APP-001", dataset: "中文通用NER标注数据集", datasetId: "M-001", applicantName: "王强", phone: "13800138001", creator: "官方", creatorOrg: "技术部", permission: "读写", reason: "NLP实体识别模型训练", status: "已通过", applyTime: "2026-02-20 10:00", reviewer: "张明", reviewTime: "2026-02-20 14:30", opinion: "已核实，通过" },
-    { id: "APP-002", dataset: "ImageNet-21K精选子集", datasetId: "M-002", applicantName: "孙伟", phone: "13911223344", creator: "官方", creatorOrg: "算法实验室", permission: "读写", reason: "图像分类模型预训练", status: "待审批", applyTime: "2026-03-05 09:15", reviewer: null, reviewTime: null, opinion: null, company: "飞讯AI", email: "sunwei@feixun.ai" },
+    { id: "APP-001", dataset: "all-skills-from-skills-sh", datasetId: "M-001", applicantName: "王强", phone: "13800138001", creator: "官方", creatorOrg: "技术部", permission: "读写", reason: "NLP实体识别模型训练", status: "已通过", applyTime: "2026-02-20 10:00", reviewer: "张明", reviewTime: "2026-02-20 14:30", opinion: "已核实，通过", industryDomain: ["互联网和相关服务"], technicalDomain: ["知识蒸馏"], modality: "文本", description: "来源于 skills.sh 网站的所有 skill 数据" },
+    { id: "APP-002", dataset: "ImageNet-21K精选子集", datasetId: "M-002", applicantName: "孙伟", phone: "13911223344", creator: "官方", creatorOrg: "算法实验室", permission: "读写", reason: "图像分类模型预训练", status: "待审批", applyTime: "2026-03-05 09:15", reviewer: null, reviewTime: null, opinion: null, company: "飞讯AI", email: "sunwei@feixun.ai", industryDomain: ["软件和信息技术服务业"], technicalDomain: ["多模态"], modality: "图像", description: "ImageNet-21K 的高质量精选子集" },
     { id: "APP-003", dataset: "金融行业研报摘要数据", datasetId: "M-003", applicantName: "周婷", phone: "13511112222", creator: "官方", creatorOrg: "金融服务部", permission: "只读", reason: "金融NLP数据调研", status: "已拒绝", applyTime: "2026-03-01 11:00", reviewer: "李芳", reviewTime: "2026-03-01 16:00", opinion: "申请理由不充分，请补充具体的模型训练计划 and 数据使用范围说明" },
     { id: "APP-004", dataset: "中英文平行语料v3", datasetId: "M-004", applicantName: "李明", phone: "13766554433", creator: "官方", creatorOrg: "翻译中心", permission: "读写", reason: "机器翻译模型训练", status: "已通过", applyTime: "2026-02-15 15:30", reviewer: "张明", reviewTime: "2026-02-15 17:00", opinion: "数据用途合理" },
     { id: "APP-005", dataset: "中文语音转写ASR数据集", datasetId: "M-005", applicantName: "陈刚", phone: "13122334455", creator: "官方", creatorOrg: "语音实验室", permission: "读写", reason: "语音识别模型微调", status: "已撤回", applyTime: "2026-02-28 09:00", reviewer: null, reviewTime: null, opinion: null },

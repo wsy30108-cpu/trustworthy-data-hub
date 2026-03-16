@@ -38,7 +38,15 @@ const ZIP_SUB_FORMATS: ZipSubFormat[] = ["文本文档", "Excel 表格", "Word �
 
 /* ─── Section + Field ─── */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return <div className="rounded-lg border bg-card p-5 space-y-4"><h3 className="text-sm font-semibold text-foreground">{title}</h3>{children}</div>;
+  return (
+    <div className="rounded-lg border bg-card p-5 space-y-4">
+      <div className="flex items-center gap-2 mb-1">
+        <div className="w-1 h-3.5 bg-primary rounded-full" />
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
 }
 function Field({ label, required, children, error }: { label: string; required?: boolean; children: React.ReactNode; error?: string }) {
   return (
@@ -51,18 +59,25 @@ function Field({ label, required, children, error }: { label: string; required?:
 }
 
 /* ─── Format Adapter Config (reusable for both direct and zip sub-format) ─── */
-function FormatAdapterConfig({ format, delimiter, setDelimiter, customDelimiter, setCustomDelimiter, encoding, setEncoding, sheetName, setSheetName, headerRow, setHeaderRow, dataStartRow, setDataStartRow, extractRange, setExtractRange, tagRule, setTagRule, tagNames, setTagNames }: {
-  format: string;
-  delimiter: string; setDelimiter: (v: string) => void;
-  customDelimiter: string; setCustomDelimiter: (v: string) => void;
-  encoding: string; setEncoding: (v: string) => void;
-  sheetName: string; setSheetName: (v: string) => void;
-  headerRow: string; setHeaderRow: (v: string) => void;
-  dataStartRow: string; setDataStartRow: (v: string) => void;
-  extractRange: string; setExtractRange: (v: string) => void;
-  tagRule: string; setTagRule: (v: string) => void;
-  tagNames: string; setTagNames: (v: string) => void;
-}) {
+function FormatAdapterConfig({ format,
+  delimiter, setDelimiter, customDelimiter, setCustomDelimiter, encoding, setEncoding,
+  splitMode, setSplitMode, sheetName, setSheetName, headerRow, setHeaderRow, dataStartRow, setDataStartRow,
+  headerCol, setHeaderCol, dataStartCol, setDataStartCol,
+  extractRange, setExtractRange, tagRule, setTagRule, tagNames, setTagNames }: {
+    format: string;
+    delimiter: string; setDelimiter: (v: string) => void;
+    customDelimiter: string; setCustomDelimiter: (v: string) => void;
+    encoding: string; setEncoding: (v: string) => void;
+    splitMode?: "按行拆分" | "按列拆分" | "不拆分"; setSplitMode?: (v: "按行拆分" | "按列拆分" | "不拆分") => void;
+    sheetName: string; setSheetName: (v: string) => void;
+    headerRow: string; setHeaderRow: (v: string) => void;
+    dataStartRow: string; setDataStartRow: (v: string) => void;
+    headerCol?: string; setHeaderCol?: (v: string) => void;
+    dataStartCol?: string; setDataStartCol?: (v: string) => void;
+    extractRange: string; setExtractRange: (v: string) => void;
+    tagRule: string; setTagRule: (v: string) => void;
+    tagNames: string; setTagNames: (v: string) => void;
+  }) {
   if (format === "文本文档") {
     return (
       <div className="grid grid-cols-2 gap-4">
@@ -85,10 +100,32 @@ function FormatAdapterConfig({ format, delimiter, setDelimiter, customDelimiter,
   }
   if (format === "Excel 表格") {
     return (
-      <div className="grid grid-cols-3 gap-4">
-        <Field label="工作表"><Input value={sheetName} onChange={e => setSheetName(e.target.value)} placeholder="Sheet1" /></Field>
-        <Field label="表头行号"><Input value={headerRow} onChange={e => setHeaderRow(e.target.value)} placeholder="1" /></Field>
-        <Field label="数据起始行号"><Input value={dataStartRow} onChange={e => setDataStartRow(e.target.value)} placeholder="2" /></Field>
+      <div className="space-y-4">
+        <Field label="数据拆分方式" required>
+          <div className="flex gap-4 pt-1">
+            {(["按行拆分", "按列拆分", "不拆分"] as const).map(m => (
+              <label key={m} className="flex items-center gap-1.5 text-sm cursor-pointer hover:text-primary transition-colors">
+                <input type="radio" checked={splitMode === m} onChange={() => setSplitMode?.(m)} className="accent-primary" />{m}
+              </label>
+            ))}
+          </div>
+        </Field>
+        <div className="grid grid-cols-3 gap-4">
+          <Field label="工作表"><Input value={sheetName} onChange={e => setSheetName(e.target.value)} placeholder="Sheet1" /></Field>
+          {splitMode === "按列拆分" ? (
+            <>
+              <Field label="表头列号"><Input value={headerCol} onChange={e => setHeaderCol?.(e.target.value)} placeholder="1" /></Field>
+              <Field label="数据起始列号"><Input value={dataStartCol} onChange={e => setDataStartCol?.(e.target.value)} placeholder="2" /></Field>
+            </>
+          ) : (
+            <>
+              <Field label="表头行号"><Input value={headerRow} onChange={e => setHeaderRow(e.target.value)} placeholder="1" /></Field>
+              {splitMode === "按行拆分" && (
+                <Field label="数据起始行号"><Input value={dataStartRow} onChange={e => setDataStartRow(e.target.value)} placeholder="2" /></Field>
+              )}
+            </>
+          )}
+        </div>
       </div>
     );
   }
@@ -169,9 +206,12 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
   const [encoding, setEncoding] = useState("UTF-8");
 
   // Excel config
+  const [excelSplitMode, setExcelSplitMode] = useState<"按行拆分" | "按列拆分" | "不拆分">("按行拆分");
   const [sheetName, setSheetName] = useState("Sheet1");
   const [headerRow, setHeaderRow] = useState("1");
   const [dataStartRow, setDataStartRow] = useState("2");
+  const [headerCol, setHeaderCol] = useState("1");
+  const [dataStartCol, setDataStartCol] = useState("1");
 
   // Word config
   const [extractRange, setExtractRange] = useState("全文提取");
@@ -187,12 +227,15 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
   const [zipPassword, setZipPassword] = useState("");
 
   // Zip sub-format adapter states
+  const [zipExcelSplitMode, setZipExcelSplitMode] = useState<"按行拆分" | "按列拆分" | "不拆分">("按行拆分");
   const [zipDelimiter, setZipDelimiter] = useState("换行符");
   const [zipCustomDelimiter, setZipCustomDelimiter] = useState("");
   const [zipEncoding, setZipEncoding] = useState("UTF-8");
   const [zipSheetName, setZipSheetName] = useState("Sheet1");
   const [zipHeaderRow, setZipHeaderRow] = useState("1");
   const [zipDataStartRow, setZipDataStartRow] = useState("2");
+  const [zipHeaderCol, setZipHeaderCol] = useState("1");
+  const [zipDataStartCol, setZipDataStartCol] = useState("1");
   const [zipExtractRange, setZipExtractRange] = useState("全文提取");
   const [zipTagRule, setZipTagRule] = useState("无");
   const [zipTagNames, setZipTagNames] = useState("");
@@ -257,7 +300,7 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
       </div>
 
       {/* Fixed config */}
-      <Section title="一、基础配置">
+      <Section title="基础配置">
         <div className="grid grid-cols-3 gap-4">
           <Field label="数据集模态">
             <Input value={dataset.modality} disabled className="bg-muted/50" />
@@ -283,7 +326,7 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
       {/* LOCAL IMPORT */}
       {uploadMethod === "本地导入" && (
         <>
-          <Section title="二、格式选择">
+          <Section title="格式选择">
             <div className="grid grid-cols-3 gap-3">
               {(Object.keys(FORMAT_EXTENSIONS) as FileFormat[]).map(fmt => (
                 <button key={fmt} onClick={() => { setFileFormat(fmt); setUploadedFiles([]); }}
@@ -302,16 +345,19 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
           </Section>
 
           {/* Format-specific config */}
-          <Section title="三、格式适配配置">
+          <Section title="格式适配配置">
             {fileFormat !== "压缩包" ? (
               <FormatAdapterConfig
                 format={fileFormat}
                 delimiter={delimiter} setDelimiter={setDelimiter}
                 customDelimiter={customDelimiter} setCustomDelimiter={setCustomDelimiter}
                 encoding={encoding} setEncoding={setEncoding}
+                splitMode={excelSplitMode} setSplitMode={setExcelSplitMode}
                 sheetName={sheetName} setSheetName={setSheetName}
                 headerRow={headerRow} setHeaderRow={setHeaderRow}
                 dataStartRow={dataStartRow} setDataStartRow={setDataStartRow}
+                headerCol={headerCol} setHeaderCol={setHeaderCol}
+                dataStartCol={dataStartCol} setDataStartCol={setDataStartCol}
                 extractRange={extractRange} setExtractRange={setExtractRange}
                 tagRule={tagRule} setTagRule={setTagRule}
                 tagNames={tagNames} setTagNames={setTagNames}
@@ -342,9 +388,12 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
                     delimiter={zipDelimiter} setDelimiter={setZipDelimiter}
                     customDelimiter={zipCustomDelimiter} setCustomDelimiter={setZipCustomDelimiter}
                     encoding={zipEncoding} setEncoding={setZipEncoding}
+                    splitMode={zipExcelSplitMode} setSplitMode={setZipExcelSplitMode}
                     sheetName={zipSheetName} setSheetName={setZipSheetName}
                     headerRow={zipHeaderRow} setHeaderRow={setZipHeaderRow}
                     dataStartRow={zipDataStartRow} setDataStartRow={setZipDataStartRow}
+                    headerCol={zipHeaderCol} setHeaderCol={setZipHeaderCol}
+                    dataStartCol={zipDataStartCol} setDataStartCol={setZipDataStartCol}
                     extractRange={zipExtractRange} setExtractRange={setZipExtractRange}
                     tagRule={zipTagRule} setTagRule={setZipTagRule}
                     tagNames={zipTagNames} setTagNames={setZipTagNames}
@@ -385,7 +434,7 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
           </Section>
 
           {/* File upload area */}
-          <Section title="四、文件上传">
+          <Section title="文件上传">
             <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
               <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-sm text-muted-foreground mb-2">点击或拖拽文件到此区域上传</p>
@@ -416,7 +465,7 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
 
       {/* PLATFORM IMPORT */}
       {uploadMethod === "平台已有数据集" && (
-        <Section title="二、平台数据集导入配置">
+        <Section title="平台数据集导入配置">
           <div className="grid grid-cols-3 gap-4">
             <Field label="数据集来源" required>
               <select value={sourceType} onChange={e => { setSourceType(e.target.value); setSourceDatasetId(""); setSourceVersion(""); }}
@@ -480,7 +529,7 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
 
       {/* FTP IMPORT */}
       {uploadMethod === "在线 FTP 导入" && (
-        <Section title="二、FTP 导入配置">
+        <Section title="FTP 导入配置">
           <div className="grid grid-cols-3 gap-4">
             <Field label="协议" required>
               <select value={ftpProtocol} onChange={e => setFtpProtocol(e.target.value)} className="w-full h-9 px-3 text-sm border rounded-md bg-card">

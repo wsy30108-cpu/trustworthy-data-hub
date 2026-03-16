@@ -818,7 +818,11 @@ const DataManagementDatasets = () => {
                   <td className="py-3 px-3">
                     <TagCell tags={ds.tags} onEdit={() => setTagEditTarget({ idx: myDs.indexOf(ds), tab: 0 })} />
                   </td>
-                  <td className="py-3 px-3 text-xs text-muted-foreground">{ds.latestVersion}</td>
+                  <td className="py-3 px-3">
+                    <button className="text-xs text-primary hover:underline font-medium" onClick={() => { setCurrentDataset(ds); setCurrentVersion({ version: ds.latestVersion, publishStatus: "未知" }); setSubPage("versionDetail"); }}>
+                      {ds.latestVersion}
+                    </button>
+                  </td>
                   <td className="py-3 px-3 text-xs text-muted-foreground">{ds.scope}</td>
                   <td className="py-3 px-3 text-muted-foreground text-xs">{ds.creator}</td>
                   <td className="py-3 px-3 text-muted-foreground text-xs">{ds.createdAt}</td>
@@ -882,7 +886,11 @@ const DataManagementDatasets = () => {
                   <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
                   <td className="py-3 px-3"><span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span></td>
                   <td className="py-3 px-3"><TagCell tags={ds.tags} /></td>
-                  <td className="py-3 px-3 text-xs text-muted-foreground">{ds.latestVersion}</td>
+                  <td className="py-3 px-3">
+                    <button className="text-xs text-primary hover:underline font-medium" onClick={() => { setCurrentDataset(ds); setCurrentVersion({ version: ds.latestVersion, publishStatus: "未知" }); setSubPage("versionDetail"); }}>
+                      {ds.latestVersion}
+                    </button>
+                  </td>
                   <td className="py-3 px-3"><span className={cn("px-1.5 py-0.5 rounded text-[10px]", ds.authLevel === "读写" ? "bg-primary/10 text-primary" : "bg-accent text-accent-foreground")}>{ds.authLevel}</span></td>
                   <td className="py-3 px-3 text-muted-foreground text-xs">{ds.publisher}</td>
                   <td className="py-3 px-3 text-muted-foreground text-xs">{ds.subscribedAt}</td>
@@ -941,14 +949,18 @@ const DataManagementDatasets = () => {
                   <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
                   <td className="py-3 px-3"><span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span></td>
                   <td className="py-3 px-3"><TagCell tags={ds.tags} /></td>
-                  <td className="py-3 px-3 text-xs text-muted-foreground">{ds.latestVersion}</td>
+                  <td className="py-3 px-3">
+                    <button className="text-xs text-primary hover:underline font-medium" onClick={() => { setCurrentDataset(ds); setCurrentVersion({ version: ds.latestVersion, publishStatus: "未知" }); setSubPage("versionDetail"); }}>
+                      {ds.latestVersion}
+                    </button>
+                  </td>
                   <td className="py-3 px-3">
                     <div className="flex flex-wrap gap-1">
                       {ds.authPerms.map(p => (
                         <span key={p} className={cn("px-1.5 py-0.5 rounded text-[10px]",
                           p === "创建数据集版本" ? "bg-primary/10 text-primary" :
-                          p === "写数据集" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
-                          "bg-accent text-accent-foreground"
+                            p === "写数据集" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                              "bg-accent text-accent-foreground"
                         )}>{p}</span>
                       ))}
                     </div>

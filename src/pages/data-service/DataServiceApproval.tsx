@@ -274,16 +274,39 @@ const DataServiceApproval = () => {
               {/* 数据集信息 */}
               <div className="space-y-4">
                 <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary" /> 数据资产
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary" /> 数据资产背景
                 </h3>
-                <div className="grid gap-6">
+                <div className="grid gap-4 bg-slate-50 rounded-2xl p-6 border border-slate-100">
                   <div className="space-y-1">
                     <p className="text-xs text-slate-400">数据集名称</p>
                     <p className="text-sm font-bold text-slate-800">{viewingApp.dataset}</p>
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-400">数据集 ID</p>
+                      <p className="text-sm font-mono text-primary bg-white px-2 py-0.5 rounded border border-slate-200 w-fit">{viewingApp.datasetId}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-slate-400">数据模态</p>
+                      <p className="text-sm font-bold text-slate-700">{viewingApp.modality || "文本"}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs text-slate-400">领域标签</p>
+                    <div className="flex flex-wrap gap-2">
+                      {viewingApp.industryDomain?.map((dom: string) => (
+                        <span key={dom} className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px] font-bold border border-indigo-100">{dom}</span>
+                      ))}
+                      {viewingApp.technicalDomain?.map((dom: string) => (
+                        <span key={dom} className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-bold border border-emerald-100">{dom}</span>
+                      ))}
+                    </div>
+                  </div>
                   <div className="space-y-1">
-                    <p className="text-xs text-slate-400">数据集 ID</p>
-                    <p className="text-sm font-mono text-primary bg-primary/5 px-2 py-0.5 rounded w-fit">{viewingApp.datasetId}</p>
+                    <p className="text-xs text-slate-400">数据集简介</p>
+                    <p className="text-xs text-slate-500 leading-relaxed line-clamp-3 italic">
+                      {viewingApp.description || "暂无描述"}
+                    </p>
                   </div>
                 </div>
               </div>

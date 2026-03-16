@@ -118,7 +118,10 @@ function MultiSelectDropdown({ options, selected, onChange, placeholder }: {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border bg-card p-5 space-y-4">
-      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      <div className="flex items-center gap-2 mb-1">
+        <div className="w-1 h-3.5 bg-primary rounded-full" />
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      </div>
       {children}
     </div>
   );
@@ -222,7 +225,7 @@ export default function DatasetCreateForm({ onBack, onCreated, editData }: {
       </div>
 
       {/* Section 1: Basic Info */}
-      <Section title="一、数据集基本信息">
+      <Section title="数据集基本信息">
         <div className="grid grid-cols-2 gap-4">
           <Field label="数据集中文名称" required error={errors.name}>
             <Input value={name} onChange={e => setName(e.target.value)} placeholder="支持中英文、数字、下划线，2-50字符" maxLength={50} />
@@ -274,7 +277,7 @@ export default function DatasetCreateForm({ onBack, onCreated, editData }: {
       </Section>
 
       {/* Section 2: Version Info */}
-      <Section title="二、数据集版本信息">
+      <Section title="数据集版本信息">
         {isEdit && (
           <p className="text-xs text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">版本信息在编辑模式下不可修改</p>
         )}
@@ -323,7 +326,7 @@ export default function DatasetCreateForm({ onBack, onCreated, editData }: {
       </Section>
 
       {/* Section 3: Permissions */}
-      <Section title="三、数据集权限配置">
+      <Section title="数据集权限配置">
         <Field label="授权范围" required>
           <div className="flex gap-3 flex-wrap">
             {AUTH_SCOPES.map(s => (
@@ -365,7 +368,7 @@ export default function DatasetCreateForm({ onBack, onCreated, editData }: {
       </Section>
 
       {/* Section 4: Catalog */}
-      <Section title="四、数据目录配置">
+      <Section title="数据目录配置">
         <div className="grid grid-cols-2 gap-4">
           <Field label="系统目录" required error={errors.sysCatalogs}>
             <MultiSelectDropdown

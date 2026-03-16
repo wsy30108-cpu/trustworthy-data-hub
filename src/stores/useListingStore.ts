@@ -41,6 +41,9 @@ export interface Listing {
     applicantOrg?: string;
     technicalDomain?: string[];
     industryDomain?: string[];
+    opinion?: string;
+    reviewer?: string;
+    reviewTime?: string;
 }
 
 export interface ListingApproval {
@@ -78,12 +81,12 @@ interface ListingState {
 }
 
 const mockListings: Listing[] = [
-    { id: "LS-001", datasetName: "中文通用NER标注数据集", datasetId: "M-001", version: "V3.0", modality: "文本", status: "已上架", applyCount: 234, authorizedUsers: 56, source: "自主发布", publisher: "张明", publishedAt: "2026-02-15", isOfficial: false, industryDomain: ["互联网 and 相关服务", "软件和信息技术服务业"] },
-    { id: "LS-002", datasetName: "ImageNet-21K精选子集", datasetId: "M-002", version: "V2.0", modality: "图像", status: "已上架", applyCount: 567, authorizedUsers: 120, source: "预置数据集", publisher: "系统", publishedAt: "2026-01-01", isOfficial: true, industryDomain: ["计算机、通信和其他电子设备制造业"] },
-    { id: "LS-003", datasetName: "金融行业研报摘要数据", datasetId: "M-003", version: "V1.5", modality: "文本", status: "已上架", applyCount: 189, authorizedUsers: 45, source: "自主发布", publisher: "李芳", publishedAt: "2026-02-20", isOfficial: false, industryDomain: ["货币金融服务", "资本市场服务"] },
-    { id: "LS-005", datasetName: "智能制造缺陷检测数据集", datasetId: "M-005", version: "V2.1", modality: "图像", status: "已下架", applyCount: 78, authorizedUsers: 20, source: "自主发布", publisher: "孙伟", publishedAt: "2026-02-10", isOfficial: false, industryDomain: ["通用设备制造业", "汽车制造业"] },
-    { id: "LS-006", datasetName: "中文多轮对话数据集", datasetId: "M-006", version: "V1.0", modality: "文本", status: "上架审批中", applyCount: 0, authorizedUsers: 0, source: "自主发布", publisher: "张明", publishedAt: "-", isOfficial: false, industryDomain: ["互联网 and 相关服务"] },
-    { id: "LS-004", datasetName: "违规敏感词过滤集", datasetId: "M-004", version: "V1.2", modality: "文本", status: "已拒绝", applyCount: 0, authorizedUsers: 0, source: "自主发布", publisher: "李华", publishedAt: "-", isOfficial: false, industryDomain: ["社交保障"] },
+    { id: "LS-001", datasetName: "中文通用NER标注数据集", datasetId: "M-001", version: "V3.0", modality: "文本", status: "已上架", applyCount: 234, authorizedUsers: 56, source: "自主发布", publisher: "张明", publishedAt: "2026-02-15", isOfficial: false, industryDomain: ["互联网 and 相关服务", "软件和信息技术服务业"], versionDesc: "全面优化了标注质量，补充了医疗领域词库。", tags: [{ key: "类型", value: "文本分类" }, { key: "精度", value: "98%" }], versionTags: [{ key: "更新量", value: "50万条" }], customMetadata: "# 中文通用NER标注数据集\n\n该数据集包含超过100万个中文句子，标注了人名、地名、机构名等实体。适用于金融、新闻等领域的NER模型训练。" },
+    { id: "LS-002", datasetName: "ImageNet-21K精选子集", datasetId: "M-002", version: "V2.0", modality: "图像", status: "已上架", applyCount: 567, authorizedUsers: 120, source: "预置数据集", publisher: "系统", publishedAt: "2026-01-01", isOfficial: true, industryDomain: ["计算机、通信和其他电子设备制造业"], versionDesc: "去除了模糊采样，增强了对比度。", tags: [{ key: "模态", value: "图像" }, { key: "规模", value: "21K类" }], versionTags: [{ key: "分辨率", value: "224x224" }], customMetadata: "# ImageNet-21K精选子集\n\n包含精选的各种常见物体的高分辨率图像。适用于各种计算机视觉任务，特别是图像分类和目标检测。", reviewer: "系统自动", reviewTime: "2026-01-01 10:00", opinion: "官方预置数据集，自动审核通过。" },
+    { id: "LS-003", datasetName: "金融行业研报摘要数据", datasetId: "M-003", version: "V1.5", modality: "文本", status: "已上架", applyCount: 189, authorizedUsers: 45, source: "自主发布", publisher: "李芳", publishedAt: "2026-02-20", isOfficial: false, industryDomain: ["货币金融服务", "资本市场服务"], versionDesc: "新增了2025年Q4的研报摘要。", tags: [{ key: "行业", value: "金融" }, { key: "格式", value: "JSON/CSV" }], versionTags: [{ key: "时效性", value: "2025 Q4" }], customMetadata: "# 金融行业研报摘要数据\n\n汇集了各大金融机构发布的行业研究报告摘要，包含丰富的市场分析与预测。适用于金融领域的自然语言处理任务和投资分析辅助系统的构建。", reviewer: "王审核", reviewTime: "2026-02-21 14:30", opinion: "数据内容合规，格式符合标准，同意上架。" },
+    { id: "LS-005", datasetName: "智能制造缺陷检测数据集", datasetId: "M-005", version: "V2.1", modality: "图像", status: "已下架", applyCount: 78, authorizedUsers: 20, source: "自主发布", publisher: "孙伟", publishedAt: "2026-02-10", isOfficial: false, industryDomain: ["通用设备制造业", "汽车制造业"], versionDesc: "优化了样本分布。", tags: [{ key: "模态", value: "图像" }], versionTags: [{ key: "样本数", value: "1万+" }], customMetadata: "# 智能制造缺陷检测数据集\n\n收集了多种工业制造过程中的产品表面缺陷图像，如划痕、凹痕、变形等。主要用于训练工业质检视觉模型，提升自动化检测效率。", reviewer: "张安全", reviewTime: "2026-02-11 09:15", opinion: "包含过多敏感生产环境背景，请处理后重新提交。现暂时下架。" },
+    { id: "LS-006", datasetName: "中文多轮对话数据集", datasetId: "M-006", version: "V1.0", modality: "文本", status: "上架审批中", applyCount: 0, authorizedUsers: 0, source: "自主发布", publisher: "张明", publishedAt: "-", isOfficial: false, industryDomain: ["互联网 and 相关服务"], versionDesc: "初始版本上架。", tags: [{ key: "对话轮次", value: "10+" }], versionTags: [{ key: "主题", value: "日常客服" }], customMetadata: "# 中文多轮对话数据集\n\n包含大量真实的客服对话记录，去除了个人隐私信息。支持多轮上下文理解的模型训练，有助于构建更加智能和拟人化的对话系统。" },
+    { id: "LS-004", datasetName: "违规敏感词过滤集", datasetId: "M-004", version: "V1.2", modality: "文本", status: "已拒绝", applyCount: 0, authorizedUsers: 0, source: "自主发布", publisher: "李华", publishedAt: "-", isOfficial: false, industryDomain: ["社交保障"], versionDesc: "扩充了社交平台高频词。", tags: [{ key: "用途", value: "内容风控" }], versionTags: [{ key: "词库量", value: "5000+" }], customMetadata: "# 违规敏感词过滤集\n\n包含大量常见的违规、敏感词汇，分为政治、赌博、色情等多个类别。常用于各大互联网平台的内容安全审核与风控系统。", reviewer: "李风控", reviewTime: "2026-03-15 16:45", opinion: "词库来源不明，存在知识产权风险，予以拒绝提交。" },
 ];
 
 const mockApprovals: ListingApproval[] = [
@@ -265,16 +268,44 @@ export const useListingStore = create<ListingState>()(
                     ...state.listingApprovals
                 ]
             })),
-            updateListing: (id, updates) => set((state) => ({
-                listings: state.listings.map(l => l.id === id ? {
-                    ...l,
+            updateListing: (id, updates) => set((state) => {
+                const listing = state.listings.find(l => l.id === id);
+                if (!listing) return state;
+
+                const updatedListing: Listing = {
+                    ...listing,
                     ...updates,
                     status: '上架审批中',
                     opinion: undefined,
                     reviewer: undefined,
                     reviewTime: undefined
-                } : l)
-            })),
+                };
+
+                const newApproval: ListingApproval = {
+                    id: `LAP-UPD-${Math.random().toString(36).substr(2, 9)}`,
+                    listingId: id,
+                    datasetName: updatedListing.datasetName,
+                    modality: updatedListing.modality,
+                    description: updatedListing.description || "",
+                    purpose: updatedListing.purpose || "",
+                    tags: updatedListing.tags || [],
+                    version: updatedListing.version,
+                    versionDesc: updatedListing.versionDesc || "",
+                    versionTags: updatedListing.versionTags || [],
+                    technicalDomain: updatedListing.technicalDomain || [],
+                    industryDomain: updatedListing.industryDomain || [],
+                    applicant: updatedListing.publisher,
+                    applicantOrg: updatedListing.applicantOrg || "所属组织",
+                    applyTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
+                    status: '待审批',
+                    customMetadata: updatedListing.customMetadata || "{}"
+                };
+
+                return {
+                    listings: state.listings.map(l => l.id === id ? updatedListing : l),
+                    listingApprovals: [newApproval, ...state.listingApprovals]
+                };
+            }),
         }),
         {
             name: 'dataset-listing-storage',

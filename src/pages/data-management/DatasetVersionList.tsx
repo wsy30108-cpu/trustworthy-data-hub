@@ -64,7 +64,38 @@ function ConfirmDialog({ open, onClose, onConfirm, title, desc }: {
   );
 }
 
-/* ─── Tag Editor Dialog ─── */
+/* ─── Tag Cell (Hover Card) ─── */
+function TagCell({ tags, onEdit }: { tags: KVTag[]; onEdit: () => void }) {
+  const [hover, setHover] = useState(false);
+  if (!tags.length) return <button onClick={onEdit} className="text-xs text-muted-foreground hover:text-primary transition-colors">+ 标签</button>;
+  return (
+    <div className="relative" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      <div className="flex items-center gap-1.5 cursor-default">
+        <span className="px-2 py-0.5 bg-accent text-accent-foreground rounded text-xs font-medium">{tags.length}</span>
+        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-0.5 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity" title="编辑标签">
+          <Edit className="w-3 h-3 text-muted-foreground" />
+        </button>
+      </div>
+      {hover && (
+        <div className="absolute z-40 left-0 top-full mt-1 bg-popover border rounded-lg shadow-lg p-3 min-w-[200px] max-w-[300px] animate-in fade-in zoom-in duration-150">
+          <div className="text-xs font-medium text-foreground mb-2">版本标签</div>
+          <div className="space-y-1">
+            {tags.map((t, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground font-medium min-w-[50px]">{t.key}:</span>
+                <span className="text-foreground">{t.value}</span>
+              </div>
+            ))}
+          </div>
+          <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="mt-2 text-xs text-primary hover:underline flex items-center gap-1">
+            <Edit className="w-3 h-3" />编辑标签
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TagEditorDialog({ open, onClose, tags, onSave, title }: {
   open: boolean; onClose: () => void; tags: KVTag[]; onSave: (t: KVTag[]) => void; title: string;
 }) {
@@ -512,9 +543,11 @@ export default function DatasetVersionList({ dataset, permissions, onBack, onVie
             <tbody>
               {items.map((v, idx) => (
                 <tr key={v.id} className="border-b last:border-0 hover:bg-muted/20 group">
-                  <td className="py-3 px-3 font-medium text-foreground">
+                  <td className="py-3 px-3">
                     <div className="flex items-center gap-2">
-                      {v.version}
+                      <button className="font-medium text-primary hover:underline" onClick={() => onViewDetail(v, dataset)}>
+                        {v.version}
+                      </button>
                       {v.status !== "可用" && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">{v.status}</span>
                       )}
@@ -523,29 +556,20 @@ export default function DatasetVersionList({ dataset, permissions, onBack, onVie
                   <td className="py-3 px-3 text-muted-foreground">{v.fileCount.toLocaleString()}</td>
                   <td className="py-3 px-3 text-muted-foreground">{v.size}</td>
                   <td className="py-3 px-3">
-                    {v.tags.length > 0 ? (
-                      <div className="flex items-center gap-1">
-                        <span className="px-2 py-0.5 bg-accent text-accent-foreground rounded text-xs">{v.tags.length}</span>
-                        <button onClick={() => setTagEditTarget(versions.indexOf(v))} className="p-0.5 rounded hover:bg-muted opacity-0 group-hover:opacity-100">
-                          <Edit className="w-3 h-3 text-muted-foreground" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button onClick={() => setTagEditTarget(versions.indexOf(v))} className="text-xs text-muted-foreground hover:text-primary">+ 标签</button>
-                    )}
+                    <TagCell tags={v.tags} onEdit={() => setTagEditTarget(versions.indexOf(v))} />
                   </td>
                   <td className="py-3 px-3">
                     {statusBadge(v.annotationStatus,
                       v.annotationStatus === "已标注" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-                      v.annotationStatus === "标注中" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
-                      "bg-muted text-muted-foreground"
+                        v.annotationStatus === "标注中" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                          "bg-muted text-muted-foreground"
                     )}
                   </td>
                   <td className="py-3 px-3">
                     {statusBadge(v.cleanStatus,
                       v.cleanStatus === "已清洗" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-                      v.cleanStatus === "清洗中" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
-                      "bg-muted text-muted-foreground"
+                        v.cleanStatus === "清洗中" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                          "bg-muted text-muted-foreground"
                     )}
                   </td>
                   <td className="py-3 px-3">
@@ -609,12 +633,14 @@ export default function DatasetVersionList({ dataset, permissions, onBack, onVie
       {confirmDialog && <ConfirmDialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)} title={confirmDialog.title} desc={confirmDialog.desc} onConfirm={confirmDialog.onConfirm} />}
       {exportTarget && <ExportDialog open={!!exportTarget} onClose={() => setExportTarget(null)} version={exportTarget} />}
       {shareTarget && <ShareDialog open={!!shareTarget} onClose={() => setShareTarget(null)} version={shareTarget} />}
-      {tagEditTarget !== null && (
-        <TagEditorDialog open={tagEditTarget !== null} onClose={() => setTagEditTarget(null)}
-          tags={versions[tagEditTarget]?.tags || []}
-          onSave={t => { setVersions(prev => prev.map((v, i) => i === tagEditTarget ? { ...v, tags: t } : v)); setTagEditTarget(null); }}
-          title="版本标签编辑" />
-      )}
+      {
+        tagEditTarget !== null && (
+          <TagEditorDialog open={tagEditTarget !== null} onClose={() => setTagEditTarget(null)}
+            tags={versions[tagEditTarget]?.tags || []}
+            onSave={t => { setVersions(prev => prev.map((v, i) => i === tagEditTarget ? { ...v, tags: t } : v)); setTagEditTarget(null); }}
+            title="版本标签编辑" />
+        )
+      }
     </div>
   );
 }

@@ -92,7 +92,15 @@ function MultiSelect({ options, selected, onChange, placeholder }: {
 
 /* ─── Section + Field ─── */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return <div className="rounded-lg border bg-card p-5 space-y-4"><h3 className="text-sm font-semibold text-foreground">{title}</h3>{children}</div>;
+  return (
+    <div className="rounded-lg border bg-card p-5 space-y-4">
+      <div className="flex items-center gap-2 mb-1">
+        <div className="w-1 h-3.5 bg-primary rounded-full" />
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
 }
 function Field({ label, required, children, error }: { label: string; required?: boolean; children: React.ReactNode; error?: string }) {
   return (
@@ -177,7 +185,7 @@ export default function DatasetVersionCreate({ dataset, existingVersions, onBack
       </div>
 
       {/* Section 1: Version Info */}
-      <Section title="一、版本基本信息">
+      <Section title="版本基本信息">
         <div className="grid grid-cols-2 gap-4">
           <Field label="版本号" required>
             <Input value={nextVersion} disabled className="bg-muted/50" />
@@ -206,7 +214,7 @@ export default function DatasetVersionCreate({ dataset, existingVersions, onBack
       </Section>
 
       {/* Section 2: Storage */}
-      <Section title="二、存储与格式配置">
+      <Section title="存储与格式配置">
         <div className="grid grid-cols-2 gap-4">
           <Field label="存储位置" required>
             <select value={storageLocation} onChange={e => setStorageLocation(e.target.value)}
@@ -227,7 +235,7 @@ export default function DatasetVersionCreate({ dataset, existingVersions, onBack
       </Section>
 
       {/* Section 3: Permissions */}
-      <Section title="三、权限配置">
+      <Section title="权限配置">
         <Field label="权限模式" required>
           <div className="flex gap-4">
             <label className="flex items-center gap-2 text-sm cursor-pointer px-3 py-2 rounded-lg border transition-colors"
@@ -288,7 +296,7 @@ export default function DatasetVersionCreate({ dataset, existingVersions, onBack
       </Section>
 
       {/* Section 4: Import */}
-      <Section title="四、初始数据导入方式">
+      <Section title="初始数据导入方式">
         <div className="grid grid-cols-3 gap-3">
           {([
             { key: "empty", title: "空版本", desc: "仅创建版本结构，后续手动上传" },

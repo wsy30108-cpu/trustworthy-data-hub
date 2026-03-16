@@ -6,6 +6,7 @@ import { useListingStore, type Listing, type ListingApproval, type KVTag } from 
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { FLAT_INDUSTRIES } from "@/lib/industry-domains";
+import { renderMarkdown } from "@/lib/markdown";
 
 const TECHNICAL_DOMAINS = ["自然语言处理", "计算机视觉", "音频处理", "机器人学", "自动驾驶", "生成式AI", "强化学习", "知识图谱"];
 
@@ -134,20 +135,6 @@ const DataServiceListing = () => {
   const [viewingApproval, setViewingApproval] = useState<any | null>(null);
   const [rejectingApproval, setRejectingApproval] = useState<ListingApproval | null>(null);
   const [reason, setReason] = useState("");
-  const [editingDataset, setEditingDataset] = useState<Listing | null>(null);
-  const [editForm, setEditForm] = useState<Partial<Listing>>({
-    datasetName: "",
-    modality: "",
-    version: "",
-    description: "",
-    purpose: "",
-    versionDesc: "",
-    technicalDomain: [],
-    industryDomain: [],
-    tags: [],
-    versionTags: [],
-    customMetadata: "{}"
-  });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [tagEditorConfig, setTagEditorConfig] = useState<{ open: boolean; title: string; field: "tags" | "versionTags"; tags: KVTag[] }>({
     open: false, title: "", field: "tags", tags: []
@@ -309,7 +296,10 @@ const DataServiceListing = () => {
                         <button onClick={() => { withdrawListing(l.id); toast.success("数据集已下架"); }} className="p-2 text-slate-400 hover:text-warning transition-colors" title="下架"><ArrowDownCircle className="w-4 h-4" /></button>
                       )}
                       {(l.status === '已下架' || l.status === '已拒绝') && (
-                        <button onClick={() => { setEditingDataset(l); setEditForm({ ...l as any }); }} className="p-2 text-primary hover:text-primary-600" title="重新发布"><Edit className="w-4 h-4" /></button>
+                        <>
+                          <button onClick={() => navigate(`/data-service/listing/create?editId=${l.id}`)} className="p-2 text-primary hover:text-primary-600" title="编辑并重新发布"><Edit className="w-4 h-4" /></button>
+                          <button onClick={() => { deleteListing(l.id); toast.success("上架记录已删除"); }} className="p-2 text-slate-400 hover:text-destructive transition-colors" title="删除"><Trash2 className="w-4 h-4" /></button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -430,72 +420,239 @@ const DataServiceListing = () => {
       {/* Details Drawer */}
       {viewingApproval && (
         <div className="fixed inset-0 z-[150] flex justify-end">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setViewingApproval(null)} />
-          <div className="relative w-[450px] bg-white h-full shadow-2xl animate-fade-in flex flex-col p-8 space-y-8 custom-scrollbar overflow-y-auto">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-fade-in" onClick={() => setViewingApproval(null)} />
+          <div className="relative w-[500px] bg-white h-full shadow-2xl animate-slide-in-right flex flex-col p-8 space-y-8 custom-scrollbar overflow-y-auto">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold">详情资料</h2>
-              <button onClick={() => setViewingApproval(null)}><X /></button>
+              <h2 className="text-xl font-bold text-slate-900 font-display">数据集上架详情</h2>
+              <button onClick={() => setViewingApproval(null)} className="p-2 hover:bg-slate-50 rounded-full transition-colors"><X className="w-5 h-5 text-slate-400" /></button>
             </div>
-            <div className="space-y-4">
-              <div className="p-4 bg-slate-50 rounded-xl">
-                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2">行业领域</p>
-                <div className="flex flex-wrap gap-2">
-                  {viewingApproval.industryDomain?.map((id: string) => (
-                    <span key={id} className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px] font-bold border border-indigo-100">{id}</span>
-                  )) || "未指定"}
+
+            <div className="space-y-6 pb-20">
+              {/* 基本状态 */}
+              <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+                  <Database className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 uppercase font-extrabold tracking-widest">当前状态</p>
+                  <span className={cn("status-tag mt-1 block w-fit font-bold", statusTag(viewingApproval.status))}>{viewingApproval.status}</span>
                 </div>
               </div>
-              <div>
-                <p className="text-xs text-slate-400 font-bold mb-1">基本描述</p>
-                <p className="text-sm text-slate-600">{viewingApproval.description || "无"}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Edit Drawer */}
-      {editingDataset && (
-        <div className="fixed inset-0 z-[150] flex justify-end">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setEditingDataset(null)} />
-          <div className="relative w-[450px] bg-white h-full shadow-2xl animate-fade-in flex flex-col overflow-hidden">
-            <div className="p-6 border-b flex items-center justify-between">
-              <h2 className="text-lg font-bold">编辑发布信息</h2>
-              <button onClick={() => setEditingDataset(null)} className="p-2"><X /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
-              <div className="space-y-3">
-                <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                  <Tag className="w-4 h-4 text-primary" /> 技术领域
-                </label>
-                <MultiSelectDropdown
-                  options={TECHNICAL_DOMAINS}
-                  selected={editForm.technicalDomain || []}
-                  onChange={(v) => setEditForm(prev => ({ ...prev, technicalDomain: v }))}
-                  placeholder="选择技术领域"
-                />
+              {/* 基本信息 */}
+              <div className="space-y-4">
+                <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary" /> 基本信息
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
+                    <p className="text-[10px] text-slate-400 mb-1 font-bold">数据集名称</p>
+                    <p className="text-sm font-bold text-slate-700">{viewingApproval.datasetName}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
+                    <p className="text-[10px] text-slate-400 mb-1 font-bold">数据集 ID</p>
+                    <p className="text-xs font-mono text-primary font-bold">{viewingApproval.datasetId || viewingApproval.id}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
+                    <p className="text-[10px] text-slate-400 mb-1 font-bold">版本号</p>
+                    <p className="text-sm font-bold text-slate-700">{viewingApproval.version}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
+                    <p className="text-[10px] text-slate-400 mb-1 font-bold">数据模态</p>
+                    <p className="text-sm font-bold text-slate-700">{viewingApproval.modality}</p>
+                  </div>
+                  <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100 col-span-2">
+                    <p className="text-[10px] text-slate-400 mb-1 font-bold">数据集版本描述</p>
+                    <p className="text-sm font-bold text-slate-700">{viewingApproval.versionDesc || "暂无说明"}</p>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-3">
-                <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                  <Tag className="w-4 h-4 text-primary" /> 行业领域
-                </label>
-                <MultiSelectDropdown
-                  options={FLAT_INDUSTRIES}
-                  selected={editForm.industryDomain || []}
-                  onChange={(v) => setEditForm(prev => ({ ...prev, industryDomain: v }))}
-                  placeholder="选择行业领域"
-                />
+
+              {/* 领域标签 */}
+              <div className="space-y-4">
+                <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary" /> 领域标签
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-[10px] text-slate-400 mb-2 font-bold uppercase">技术领域</p>
+                    <div className="flex flex-wrap gap-2">
+                      {viewingApproval.technicalDomain?.map((dom: string) => (
+                        <span key={dom} className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px] font-bold border border-indigo-100">{dom}</span>
+                      )) || <span className="text-xs text-slate-300 italic">未指定</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400 mb-2 font-bold uppercase">行业领域</p>
+                    <div className="flex flex-wrap gap-2">
+                      {viewingApproval.industryDomain?.map((dom: string) => (
+                        <span key={dom} className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-bold border border-emerald-100">{dom}</span>
+                      )) || <span className="text-xs text-slate-300 italic">未指定</span>}
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="p-6 border-t bg-slate-50 flex gap-3">
-              <button onClick={() => setEditingDataset(null)} className="flex-1 py-2 text-sm font-bold text-slate-500 bg-white border rounded-xl">取消</button>
-              <button onClick={() => {
-                if (editingDataset) {
-                  updateListing(editingDataset.id, editForm);
-                  toast.success("信息已更新并重新提交审批");
-                  setEditingDataset(null);
-                }
-              }} className="flex-1 py-2 text-sm font-bold text-white bg-primary rounded-xl">保存并提交</button>
+
+              {/* 介绍描述 */}
+              <div className="space-y-4">
+                <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary" /> 自定义数据集介绍
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-[10px] text-slate-400 mb-1 font-bold">数据集内容简介</p>
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 relative">
+                      <p className="text-sm text-slate-600 leading-relaxed italic font-medium">
+                        {viewingApproval.description || "暂无描述"}
+                      </p>
+                      <FileText className="absolute right-3 top-3 w-4 h-4 text-slate-200" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400 mb-1 font-bold">上架用途说明</p>
+                    <p className="text-sm text-slate-600 leading-relaxed font-medium pl-4 border-l-2 border-primary/20">
+                      {viewingApproval.purpose || "暂无用途说明"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 数据集标签 */}
+              {viewingApproval.tags && viewingApproval.tags.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary" /> 数据集标签
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {viewingApproval.tags.map((t: KVTag, i: number) => (
+                      <div key={i} className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-[11px]">
+                        <span className="font-bold text-primary/60">{t.key}:</span>
+                        <span className="text-slate-600 font-bold truncate">{t.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 数据集版本标签 */}
+              {viewingApproval.versionTags && viewingApproval.versionTags.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary" /> 数据集版本标签
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {viewingApproval.versionTags.map((t: KVTag, i: number) => (
+                      <div key={i} className="flex items-center gap-2 px-3 py-2 bg-primary/5 border border-primary/10 rounded-xl text-[11px]">
+                        <span className="font-bold text-primary">{t.key}:</span>
+                        <span className="text-primary/70 font-bold truncate">{t.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+
+              {/* 自定义数据集介绍 (Markdown) */}
+              {viewingApproval.customMetadata && (
+                <section className="space-y-4">
+                  <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary" /> 自定义数据集介绍
+                  </h3>
+                  <div className="p-8 bg-white rounded-3xl border border-slate-200 shadow-sm">
+                    <div
+                      className="prose prose-slate prose-sm max-w-none prose-headings:font-bold prose-h2:border-b prose-h2:pb-2 prose-h2:mt-8 first:prose-h2:mt-0"
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(viewingApproval.customMetadata) }}
+                    />
+                  </div>
+                </section>
+              )}
+
+              {/* 审批流程 (Timeline) */}
+              <section className="space-y-4">
+                <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary" /> 审批流程
+                </h3>
+
+                <div className="relative pl-4 space-y-6">
+                  {/* 时间轴连线 */}
+                  <div className="absolute top-4 bottom-4 left-6 w-[2px] bg-slate-100 rounded-full" />
+
+                  {/* 第 1 步：提交申请 */}
+                  <div className="relative z-10 flex gap-4">
+                    <div className="w-5 h-5 rounded-full bg-primary/10 border-2 border-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                      <Check className="w-3 h-3 text-primary" />
+                    </div>
+                    <div className="flex-1 bg-slate-50 border border-slate-100 rounded-xl p-4 shadow-sm hover:border-slate-200 transition-colors">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="text-xs font-bold text-slate-700">提交申请</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                            <User className="w-3 h-3" /> {viewingApproval.applicant || viewingApproval.publisher} (@{viewingApproval.applicantOrg || viewingApproval.source || "平台"})
+                          </p>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {viewingApproval.applyTime || viewingApproval.publishedAt || "无时间"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 第 2 步：审批处理 */}
+                  <div className="relative z-10 flex gap-4">
+                    <div className={cn(
+                      "w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 shadow-sm border-2 border-white",
+                      viewingApproval.status === '已上架' || viewingApproval.status === '已通过' ? "bg-success/10 text-success" :
+                        viewingApproval.status === '已拒绝' ? "bg-destructive/10 text-destructive" :
+                          "bg-warning/10 text-warning"
+                    )}>
+                      {viewingApproval.status === '已上架' || viewingApproval.status === '已通过' ? <Check className="w-3 h-3" /> :
+                        viewingApproval.status === '已拒绝' ? <X className="w-3 h-3" /> :
+                          <Clock className="w-3 h-3 animate-pulse" />}
+                    </div>
+                    <div className={cn(
+                      "flex-1 border rounded-xl p-4 shadow-sm transition-colors",
+                      viewingApproval.status === '已上架' || viewingApproval.status === '已通过' ? "bg-success/5 border-success/10" :
+                        viewingApproval.status === '已拒绝' ? "bg-destructive/5 border-destructive/10" :
+                          "bg-white border-warning/30 shadow-warning/5"
+                    )}>
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className={cn(
+                            "text-xs font-bold",
+                            viewingApproval.status === '已上架' || viewingApproval.status === '已通过' ? "text-success" :
+                              viewingApproval.status === '已拒绝' ? "text-destructive" :
+                                "text-warning-foreground" // Use foreground to ensure contrast for warning
+                          )}>
+                            {viewingApproval.status === '已上架' || viewingApproval.status === '已通过' ? "审批通过" :
+                              viewingApproval.status === '已拒绝' ? "已拒绝" :
+                                "上架审批中"}
+                          </p>
+                          {(viewingApproval.status === '已上架' || viewingApproval.status === '已通过' || viewingApproval.status === '已拒绝') && viewingApproval.reviewer && (
+                            <p className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                              <ShieldCheck className="w-3 h-3" /> {viewingApproval.reviewer}
+                            </p>
+                          )}
+                          {viewingApproval.status === '上架审批中' && (
+                            <p className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                              等待平台管理员处理
+                            </p>
+                          )}
+                        </div>
+                        {(viewingApproval.status === '已上架' || viewingApproval.status === '已通过' || viewingApproval.status === '已拒绝') && viewingApproval.reviewTime && (
+                          <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> {viewingApproval.reviewTime}
+                          </span>
+                        )}
+                      </div>
+                      {(viewingApproval.status === '已上架' || viewingApproval.status === '已通过' || viewingApproval.status === '已拒绝') && viewingApproval.opinion && (
+                        <div className="mt-3 p-3 bg-white/60 rounded-lg border border-white/40">
+                          <p className="text-xs text-slate-600 font-medium italic">“{viewingApproval.opinion}”</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </section>
             </div>
           </div>
         </div>
@@ -505,7 +662,10 @@ const DataServiceListing = () => {
         open={tagEditorConfig.open}
         onClose={() => setTagEditorConfig({ ...tagEditorConfig, open: false })}
         tags={tagEditorConfig.tags}
-        onSave={(tags) => setEditForm({ ...editForm, [tagEditorConfig.field]: tags })}
+        onSave={(tags) => {
+          // This TagEditorDialog is currently not being used for saving in this page 
+          // but we keep the prop for component compatibility if needed.
+        }}
         title={tagEditorConfig.title}
       />
 

@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useMemo, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ChevronRight, Check, Database, Boxes, ShieldCheck, Tag, Info, AlertCircle, Trash2, Plus, Edit, Search, Filter, Eye, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -174,7 +174,7 @@ dataset_name/
 建议用表格描述字段说明，例如：
 
 |字段名|类型|描述|
-|-|-|-|
+||-|--|
 |id|string|唯一标识符|
 |text|string|文本内容|
 |...|...|...|
@@ -192,7 +192,10 @@ dataset_name/
 
 export default function DataServiceListingCreate() {
     const navigate = useNavigate();
-    const { addListing } = useListingStore();
+    const [searchParams] = useSearchParams();
+    const editId = searchParams.get("editId");
+
+    const { addListing, updateListing, listings } = useListingStore();
 
     const [step, setStep] = useState(1);
 
@@ -208,12 +211,36 @@ export default function DataServiceListingCreate() {
     const [form, setForm] = useState<Partial<Listing>>({
         description: "",
         purpose: "",
+        versionDesc: "",
         technicalDomain: [],
         industryDomain: [],
         tags: [],
         versionTags: [],
         customMetadata: INTRODUCTION_TEMPLATE
     });
+
+    // Handle Edit Mode Initialization
+    useEffect(() => {
+        if (editId) {
+            const existingListing = listings.find(l => l.id === editId);
+            if (existingListing) {
+                // Find and set spaceId based on existing source
+                const space = MOCK_SPACES.find(s => s.name === existingListing.source);
+                if (space) setSelectedSpaceId(space.id);
+
+                setSelectedDatasetId(existingListing.datasetId);
+                setSelectedVersion(existingListing.version);
+
+                setForm({
+                    ...existingListing
+                });
+                setStep(2); // Directly jump to step 2 for editing
+            } else {
+                toast.error("未找到上架记录");
+                navigate("/data-service/listing");
+            }
+        }
+    }, [editId, listings, navigate]);
 
     const [introTab, setIntroTab] = useState<"edit" | "preview">("edit");
 
@@ -266,26 +293,45 @@ export default function DataServiceListingCreate() {
     const handleSubmit = () => {
         if (!form.datasetName) return;
 
-        addListing({
-            id: `L-${Date.now()}`,
-            datasetName: form.datasetName || "",
-            datasetId: form.datasetId || "",
-            version: form.version || "",
-            modality: form.modality || "",
-            source: MOCK_SPACES.find(s => s.id === selectedSpaceId)?.name || "未知空间",
-            description: form.description,
-            purpose: form.purpose,
-            tags: form.tags,
-            versionDesc: form.versionDesc,
-            versionTags: form.versionTags,
-            technicalDomain: form.technicalDomain,
-            industryDomain: form.industryDomain,
-            customMetadata: form.customMetadata,
-            applyCount: 0,
-            authorizedUsers: 0
-        });
+        if (editId) {
+            updateListing(editId, {
+                datasetName: form.datasetName || "",
+                datasetId: form.datasetId || "",
+                version: form.version || "",
+                modality: form.modality || "",
+                source: MOCK_SPACES.find(s => s.id === selectedSpaceId)?.name || form.source || "未知空间",
+                description: form.description,
+                purpose: form.purpose,
+                tags: form.tags,
+                versionDesc: form.versionDesc,
+                versionTags: form.versionTags,
+                technicalDomain: form.technicalDomain,
+                industryDomain: form.industryDomain,
+                customMetadata: form.customMetadata,
+            });
+            toast.success("上架信息已更新，请等待重新审批");
+        } else {
+            addListing({
+                id: `L-${Date.now()}`,
+                datasetName: form.datasetName || "",
+                datasetId: form.datasetId || "",
+                version: form.version || "",
+                modality: form.modality || "",
+                source: MOCK_SPACES.find(s => s.id === selectedSpaceId)?.name || "未知空间",
+                description: form.description,
+                purpose: form.purpose,
+                tags: form.tags,
+                versionDesc: form.versionDesc,
+                versionTags: form.versionTags,
+                technicalDomain: form.technicalDomain,
+                industryDomain: form.industryDomain,
+                customMetadata: form.customMetadata,
+                applyCount: 0,
+                authorizedUsers: 0
+            });
+            toast.success("上架申请已提交");
+        }
 
-        toast.success("上架申请已提交");
         navigate("/data-service/listing");
     };
 
@@ -303,8 +349,10 @@ export default function DataServiceListingCreate() {
                         </button>
                         <div className="h-8 w-[1px] bg-slate-200" />
                         <div>
-                            <h1 className="text-xl font-bold text-slate-900 tracking-tight">新建上架申请</h1>
-                            <p className="text-xs text-slate-400 font-medium">遵循二阶段配置引导，快速发布数据资源</p>
+                            <h1 className="text-xl font-bold text-slate-900 tracking-tight">{editId ? "编辑上架申请" : "新建上架申请"}</h1>
+                            <p className="text-xs text-slate-400 font-medium">
+                                {editId ? "更新上架元数据，确保资产信息的准确性" : "遵循二阶段配置引导，快速发布数据资源"}
+                            </p>
                         </div>
                     </div>
 
@@ -570,6 +618,16 @@ export default function DataServiceListingCreate() {
                                                     onChange={(e) => setForm({ ...form, purpose: e.target.value })}
                                                     className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:bg-white focus:border-primary outline-none transition-all text-sm font-medium resize-none shadow-sm shadow-slate-200/50"
                                                     placeholder="说明数据集的最佳使用场景..."
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold text-slate-500">本次上架版本说明</label>
+                                                <textarea
+                                                    rows={2}
+                                                    value={form.versionDesc}
+                                                    onChange={(e) => setForm({ ...form, versionDesc: e.target.value })}
+                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:bg-white focus:border-primary outline-none transition-all text-sm font-medium resize-none shadow-sm shadow-slate-200/50"
+                                                    placeholder="描述该版本的变更内容、更新要点或特定注意事项..."
                                                 />
                                             </div>
                                         </div>
