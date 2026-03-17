@@ -20,7 +20,7 @@ interface AnnotationTask {
   acceptProgress: number;
   creator: string;
   createdAt: string;
-  status: "草稿" | "已发布" | "进行中" | "已完成" | "已下线" | "已删除";
+  status: "待处理" | "已发布" | "进行中" | "已完成" | "已下线" | "已删除";
   totalBatches: number;
   claimedBatches: number;
   totalData: number;
@@ -39,6 +39,9 @@ const mockTasks: AnnotationTask[] = [
   { id: "AT-005", name: "视频内容审核标注", description: "短视频内容审核与分类标注", type: "视频类", projectType: "视频分类", annotationProgress: 0, qaProgress: 0, acceptProgress: 0, creator: "孙伟", createdAt: "2026-03-05", status: "已发布", totalBatches: 8, claimedBatches: 1, totalData: 1500, annotatedData: 0, totalQA: 0, annotatedQA: 0, totalAccept: 0, annotatedAccept: 0 },
   { id: "AT-006", name: "表格数据时序标注", description: "金融时序数据异常点标注", type: "表格类", projectType: "时间序列标注", annotationProgress: 50, qaProgress: 20, acceptProgress: 0, creator: "张明", createdAt: "2026-03-08", status: "进行中", totalBatches: 12, claimedBatches: 10, totalData: 6000, annotatedData: 3000, totalQA: 3000, annotatedQA: 600, totalAccept: 600, annotatedAccept: 0 },
   { id: "AT-007", name: "圖文跨模態對齊", description: "圖像與文本描述對齊標注", type: "跨模態類", projectType: "跨模態對齊", annotationProgress: 15, qaProgress: 0, acceptProgress: 0, creator: "李芳", createdAt: "2026-03-10", status: "已发布", totalBatches: 20, claimedBatches: 5, totalData: 10000, annotatedData: 1500, totalQA: 1500, annotatedQA: 0, totalAccept: 1500, annotatedAccept: 0 },
+  { id: "AT-008", name: "自动驾驶场景点云标注", description: "Lidar点云动态目标连续帧标注", type: "跨模态类", projectType: "3D点云标注", annotationProgress: 0, qaProgress: 0, acceptProgress: 0, creator: "张明", createdAt: "2026-03-15", status: "待处理", totalBatches: 0, claimedBatches: 0, totalData: 8000, annotatedData: 0, totalQA: 0, annotatedQA: 0, totalAccept: 0, annotatedAccept: 0 },
+  { id: "AT-009", name: "多语言语音合成评测", description: "英文/德语合成语音质量主观评价", type: "音频类", projectType: "语音质量评测", annotationProgress: 0, qaProgress: 0, acceptProgress: 0, creator: "李芳", createdAt: "2026-03-16", status: "待处理", totalBatches: 0, claimedBatches: 0, totalData: 1500, annotatedData: 0, totalQA: 0, annotatedQA: 0, totalAccept: 0, annotatedAccept: 0 },
+  { id: "AT-010", name: "结构化文档提取标注", description: "复杂发票与合同关键字段提取", type: "文本类", projectType: "内容分类与审核", annotationProgress: 0, qaProgress: 0, acceptProgress: 0, creator: "王强", createdAt: "2026-03-17", status: "待处理", totalBatches: 0, claimedBatches: 0, totalData: 3500, annotatedData: 0, totalQA: 0, annotatedQA: 0, totalAccept: 0, annotatedAccept: 0 },
 ];
 
 const typeColors: Record<string, string> = {
@@ -51,7 +54,7 @@ const typeColors: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  "草稿": "bg-muted text-muted-foreground",
+  "待处理": "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
   "已发布": "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
   "进行中": "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
   "已完成": "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300",
@@ -70,7 +73,6 @@ const DataAnnotationTasks = () => {
   const [pageSize, setPageSize] = useState(10);
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [detailTask, setDetailTask] = useState<AnnotationTask | null>(null);
-  const [actionMenu, setActionMenu] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<AnnotationTask | null>(null);
   const [deleteInput, setDeleteInput] = useState("");
   const [tasks, setTasks] = useState(mockTasks);
@@ -91,13 +93,11 @@ const DataAnnotationTasks = () => {
   const handleOnline = (task: AnnotationTask) => {
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: "已发布" as const } : t));
     toast.success(`任务「${task.name}」已上线`);
-    setActionMenu(null);
   };
 
   const handleOffline = (task: AnnotationTask) => {
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: "已下线" as const } : t));
     toast.success(`任务「${task.name}」已下线`);
-    setActionMenu(null);
   };
 
   const handleClone = (task: AnnotationTask) => {
@@ -105,14 +105,13 @@ const DataAnnotationTasks = () => {
       ...task,
       id: `AT-${String(tasks.length + 1).padStart(3, "0")}`,
       name: `${task.name} (副本)`,
-      status: "草稿",
+      status: "待处理",
       annotationProgress: 0, qaProgress: 0, acceptProgress: 0,
       annotatedData: 0, annotatedQA: 0, annotatedAccept: 0,
       createdAt: new Date().toISOString().split("T")[0],
     };
     setTasks(prev => [cloned, ...prev]);
     toast.success(`已克隆任务配置，新任务「${cloned.name}」已创建`);
-    setActionMenu(null);
   };
 
   const handleDelete = () => {
@@ -125,7 +124,6 @@ const DataAnnotationTasks = () => {
     toast.success(`任务「${deleteConfirm.name}」已删除，所有标注批次已销毁`);
     setDeleteConfirm(null);
     setDeleteInput("");
-    setActionMenu(null);
   };
 
   if (showCreateWizard) {
@@ -180,7 +178,7 @@ const DataAnnotationTasks = () => {
         </select>
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 text-sm border rounded-lg bg-card">
           <option>全部状态</option>
-          {["草稿", "已发布", "进行中", "已完成", "已下线"].map(s => <option key={s}>{s}</option>)}
+          {["待处理", "已发布", "进行中", "已完成", "已下线"].map(s => <option key={s}>{s}</option>)}
         </select>
         <button onClick={() => setShowFilters(!showFilters)} className={`px-3 py-2 text-sm border rounded-lg flex items-center gap-1 ${showFilters ? "bg-primary/10 border-primary text-primary" : "bg-card text-muted-foreground hover:text-foreground"}`}>
           <Filter className="w-4 h-4" /> 高级筛选
@@ -262,27 +260,26 @@ const DataAnnotationTasks = () => {
                 </td>
                 <td className="py-3 px-4">
                   <span className={`status-tag ${task.status === "已完成" ? "status-tag-success" :
-                    task.status === "进行中" ? "status-tag-info" : "status-tag-warning"
+                    task.status === "进行中" ? "status-tag-info" :
+                      task.status === "已发布" ? "status-tag-info bg-blue-50 text-blue-600 border-blue-100" :
+                        "status-tag-warning bg-slate-100 text-slate-500 border-slate-200"
                     }`}>{task.status}</span>
                 </td>
                 <td className="py-3 px-4 text-muted-foreground">{task.creator}</td>
                 <td className="py-3 px-4 text-muted-foreground text-xs">{task.createdAt}</td>
                 <td className="py-3 px-4">
-                  <div className="flex items-center justify-center gap-1 relative">
-                    <button onClick={() => setDetailTask(task)} className="p-1 rounded hover:bg-muted/50" title="标注详情"><Eye className="w-4 h-4 text-muted-foreground" /></button>
-                    <button onClick={() => setActionMenu(actionMenu === task.id ? null : task.id)} className="p-1 rounded hover:bg-muted/50"><MoreHorizontal className="w-4 h-4 text-muted-foreground" /></button>
-                    {actionMenu === task.id && (
-                      <div className="absolute right-0 top-8 z-50 bg-card border rounded-lg shadow-lg py-1 min-w-[140px]">
-                        {task.status === "已下线" && (
-                          <button onClick={() => handleOnline(task)} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 text-left"><ArrowUpCircle className="w-4 h-4" /> 任务上线</button>
-                        )}
-                        {(task.status === "进行中" || task.status === "已发布") && (
-                          <button onClick={() => handleOffline(task)} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 text-left"><ArrowDownCircle className="w-4 h-4" /> 任务下线</button>
-                        )}
-                        <button onClick={() => handleClone(task)} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 text-left"><Copy className="w-4 h-4" /> 克隆配置</button>
-                        <button onClick={() => { setDeleteConfirm(task); setActionMenu(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 text-left text-destructive"><Trash2 className="w-4 h-4" /> 删除任务</button>
-                      </div>
+                  <div className="flex items-center justify-center gap-3">
+                    {task.status === "待处理" && (
+                      <button onClick={() => setShowCreateWizard(true)} className="text-[11px] font-bold text-primary hover:text-primary/80 transition-colors">编辑</button>
                     )}
+                    {task.status === "已下线" && (
+                      <button onClick={() => handleOnline(task)} className="text-[11px] font-bold text-slate-600 hover:text-primary transition-colors">上线</button>
+                    )}
+                    {(task.status === "进行中" || task.status === "已发布") && (
+                      <button onClick={() => handleOffline(task)} className="text-[11px] font-bold text-slate-600 hover:text-orange-600 transition-colors">下线</button>
+                    )}
+                    <button onClick={() => handleClone(task)} className="text-[11px] font-bold text-slate-600 hover:text-primary transition-colors">克隆</button>
+                    <button onClick={() => setDeleteConfirm(task)} className="text-[11px] font-bold text-slate-400 hover:text-destructive transition-colors">删除</button>
                   </div>
                 </td>
               </tr>
@@ -323,8 +320,6 @@ const DataAnnotationTasks = () => {
         </div>
       )}
 
-      {/* 关闭action menu的点击遮罩 */}
-      {actionMenu && <div className="fixed inset-0 z-40" onClick={() => setActionMenu(null)} />}
     </div>
   );
 };

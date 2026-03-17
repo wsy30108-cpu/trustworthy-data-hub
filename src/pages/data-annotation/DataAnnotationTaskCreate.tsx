@@ -1,8 +1,9 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { marked } from "marked";
 import {
   ArrowLeft, Check, ChevronRight, Plus, X, Trash2, Upload, Eye, Info, Search,
   AlertTriangle, FileText, Settings, Users, Shield, BookOpen, Zap, ChevronDown, ChevronUp,
-  Database, Type, Image, Mic, Video, Table2, Layers, Loader2
+  Database, Type, Image, Mic, Video, Table2, Layers, Loader2, Save
 } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
@@ -125,12 +126,21 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   const [allowAppend, setAllowAppend] = useState(true);
   const [crossAnnotation, setCrossAnnotation] = useState(false);
   const [crossMax, setCrossMax] = useState(2);
-  const [judgeExpert, setJudgeExpert] = useState("张明");
+  const [judgeExperts, setJudgeExperts] = useState<string[]>(["张明"]);
+  const [activeSearchJudge, setActiveSearchJudge] = useState(false);
 
   // Step 4: Spec
   const [specMode, setSpecMode] = useState<"text" | "file" | "none">("none");
   const [specText, setSpecText] = useState("");
+  const [specTab, setSpecTab] = useState<"edit" | "preview">("edit");
   const [specForceRead, setSpecForceRead] = useState(false);
+  const parsedSpec = useMemo(() => {
+    try {
+      return marked.parse(specText) as string;
+    } catch (e) {
+      return specText;
+    }
+  }, [specText]);
 
   // Step 5: generated batches preview
   const [generatedBatches, setGeneratedBatches] = useState<{ id: string; size: number }[]>([]);
@@ -140,6 +150,19 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   const [activeSearchGroupId, setActiveSearchGroupId] = useState<string | null>(null);
   const [activeSearchQaNodeIdx, setActiveSearchQaNodeIdx] = useState<number | null>(null);
   const [activeSearchAcceptNodeIdx, setActiveSearchAcceptNodeIdx] = useState<number | null>(null);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+
+  const handleSaveDraft = async () => {
+    if (!taskName) {
+      toast.error("请先填写任务名称再保存草稿");
+      return;
+    }
+    setIsSavingDraft(true);
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    setIsSavingDraft(false);
+    toast.success("任务草稿已成功保存至云端");
+  };
   const [searchText, setSearchText] = useState("");
 
   // Handle outside click for personnel search
@@ -149,6 +172,7 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
         setActiveSearchGroupId(null);
         setActiveSearchQaNodeIdx(null);
         setActiveSearchAcceptNodeIdx(null);
+        setActiveSearchJudge(false);
         setSearchText("");
       }
     };
@@ -315,11 +339,11 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
       <main className="flex-1 overflow-hidden">
         <div className="container max-w-[1440px] h-full flex px-6 py-8 gap-8 overflow-hidden">
           {/* Left: Step Content */}
-          <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar">
-            <div className="max-w-[1000px] pb-32">
+          <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar flex flex-col">
+            <div className={`max-w-[1000px] flex flex-col ${step === 1 || step === 4 ? "flex-1" : "pb-32"}`}>
 
               {/* Step content */}
-              <div className="max-w-6xl">
+              <div className={`max-w-6xl flex flex-col ${step === 1 || step === 4 ? "flex-1" : ""}`}>
                 {/* Step 0: Basic Info */}
                 {step === 0 && (
                   <div className="space-y-6">
@@ -359,8 +383,8 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
 
                 {/* Step 1: Dataset */}
                 {step === 1 && (
-                  <div className="space-y-6">
-                    <div className="rounded-lg border bg-card p-6 space-y-4">
+                  <div className="h-full flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="flex-1 rounded-lg border bg-card p-6 space-y-4 flex flex-col min-h-0 pb-10">
                       <h3 className="font-medium flex items-center gap-2"><Database className="w-4 h-4 text-primary" /> 数据集配置</h3>
                       <p className="text-xs text-muted-foreground">选择与项目类型匹配的数据集，支持选择数据集的一个版本进行标注</p>
 
@@ -386,7 +410,7 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         </div>
                       </div>
-                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                      <div className="flex-1 space-y-2 overflow-y-auto pr-1 -mr-1 custom-scrollbar min-h-0">
                         {filteredDatasets.map(ds => {
                           const selected = selectedDatasets.find(s => s.id === ds.id);
                           return (
@@ -444,9 +468,9 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
 
                 {/* Step 2: Tool */}
                 {step === 2 && (
-                  <div className="flex gap-6 min-h-[600px]">
+                  <div className="bg-card border rounded-2xl shadow-sm p-6 flex gap-8 min-h-[600px] animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {/* Sidebar */}
-                    <div className="w-64 flex-shrink-0 flex flex-col gap-4 border-r pr-4">
+                    <div className="w-64 flex-shrink-0 flex flex-col gap-4 border-r pr-6">
                       <div className="relative">
                         <input
                           value={toolSearch}
@@ -562,8 +586,8 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                           </div>
                         </>
                       ) : (
-                        <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-right-4 duration-300">
-                          <div className="mb-6 flex items-center justify-between border-b pb-4">
+                        <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
+                          <div className="mb-4 flex items-center justify-between border-b pb-4">
                             <div className="flex items-center gap-4">
                               <button onClick={() => setSelectedTool(null)} className="p-2 hover:bg-muted rounded-full transition-colors">
                                 <ArrowLeft className="w-5 h-5 text-muted-foreground" />
@@ -573,12 +597,9 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                                 <p className="text-xs text-muted-foreground">工具 ID: {selectedTool} · 分类: {mockTools.find(t => t.id === selectedTool)?.type}</p>
                               </div>
                             </div>
-                            <button onClick={() => setStep(3)} className="px-8 py-2.5 bg-primary text-primary-foreground rounded-xl font-bold text-sm hover:shadow-lg active:scale-95 transition-all">
-                              完成配置并继续
-                            </button>
                           </div>
 
-                          <div className="flex-1 overflow-y-auto pr-4 px-2 pt-6 space-y-12 pb-10 custom-scrollbar">
+                          <div className="flex-1 overflow-y-auto px-1 pt-2 space-y-12 pb-10 custom-scrollbar">
                             {(() => {
                               const tool = mockTools.find(t => t.id === selectedTool);
                               if (!tool || !tool.objects) return null;
@@ -1470,52 +1491,186 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                     </div>
 
                     {/* Manager & advanced */}
-                    <div className="rounded-lg border bg-card p-6 space-y-4">
-                      <h3 className="font-medium flex items-center gap-2"><Settings className="w-4 h-4 text-primary" /> 高级配置</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center justify-between p-3 rounded border">
-                          <span className="text-sm">标注批次最大跳过条数</span>
-                          <input type="number" value={maxSkip} onChange={e => setMaxSkip(Number(e.target.value))} className="w-16 px-2 py-1 text-sm border rounded bg-background" />
-                        </div>
-                        <div className="flex items-center justify-between p-3 rounded border">
-                          <span className="text-sm">超时回收</span>
-                          <div className="flex items-center gap-2">
-                            <Switch checked={timeoutEnabled} onCheckedChange={setTimeoutEnabled} />
-                            {timeoutEnabled && <input type="number" value={timeoutHours} onChange={e => setTimeoutHours(Number(e.target.value))} className="w-16 px-2 py-1 text-sm border rounded bg-background" />}
-                            {timeoutEnabled && <span className="text-xs text-muted-foreground">小时</span>}
+                    {/* Advanced config */}
+                    <div className="rounded-lg border bg-card p-6 space-y-6">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-2">
+                        <h3 className="font-bold flex items-center gap-2 text-slate-800">
+                          <Settings className="w-5 h-5 text-primary" /> 高级配置
+                        </h3>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold bg-slate-100 px-2 py-0.5 rounded-full">全局任务策略</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="space-y-6">
+                          {/* Group: Flow */}
+                          <div className="p-4 bg-slate-50/30 border border-slate-100 rounded-2xl space-y-4">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Database className="w-4 h-4 text-blue-500" />
+                              <span className="text-xs font-bold text-slate-700">任务流转建议</span>
+                            </div>
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm">
+                                <span className="text-xs font-medium text-slate-600">标注最大领取条数</span>
+                                <div className="flex items-center gap-2">
+                                  <input type="number" value={maxSkip} onChange={e => setMaxSkip(Number(e.target.value))}
+                                    className="w-16 h-8 px-2 text-xs border border-slate-200 rounded-lg bg-white text-center font-bold focus:ring-2 focus:ring-primary/20 outline-none" min={1} />
+                                  <span className="text-[10px] text-slate-400 font-bold">条</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm">
+                                <span className="text-xs font-medium text-slate-600">允许标注员释放批次</span>
+                                <Switch checked={allowRelease} onCheckedChange={setAllowRelease} />
+                              </div>
+                              <div className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm">
+                                <span className="text-xs font-medium text-slate-600">允许追加标注数据集</span>
+                                <Switch checked={allowAppend} onCheckedChange={setAllowAppend} />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Group: Quality */}
+                          <div className="p-4 bg-slate-50/30 border border-slate-100 rounded-2xl space-y-4">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Shield className="w-4 h-4 text-amber-500" />
+                              <span className="text-xs font-bold text-slate-700">质量与回收机制</span>
+                            </div>
+                            <div className="space-y-3">
+                              <div className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-medium text-slate-600">超时自动回收</span>
+                                  <Switch checked={timeoutEnabled} onCheckedChange={setTimeoutEnabled} />
+                                </div>
+                                {timeoutEnabled && (
+                                  <div className="flex items-center justify-between pt-2 border-t border-slate-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase">自动回收时限</span>
+                                    <div className="flex items-center gap-2">
+                                      <input type="number" value={timeoutHours} onChange={e => setTimeoutHours(Number(e.target.value))}
+                                        className="w-16 h-8 px-2 text-xs border border-slate-200 rounded-lg text-center font-bold focus:ring-2 focus:ring-primary/20 outline-none" min={1} />
+                                      <span className="text-[10px] text-slate-400 font-bold">Hours</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-medium text-slate-600">多人交叉标注</span>
+                                  <Switch checked={crossAnnotation} onCheckedChange={setCrossAnnotation} />
+                                </div>
+                                {crossAnnotation && (
+                                  <div className="flex items-center justify-between pt-2 border-t border-slate-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase">每条数据标注人数</span>
+                                    <div className="flex items-center gap-2">
+                                      <input type="number" value={crossMax} onChange={e => setCrossMax(Number(e.target.value))}
+                                        className="w-16 h-8 px-2 text-xs border border-slate-200 rounded-lg text-center font-bold focus:ring-2 focus:ring-primary/20 outline-none" min={2} />
+                                      <span className="text-[10px] text-slate-400 font-bold">人</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between p-3 rounded border">
-                          <span className="text-sm">允许标注人员释放批次</span>
-                          <Switch checked={allowRelease} onCheckedChange={setAllowRelease} />
-                        </div>
-                        <div className="flex items-center justify-between p-3 rounded border">
-                          <span className="text-sm">允许追加标注数据集</span>
-                          <Switch checked={allowAppend} onCheckedChange={setAllowAppend} />
-                        </div>
-                        <div className="flex items-center justify-between p-3 rounded border">
-                          <span className="text-sm">多人交叉标注</span>
-                          <div className="flex items-center gap-2">
-                            <Switch checked={crossAnnotation} onCheckedChange={setCrossAnnotation} />
-                            {crossAnnotation && <input type="number" value={crossMax} onChange={e => setCrossMax(Number(e.target.value))} className="w-12 px-2 py-1 text-sm border rounded bg-background" min={2} />}
-                            {crossAnnotation && <span className="text-xs text-muted-foreground">人</span>}
+
+                        {/* Right: Experts */}
+                        <div className="p-4 bg-slate-50/30 border border-slate-100 rounded-2xl flex flex-col h-full">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Users className="w-4 h-4 text-primary" />
+                            <span className="text-xs font-bold text-slate-700">判定专家配置</span>
                           </div>
-                        </div>
-                        <div className="flex items-center justify-between p-3 rounded border">
-                          <span className="text-sm">判定专家</span>
-                          <select value={judgeExpert} onChange={e => setJudgeExpert(e.target.value)} className="px-2 py-1 text-sm border rounded bg-background">
-                            {mockUsers.map(m => <option key={m.account} value={m.name}>{m.name}</option>)}
-                          </select>
+                          <div className="flex-1 bg-white border border-slate-100 rounded-xl p-4 shadow-sm space-y-4">
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-bold text-slate-400 block uppercase tracking-tighter">判定专家团队（{judgeExperts.length}）</label>
+                              <div className="flex flex-wrap gap-2 min-h-[40px] mb-2">
+                                {judgeExperts.map((p, pi) => (
+                                  <div key={pi} className="group/tag inline-flex items-center gap-2 px-2 py-1.5 bg-slate-50 border border-slate-100 rounded-xl hover:bg-white hover:border-primary/20 hover:shadow-sm transition-all duration-200">
+                                    <div className="w-5 h-5 rounded-full bg-white border border-slate-100 flex items-center justify-center text-[10px] font-bold text-primary shrink-0 shadow-inner">
+                                      {p.slice(0, 1)}
+                                    </div>
+                                    <span className="text-xs font-bold text-slate-700 leading-none">{p}</span>
+                                    <button
+                                      onClick={() => setJudgeExperts(prev => prev.filter((_, i) => i !== pi))}
+                                      className="ml-1 w-4 h-4 rounded-lg flex items-center justify-center opacity-0 group-hover/tag:opacity-100 hover:bg-rose-500 hover:text-white text-slate-400 transition-all duration-200"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="relative w-full search-adder-container">
+                                <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+                                  <Search className="w-3.5 h-3.5 text-muted-foreground" />
+                                  <input
+                                    type="text"
+                                    value={activeSearchJudge ? searchText : ""}
+                                    onChange={e => setSearchText(e.target.value)}
+                                    onFocus={() => {
+                                      setActiveSearchJudge(true);
+                                      setActiveSearchGroupId(null);
+                                      setActiveSearchQaNodeIdx(null);
+                                      setActiveSearchAcceptNodeIdx(null);
+                                      setSearchText("");
+                                    }}
+                                    className="flex-1 bg-transparent border-none p-0 focus:ring-0 text-xs placeholder:text-slate-300"
+                                    placeholder="搜索姓名或账号添加判定专家..."
+                                  />
+                                </div>
+
+                                {activeSearchJudge && (
+                                  <div className="absolute top-full left-0 right-0 z-[110] mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-40 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                                    {(() => {
+                                      const filtered = mockUsers.filter(u =>
+                                        (u.name.toLowerCase().includes(searchText.toLowerCase()) ||
+                                          u.account.toLowerCase().includes(searchText.toLowerCase())) &&
+                                        !judgeExperts.includes(u.name)
+                                      );
+
+                                      if (filtered.length === 0) {
+                                        return (
+                                          <div className="p-4 text-center">
+                                            <p className="text-[10px] text-muted-foreground">未找到匹配专家</p>
+                                          </div>
+                                        );
+                                      }
+
+                                      return (
+                                        <div className="py-1">
+                                          {filtered.map(user => (
+                                            <button
+                                              key={user.account}
+                                              onClick={() => {
+                                                setJudgeExperts(prev => [...prev, user.name]);
+                                                setSearchText("");
+                                                setActiveSearchJudge(false);
+                                              }}
+                                              className="w-full text-left px-4 py-2 flex items-center gap-3 hover:bg-primary/5 transition-colors border-b border-slate-50 last:border-0 group/item"
+                                            >
+                                              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                                                {user.name.slice(0, 1)}
+                                              </div>
+                                              <div className="flex flex-col">
+                                                <span className="text-[11px] font-bold text-slate-700">{user.name}</span>
+                                                <span className="text-[9px] text-muted-foreground font-mono">{user.account}</span>
+                                              </div>
+                                              <Plus className="w-4 h-4 text-primary ml-auto opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                                            </button>
+                                          ))}
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Step 4: Spec */}
                 {step === 4 && (
-                  <div className="space-y-6">
-                    <div className="rounded-lg border bg-card p-6 space-y-4">
+                  <div className="h-full flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="flex-1 rounded-lg border bg-card p-6 space-y-4 flex flex-col min-h-0 pb-10">
                       <h3 className="font-medium flex items-center gap-2"><BookOpen className="w-4 h-4 text-primary" /> 标注规范配置</h3>
                       <p className="text-xs text-muted-foreground">单任务仅允许选择一种规范方式</p>
                       <div className="flex gap-2">
@@ -1527,10 +1682,47 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                         ))}
                       </div>
                       {specMode === "text" && (
-                        <div>
-                          <label className="text-xs text-muted-foreground mb-1 block">标注规范（支持 Markdown / HTML）</label>
-                          <textarea value={specText} onChange={e => setSpecText(e.target.value)} placeholder="请输入标注规范说明..." rows={8}
-                            className="w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none font-mono" />
+                        <div className="flex-1 flex flex-col min-h-0 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">标注规范（支持 Markdown / HTML）</label>
+                            <div className="flex bg-slate-100 p-1 rounded-lg">
+                              <button
+                                onClick={() => setSpecTab("edit")}
+                                className={`px-4 py-1.5 text-[10px] font-bold rounded-md transition-all ${specTab === "edit" ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
+                              >
+                                编辑
+                              </button>
+                              <button
+                                onClick={() => setSpecTab("preview")}
+                                className={`px-4 py-1.5 text-[10px] font-bold rounded-md transition-all ${specTab === "preview" ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
+                              >
+                                预览
+                              </button>
+                            </div>
+                          </div>
+
+                          {specTab === "edit" ? (
+                            <textarea
+                              value={specText}
+                              onChange={e => setSpecText(e.target.value)}
+                              placeholder="请输入通过 Markdown 或 HTML 编写的标注规范说明..."
+                              className="flex-1 w-full px-4 py-3 text-sm border border-slate-200 rounded-2xl bg-slate-50/30 focus:bg-white focus:outline-none focus:ring-4 focus:ring-primary/5 transition-all resize-none font-mono leading-relaxed"
+                            />
+                          ) : (
+                            <div className="flex-1 w-full px-6 py-6 border border-slate-200 rounded-2xl bg-white overflow-y-auto custom-scrollbar shadow-inner">
+                              {specText ? (
+                                <div
+                                  className="prose prose-sm max-w-none prose-slate prose-headings:text-slate-800 prose-headings:font-bold prose-p:text-slate-600 prose-strong:text-slate-700 prose-ul:list-disc prose-li:text-slate-600"
+                                  dangerouslySetInnerHTML={{ __html: parsedSpec }}
+                                />
+                              ) : (
+                                <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-3">
+                                  <Eye className="w-10 h-10 opacity-20" />
+                                  <p className="text-xs font-medium">暂无预览内容，请先在编辑视图输入</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
                       {specMode === "file" && (
@@ -1711,11 +1903,11 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
               </div>
 
               {/* Tips Card */}
-              <div className="flex-1 bg-slate-900 rounded-2xl p-6 text-slate-300 relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-primary/20 rounded-full blur-2xl -mr-12 -mt-12 transition-transform group-hover:scale-150 duration-700" />
+              <div className="bg-white rounded-2xl p-6 text-slate-600 border border-slate-200 shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-2xl -mr-12 -mt-12 transition-transform group-hover:scale-150 duration-700" />
                 <BookOpen className="w-6 h-6 text-primary mb-4" />
-                <h4 className="text-sm font-bold text-white mb-2">配置小贴士</h4>
-                <p className="text-xs leading-relaxed opacity-80">
+                <h4 className="text-sm font-bold text-slate-900 mb-2">配置小贴士</h4>
+                <p className="text-xs leading-relaxed">
                   {step === 0 ? "项目类型选择后不可更改，请根据数据特点（如文本、图像）准确选择。" :
                     step === 1 ? "选择数据结构清晰、标注对象明确且适配标注工具的数据集版本。" :
                       step === 2 ? "复杂的标注任务可以配置多级标签组，支持专家模式下的动态字段联动。" :
@@ -1738,7 +1930,16 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
               {step === 0 ? "取消创建" : "返回上一步"}
             </button>
             <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground italic">
-              {/* Sync status removed per user request */}
+              {step > 1 && (
+                <button
+                  onClick={handleSaveDraft}
+                  disabled={isSavingDraft}
+                  className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-500 hover:text-primary hover:bg-primary/5 rounded-lg border border-transparent hover:border-primary/10 transition-all disabled:opacity-50"
+                >
+                  {isSavingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>{isSavingDraft ? "正在保存..." : "保存草稿"}</span>
+                </button>
+              )}
             </div>
           </div>
 
