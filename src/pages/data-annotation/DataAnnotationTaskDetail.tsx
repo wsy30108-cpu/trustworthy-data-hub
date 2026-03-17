@@ -41,7 +41,14 @@ const mockAcceptResults = [
 ];
 
 interface Props {
-  task: { id: string; name: string; type: string; status: string; creator: string; createdAt: string; totalData: number; annotatedData: number; totalBatches: number; claimedBatches: number; annotationProgress: number; qaProgress: number; acceptProgress: number };
+  task: {
+    id: string; name: string; type: string; status: string; creator: string; createdAt: string;
+    totalData: number; annotatedData: number;
+    totalBatches: number; claimedBatches: number;
+    annotationProgress: number; qaProgress: number; acceptProgress: number;
+    totalQA: number; annotatedQA: number;
+    totalAccept: number; annotatedAccept: number;
+  };
   onBack: () => void;
 }
 
@@ -68,7 +75,7 @@ const DataAnnotationTaskDetail = ({ task, onBack }: Props) => {
   const [archiveDataset, setArchiveDataset] = useState("");
   const [archiveVersion, setArchiveVersion] = useState("新建版本");
 
-  const members = ["张明","李芳","王强","赵丽","孙伟","周杰","刘洋"];
+  const members = ["张明", "李芳", "王强", "赵丽", "孙伟", "周杰", "刘洋"];
 
   const filteredBatches = batches.filter(b => {
     if (stageFilter !== "全部" && b.stage !== stageFilter) return false;
@@ -110,9 +117,9 @@ const DataAnnotationTaskDetail = ({ task, onBack }: Props) => {
 
   const overviewStats = [
     { label: "任务领取率", value: `${Math.round(task.claimedBatches / task.totalBatches * 100)}%`, icon: Users },
-    { label: "标注完成率", value: `${task.annotationProgress}%`, icon: BarChart3 },
-    { label: "质检合格率", value: `${task.qaProgress}%`, icon: Percent },
-    { label: "验收合格率", value: `${task.acceptProgress}%`, icon: CheckCircle2 },
+    { label: "标注进度", value: `${task.annotatedData.toLocaleString()} / ${task.totalData.toLocaleString()}`, icon: BarChart3 },
+    { label: "质检进度", value: `${task.annotatedQA.toLocaleString()} / ${task.totalQA.toLocaleString()}`, icon: Percent },
+    { label: "验收进度", value: `${task.annotatedAccept.toLocaleString()} / ${task.totalAccept.toLocaleString()}`, icon: CheckCircle2 },
   ];
 
   return (
@@ -155,10 +162,10 @@ const DataAnnotationTaskDetail = ({ task, onBack }: Props) => {
               <input value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="搜索批次ID..." className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary/20" />
             </div>
             <select value={stageFilter} onChange={e => setStageFilter(e.target.value)} className="px-3 py-2 text-sm border rounded-lg bg-card">
-              <option>全部</option>{["标注","质检","验收","判定","已完成"].map(s => <option key={s}>{s}</option>)}
+              <option>全部</option>{["标注", "质检", "验收", "判定", "已完成"].map(s => <option key={s}>{s}</option>)}
             </select>
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 text-sm border rounded-lg bg-card">
-              <option>全部</option>{["待处理","处理中","已完成","已废弃"].map(s => <option key={s}>{s}</option>)}
+              <option>全部</option>{["待处理", "处理中", "已完成", "已废弃"].map(s => <option key={s}>{s}</option>)}
             </select>
             <button onClick={handleBatchDiscard} className="px-3 py-2 text-sm border border-destructive/30 text-destructive rounded-lg hover:bg-destructive/10">批量废弃未处理</button>
           </div>

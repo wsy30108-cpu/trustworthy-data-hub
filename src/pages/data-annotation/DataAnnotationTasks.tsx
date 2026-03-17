@@ -25,16 +25,20 @@ interface AnnotationTask {
   claimedBatches: number;
   totalData: number;
   annotatedData: number;
+  totalQA: number;
+  annotatedQA: number;
+  totalAccept: number;
+  annotatedAccept: number;
 }
 
 const mockTasks: AnnotationTask[] = [
-  { id: "AT-001", name: "金融文本情感标注", description: "对金融新闻和研报进行情感极性标注", type: "文本类", projectType: "内容分类与审核", annotationProgress: 78, qaProgress: 65, acceptProgress: 45, creator: "张明", createdAt: "2026-02-20", status: "进行中", totalBatches: 25, claimedBatches: 22, totalData: 12500, annotatedData: 9750 },
-  { id: "AT-002", name: "医疗图像分类标注", description: "CT/MRI影像分类与病灶区域标注", type: "图像类", projectType: "图像分类", annotationProgress: 100, qaProgress: 90, acceptProgress: 80, creator: "李芳", createdAt: "2026-02-15", status: "进行中", totalBatches: 10, claimedBatches: 10, totalData: 5000, annotatedData: 5000 },
-  { id: "AT-003", name: "客服对话意图标注", description: "客服对话文本意图分类标注", type: "文本类", projectType: "内容分类与审核", annotationProgress: 100, qaProgress: 100, acceptProgress: 100, creator: "王强", createdAt: "2026-01-28", status: "已完成", totalBatches: 40, claimedBatches: 40, totalData: 20000, annotatedData: 20000 },
-  { id: "AT-004", name: "语音转写质检", description: "语音转写结果校正与质检", type: "音频类", projectType: "音频转写", annotationProgress: 35, qaProgress: 0, acceptProgress: 0, creator: "赵丽", createdAt: "2026-03-01", status: "进行中", totalBatches: 15, claimedBatches: 8, totalData: 3000, annotatedData: 1050 },
-  { id: "AT-005", name: "视频内容审核标注", description: "短视频内容审核与分类标注", type: "视频类", projectType: "视频分类", annotationProgress: 0, qaProgress: 0, acceptProgress: 0, creator: "孙伟", createdAt: "2026-03-05", status: "已发布", totalBatches: 8, claimedBatches: 1, totalData: 1500, annotatedData: 0 },
-  { id: "AT-006", name: "表格数据时序标注", description: "金融时序数据异常点标注", type: "表格类", projectType: "时间序列标注", annotationProgress: 50, qaProgress: 20, acceptProgress: 0, creator: "张明", createdAt: "2026-03-08", status: "进行中", totalBatches: 12, claimedBatches: 10, totalData: 6000, annotatedData: 3000 },
-  { id: "AT-007", name: "图文跨模态对齐", description: "图像与文本描述对齐标注", type: "跨模态类", projectType: "跨模态对齐", annotationProgress: 15, qaProgress: 0, acceptProgress: 0, creator: "李芳", createdAt: "2026-03-10", status: "已发布", totalBatches: 20, claimedBatches: 5, totalData: 10000, annotatedData: 1500 },
+  { id: "AT-001", name: "金融文本情感标注", description: "对金融新闻和研报进行情感极性标注", type: "文本类", projectType: "内容分类与审核", annotationProgress: 78, qaProgress: 65, acceptProgress: 45, creator: "张明", createdAt: "2026-02-20", status: "进行中", totalBatches: 25, claimedBatches: 22, totalData: 12500, annotatedData: 9750, totalQA: 12500, annotatedQA: 8125, totalAccept: 12500, annotatedAccept: 5625 },
+  { id: "AT-002", name: "医疗图像分类标注", description: "CT/MRI影像分类与病灶区域标注", type: "图像类", projectType: "图像分类", annotationProgress: 100, qaProgress: 90, acceptProgress: 80, creator: "李芳", createdAt: "2026-02-15", status: "进行中", totalBatches: 10, claimedBatches: 10, totalData: 5000, annotatedData: 5000, totalQA: 5000, annotatedQA: 4500, totalAccept: 5000, annotatedAccept: 4000 },
+  { id: "AT-003", name: "客服对话意图标注", description: "客服对话文本意图分类标注", type: "文本类", projectType: "内容分类与审核", annotationProgress: 100, qaProgress: 100, acceptProgress: 100, creator: "王强", createdAt: "2026-01-28", status: "已完成", totalBatches: 40, claimedBatches: 40, totalData: 20000, annotatedData: 20000, totalQA: 20000, annotatedQA: 20000, totalAccept: 20000, annotatedAccept: 20000 },
+  { id: "AT-004", name: "语音转写质检", description: "语音转写结果校正与质检", type: "音频类", projectType: "音频转写", annotationProgress: 35, qaProgress: 0, acceptProgress: 0, creator: "赵丽", createdAt: "2026-03-01", status: "进行中", totalBatches: 15, claimedBatches: 8, totalData: 3000, annotatedData: 1050, totalQA: 1050, annotatedQA: 0, totalAccept: 1050, annotatedAccept: 0 },
+  { id: "AT-005", name: "视频内容审核标注", description: "短视频内容审核与分类标注", type: "视频类", projectType: "视频分类", annotationProgress: 0, qaProgress: 0, acceptProgress: 0, creator: "孙伟", createdAt: "2026-03-05", status: "已发布", totalBatches: 8, claimedBatches: 1, totalData: 1500, annotatedData: 0, totalQA: 0, annotatedQA: 0, totalAccept: 0, annotatedAccept: 0 },
+  { id: "AT-006", name: "表格数据时序标注", description: "金融时序数据异常点标注", type: "表格类", projectType: "时间序列标注", annotationProgress: 50, qaProgress: 20, acceptProgress: 0, creator: "张明", createdAt: "2026-03-08", status: "进行中", totalBatches: 12, claimedBatches: 10, totalData: 6000, annotatedData: 3000, totalQA: 3000, annotatedQA: 600, totalAccept: 600, annotatedAccept: 0 },
+  { id: "AT-007", name: "圖文跨模態對齊", description: "圖像與文本描述對齊標注", type: "跨模態類", projectType: "跨模態對齊", annotationProgress: 15, qaProgress: 0, acceptProgress: 0, creator: "李芳", createdAt: "2026-03-10", status: "已发布", totalBatches: 20, claimedBatches: 5, totalData: 10000, annotatedData: 1500, totalQA: 1500, annotatedQA: 0, totalAccept: 1500, annotatedAccept: 0 },
 ];
 
 const typeColors: Record<string, string> = {
@@ -103,7 +107,7 @@ const DataAnnotationTasks = () => {
       name: `${task.name} (副本)`,
       status: "草稿",
       annotationProgress: 0, qaProgress: 0, acceptProgress: 0,
-      claimedBatches: 0, annotatedData: 0,
+      annotatedData: 0, annotatedQA: 0, annotatedAccept: 0,
       createdAt: new Date().toISOString().split("T")[0],
     };
     setTasks(prev => [cloned, ...prev]);
@@ -224,26 +228,41 @@ const DataAnnotationTasks = () => {
                 </td>
                 <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColors[task.type] || "bg-muted text-muted-foreground"}`}>{task.type}</span></td>
                 <td className="py-3 px-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden"><div className="h-full bg-primary rounded-full" style={{ width: `${task.annotationProgress}%` }} /></div>
-                    <span className="text-xs text-muted-foreground">{task.annotationProgress}%</span>
+                  <div className="flex flex-col gap-1 min-w-[100px]">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-foreground font-medium">{task.annotatedData.toLocaleString()}</span>
+                      <span className="text-muted-foreground">/ {task.totalData.toLocaleString()}</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${task.annotationProgress}%` }} />
+                    </div>
                   </div>
                 </td>
                 <td className="py-3 px-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden"><div className="h-full bg-amber-500 rounded-full" style={{ width: `${task.qaProgress}%` }} /></div>
-                    <span className="text-xs text-muted-foreground">{task.qaProgress}%</span>
+                  <div className="flex flex-col gap-1 min-w-[100px]">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-foreground font-medium">{task.annotatedQA.toLocaleString()}</span>
+                      <span className="text-muted-foreground">/ {task.totalQA.toLocaleString()}</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-amber-500 rounded-full transition-all duration-500" style={{ width: `${task.qaProgress}%` }} />
+                    </div>
                   </div>
                 </td>
                 <td className="py-3 px-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden"><div className="h-full bg-emerald-500 rounded-full" style={{ width: `${task.acceptProgress}%` }} /></div>
-                    <span className="text-xs text-muted-foreground">{task.acceptProgress}%</span>
+                  <div className="flex flex-col gap-1 min-w-[100px]">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-foreground font-medium">{task.annotatedAccept.toLocaleString()}</span>
+                      <span className="text-muted-foreground">/ {task.totalAccept.toLocaleString()}</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${task.acceptProgress}%` }} />
+                    </div>
                   </div>
                 </td>
                 <td className="py-3 px-4">
                   <span className={`status-tag ${task.status === "已完成" ? "status-tag-success" :
-                      task.status === "进行中" ? "status-tag-info" : "status-tag-warning"
+                    task.status === "进行中" ? "status-tag-info" : "status-tag-warning"
                     }`}>{task.status}</span>
                 </td>
                 <td className="py-3 px-4 text-muted-foreground">{task.creator}</td>

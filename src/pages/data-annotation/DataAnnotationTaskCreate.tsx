@@ -1,39 +1,74 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   ArrowLeft, Check, ChevronRight, Plus, X, Trash2, Upload, Eye, Info, Search,
-  AlertTriangle, FileText, Settings, Users, Shield, BookOpen, Zap, ChevronDown,
-  Database, Type, Image, Mic, Video, Table2, Layers
+  AlertTriangle, FileText, Settings, Users, Shield, BookOpen, Zap, ChevronDown, ChevronUp,
+  Database, Type, Image, Mic, Video, Table2, Layers, Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 
 /* ─── Project types ─── */
 const projectTypes = [
-  { category: "文本类", icon: Type, color: "bg-blue-100 text-blue-700", sub: ["基础序列","实体与关系","内容分类与审核","情感与倾向","生成式与对话标注"] },
-  { category: "图像类", icon: Image, color: "bg-green-100 text-green-700", sub: ["图像分类","对象检测","像素级标注","语义分割","OCR标注"] },
-  { category: "音频类", icon: Mic, color: "bg-amber-100 text-amber-700", sub: ["音频转写","音频分段","说话人与声学标注","内容与事件标注"] },
-  { category: "视频类", icon: Video, color: "bg-purple-100 text-purple-700", sub: ["视频对象检测","视频分类","时序跟踪","内容理解"] },
-  { category: "表格类", icon: Table2, color: "bg-cyan-100 text-cyan-700", sub: ["时间序列标注"] },
-  { category: "跨模态类", icon: Layers, color: "bg-rose-100 text-rose-700", sub: ["跨模态对齐","跨模态匹配与关联","多模态内容理解与生成标注"] },
+  { category: "文本类", icon: Type, color: "bg-blue-100 text-blue-700", sub: ["文本", "对话", "超文本", "列表", "段落", "时间序列"] },
+  { category: "图像类", icon: Image, color: "bg-green-100 text-green-700", sub: ["图像", "PDF"] },
+  { category: "音频类", icon: Mic, color: "bg-amber-100 text-amber-700", sub: ["音频"] },
+  { category: "视频类", icon: Video, color: "bg-purple-100 text-purple-700", sub: ["视频"] },
+  { category: "表格类", icon: Table2, color: "bg-cyan-100 text-cyan-700", sub: ["表格", "时间序列"] },
+  { category: "跨模态类", icon: Layers, color: "bg-rose-100 text-rose-700", sub: ["文本", "图像", "音频", "视频"] },
 ];
 
-const mockDatasets = [
-  { id: "DS-001", name: "金融新闻语料库", type: "文本类", files: 12500, size: "2.3GB", creator: "张明", versions: ["v1.0","v1.1","v2.0"] },
-  { id: "DS-002", name: "医疗CT影像集", type: "图像类", files: 5000, size: "45GB", creator: "李芳", versions: ["v1.0"] },
-  { id: "DS-003", name: "客服对话数据", type: "文本类", files: 20000, size: "850MB", creator: "王强", versions: ["v1.0","v2.0"] },
-  { id: "DS-004", name: "语音采集样本", type: "音频类", files: 3000, size: "12GB", creator: "赵丽", versions: ["v1.0"] },
-  { id: "DS-005", name: "短视频素材集", type: "视频类", files: 1500, size: "120GB", creator: "孙伟", versions: ["v1.0"] },
+const myMockDatasets = [
+  { id: "DS-001", name: "金融新闻语料库", type: "文本类", files: 12500, size: "2.3GB", creator: "张明", versions: ["v1.0", "v1.1", "v2.0"], fields: [{ name: "content", example: "近日，某金融大模型正式发布..." }, { name: "title", example: "金融科技新突破" }, { name: "author", example: "财联社" }] },
+  { id: "DS-002", name: "医疗CT影像集", type: "图像类", files: 5000, size: "45GB", creator: "李芳", versions: ["v1.0"], fields: [{ name: "image_url", example: "oss://bucket/ct_001.png" }, { name: "patient_id", example: "P_1025" }] },
+  { id: "DS-003", name: "客服对话数据", type: "文本类", files: 20000, size: "850MB", creator: "王强", versions: ["v1.0", "v2.0"], fields: [{ name: "dialogue", example: "用户: 你好，卡注销了... 客服: 您好..." }, { name: "session_id", example: "S_9912" }] },
+  { id: "DS-004", name: "语音采集样本", type: "音频类", files: 3000, size: "12GB", creator: "赵丽", versions: ["v1.0"], fields: [{ name: "audio_path", example: "/data/audio/rec_001.wav" }, { name: "duration", example: "12.5s" }] },
+  { id: "DS-005", name: "短视频素材集", type: "视频类", files: 1500, size: "120GB", creator: "孙伟", versions: ["v1.0"], fields: [{ name: "video_url", example: "https://cdn.com/v_123.mp4" }, { name: "frame_count", example: "1500" }] },
 ];
+
+const subscribedMockDatasets = [
+  { id: "DS-S001", name: "金融新闻语料库 (订购)", type: "文本类", files: 12500, size: "15.2GB", creator: "数据市场官方", versions: ["V3.0", "V2.0"], fields: [{ name: "article_text", example: "市场情绪持续回升..." }, { name: "stock_code", example: "SH600519" }] },
+  { id: "DS-S002", name: "开源医学影像数据集", type: "图像类", files: 5000, size: "89.5GB", creator: "医疗AI实验室", versions: ["V3.0", "V1.0"], fields: [{ name: "dicom_path", example: "oss://med/dicom/001.dcm" }, { name: "diagnosis", example: "Pneumonia" }] },
+];
+
+const sharedMockDatasets = [
+  { id: "DS-H001", name: "内部标注训练集 (共享)", type: "文本类", files: 12500, size: "3.5GB", creator: "王强", versions: ["V2.0"], fields: [{ name: "raw_text", example: "这是需要标注的原始文本..." }] },
+  { id: "DS-H002", name: "产品图像分类数据集", type: "图像类", files: 5000, size: "18.7GB", creator: "赵丽", versions: ["V3.0", "V2.0", "V1.0"], fields: [{ name: "source_img", example: "path/to/prod_001.jpg" }, { name: "category", example: "电子产" }] },
+];
+
+const mockToolsMap: Record<string, string> = {
+  "文本类": "https://images.unsplash.com/photo-1455390582262-044cdead277a?w=400&h=225&fit=crop",
+  "图像类": "https://images.unsplash.com/photo-1542831371-29b0f74f9713?w=400&h=225&fit=crop",
+  "音频类": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=225&fit=crop",
+  "视频类": "https://images.unsplash.com/photo-1485846234645-a62644f84728?w=400&h=225&fit=crop",
+  "表格类": "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=400&h=225&fit=crop",
+  "跨模态类": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&h=225&fit=crop"
+};
 
 const mockTools = [
-  { id: "TL-001", name: "文本分类标注", type: "文本类", isPreset: true },
-  { id: "TL-002", name: "实体关系标注", type: "文本类", isPreset: true },
-  { id: "TL-003", name: "图像分类标注", type: "图像类", isPreset: true },
-  { id: "TL-004", name: "矩形框标注", type: "图像类", isPreset: true },
-  { id: "TL-006", name: "金融情感三分类", type: "文本类", isPreset: false },
+  { id: "TL-001", name: "通用文本分类器", type: "文本类", isPreset: true, desc: "支持对纯文本、超文本内容进行多标签分类标注，适用于舆情分析与内容审核。", image: "https://images.unsplash.com/photo-1517842645767-c639042777db?w=400&h=225&fit=crop", objects: [{ name: "文本", methods: ["标签"] }] },
+  { id: "TL-002", name: "复杂文档分析工具", type: "文本类", isPreset: true, desc: "针对段落、对话等复杂文本结构进行实体挖掘与关系标注。支持多级标签组联动。", image: "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=400&h=225&fit=crop", objects: [{ name: "段落", methods: ["标签"] }, { name: "对话", methods: ["标签"] }] },
+  { id: "TL-003", name: "图像目标检测插件", type: "图像类", isPreset: true, desc: "支持矩形框、多边形标注。内置智能回归算法，提升目标定位精准度。", image: "https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?w=400&h=225&fit=crop", objects: [{ name: "图像", methods: ["矩形框", "标签"] }] },
+  { id: "TL-004", name: "PDF版面分析高级版", type: "图像类", isPreset: true, desc: "提供PDF像素级的超高精度标注能力，支持对PDF内的文本块、图片块独立进行属性定义。", image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&h=225&fit=crop", objects: [{ name: "PDF", methods: ["多边形", "标签"] }] },
+  { id: "TL-005", name: "ASR语音转写工具", type: "音频类", isPreset: true, desc: "专为长语音和大规模私有化部署设计，支持中英文混说，解析音频文件的内容、角色及情感。", image: "https://images.unsplash.com/photo-1558317374-067fb5f30001?w=400&h=225&fit=crop", objects: [{ name: "音频", methods: ["转写", "标签"] }] },
+  { id: "TL-006", name: "视频对象追踪系统", type: "视频类", isPreset: true, desc: "在连续视频帧流中实现目标位置追踪与关键帧属性插值，支持复杂运动轨迹修正。", image: "https://images.unsplash.com/photo-1492691523567-6170c3af93db?w=400&h=225&fit=crop", objects: [{ name: "视频", methods: ["矩形框", "标签"] }] },
+  { id: "TL-007", name: "金融指标提取助理", type: "表格类", isPreset: true, desc: "专注于对结构化表格及动态时间序列数据进行精细化属性标注，确保事实正确性。", image: "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=400&h=225&fit=crop", objects: [{ name: "表格", methods: ["标签"] }, { name: "时间序列", methods: ["标签"] }] },
 ];
 
-const mockMembers = ["张明","李芳","王强","赵丽","孙伟","周杰","刘洋","陈思","黄磊","吴敏"];
+const mockUsers = [
+  { name: "张明", account: "zhangming@hub.com" },
+  { name: "李芳", account: "lifang@hub.com" },
+  { name: "王强", account: "wangqiang@hub.com" },
+  { name: "赵丽", account: "zhaoli@hub.com" },
+  { name: "孙伟", account: "sunwei@hub.com" },
+  { name: "周杰", account: "zhoujie@hub.com" },
+  { name: "刘洋", account: "liuyang@hub.com" },
+  { name: "陈思", account: "chensi@hub.com" },
+  { name: "黄磊", account: "huanglei@hub.com" },
+  { name: "吴敏", account: "wumin@hub.com" },
+];
+
+interface User { name: string; account: string; }
+interface PersonGroup { id: string; name: string; persons: User[]; batchLimit: number; }
 
 interface Props { onBack: () => void; }
 
@@ -45,20 +80,19 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   const [taskName, setTaskName] = useState("");
   const [taskDesc, setTaskDesc] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedSubType, setSelectedSubType] = useState("");
 
   // Step 1: Dataset
   const [selectedDatasets, setSelectedDatasets] = useState<{ id: string; version: string }[]>([]);
   const [datasetSearch, setDatasetSearch] = useState("");
+  const [datasetTab, setDatasetTab] = useState(0); // 0: 我的, 1: 订购, 2: 分享
 
   // Step 2: Tool
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
-  const [annotationField, setAnnotationField] = useState("");
-  const [labels, setLabels] = useState<{ value: string; color: string }[]>([
-    { value: "正面", color: "#22c55e" },
-    { value: "负面", color: "#ef4444" },
-    { value: "中性", color: "#6b7280" },
-  ]);
+  const [toolTab, setToolTab] = useState(0); // 0: 我的, 1: 市场
+  const [toolCategory, setToolCategory] = useState("all");
+  const [toolSearch, setToolSearch] = useState("");
+  const [annotationFields, setAnnotationFields] = useState<Record<string, string>>({});
+  const [objectLabels, setObjectLabels] = useState<Record<string, { value: string; color: string }[]>>({});
   const [labelMode, setLabelMode] = useState<"single" | "multi">("single");
 
   // Step 3: Task config
@@ -66,8 +100,9 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   const [batchSize, setBatchSize] = useState(100);
   const [samplingOrder, setSamplingOrder] = useState<"original" | "random">("original");
   const [assignMode, setAssignMode] = useState<"person" | "team" | "pool">("person");
-  const [assignedPersons, setAssignedPersons] = useState<string[]>(["张明"]);
-  const [personBatchLimit, setPersonBatchLimit] = useState(5);
+  const [personGroups, setPersonGroups] = useState<PersonGroup[]>([
+    { id: "g-" + Date.now(), name: "分组 1", persons: [{ name: "张明", account: "zhangming@hub.com" }], batchLimit: 5 }
+  ]);
   const [qaEnabled, setQaEnabled] = useState(false);
   const [qaNodes, setQaNodes] = useState<{
     persons: string[];
@@ -76,10 +111,12 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
     dataRatio: number;
   }[]>([{ persons: ["王强"], method: "batch", batchRatio: 100, dataRatio: 30 }]);
   const [acceptEnabled, setAcceptEnabled] = useState(false);
-  const [acceptPersons, setAcceptPersons] = useState<string[]>(["李芳"]);
-  const [acceptMethod, setAcceptMethod] = useState("batch");
-  const [acceptBatchRatio, setAcceptBatchRatio] = useState(100);
-  const [acceptDataRatio, setAcceptDataRatio] = useState(20);
+  const [acceptNodes, setAcceptNodes] = useState<{
+    persons: string[];
+    method: string;
+    batchRatio: number;
+    dataRatio: number;
+  }[]>([{ persons: ["李芳"], method: "batch", batchRatio: 100, dataRatio: 20 }]);
   const [managers, setManagers] = useState<string[]>([]);
   const [maxSkip, setMaxSkip] = useState(20);
   const [timeoutEnabled, setTimeoutEnabled] = useState(false);
@@ -97,47 +134,97 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
 
   // Step 5: generated batches preview
   const [generatedBatches, setGeneratedBatches] = useState<{ id: string; size: number }[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isGenerated, setIsGenerated] = useState(false);
+  const [showBatchList, setShowBatchList] = useState(false);
+  const [activeSearchGroupId, setActiveSearchGroupId] = useState<string | null>(null);
+  const [activeSearchQaNodeIdx, setActiveSearchQaNodeIdx] = useState<number | null>(null);
+  const [activeSearchAcceptNodeIdx, setActiveSearchAcceptNodeIdx] = useState<number | null>(null);
+  const [searchText, setSearchText] = useState("");
+
+  // Handle outside click for personnel search
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest(".search-adder-container")) {
+        setActiveSearchGroupId(null);
+        setActiveSearchQaNodeIdx(null);
+        setActiveSearchAcceptNodeIdx(null);
+        setSearchText("");
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
 
   const canProceed = useCallback((): boolean => {
     switch (step) {
-      case 0: return taskName.trim().length > 0 && selectedCategory !== "" && selectedSubType !== "";
+      case 0: return taskName.trim().length > 0 && selectedCategory !== "";
       case 1: return selectedDatasets.length > 0;
-      case 2: return selectedTool !== null;
-      case 3: return true;
+      case 2: {
+        const tool = mockTools.find(t => t.id === selectedTool);
+        if (!tool) return false;
+        // Verify all objects have a mapping field
+        return tool.objects.every(obj => annotationFields[obj.name]?.trim().length > 0);
+      }
+      case 3: {
+        if (assignMode === "person") {
+          return personGroups.length > 0 && personGroups.every(g => g.persons.length > 0);
+        }
+        return true;
+      }
       case 4: return true;
       case 5: return true;
       default: return true;
     }
-  }, [step, taskName, selectedCategory, selectedSubType, selectedDatasets, selectedTool]);
+  }, [step, taskName, selectedCategory, selectedDatasets, selectedTool, annotationFields]);
 
   const handleGenerateBatches = () => {
-    const total = selectedDatasets.reduce((s, d) => {
-      const ds = mockDatasets.find(dd => dd.id === d.id);
-      return s + (ds?.files || 0);
-    }, 0);
-    let batches: { id: string; size: number }[] = [];
-    if (batchMode === "dataset") {
-      selectedDatasets.forEach((d, i) => {
-        const ds = mockDatasets.find(dd => dd.id === d.id);
-        batches.push({ id: `BT-${String(i + 1).padStart(3, "0")}`, size: ds?.files || 0 });
-      });
-    } else if (batchMode === "count") {
-      let rem = total;
-      let idx = 1;
-      while (rem > 0) {
-        const sz = Math.min(batchSize, rem);
-        batches.push({ id: `BT-${String(idx).padStart(3, "0")}`, size: sz });
-        rem -= sz;
-        idx++;
+    setIsGenerating(true);
+    setIsGenerated(false);
+    setShowBatchList(false);
+
+    // Simulate background computation
+    setTimeout(() => {
+      const allMockDatasets = [...myMockDatasets, ...subscribedMockDatasets, ...sharedMockDatasets];
+      const total = selectedDatasets.reduce((s, d) => {
+        const ds = allMockDatasets.find(dd => dd.id === d.id);
+        return s + (ds?.files || 0);
+      }, 0);
+      let batches: { id: string; size: number }[] = [];
+      if (batchMode === "dataset") {
+        selectedDatasets.forEach((d, i) => {
+          const ds = allMockDatasets.find(dd => dd.id === d.id);
+          batches.push({ id: `BT-${String(i + 1).padStart(3, "0")}`, size: ds?.files || 0 });
+        });
+      } else if (batchMode === "count") {
+        let rem = total;
+        let idx = 1;
+        while (rem > 0) {
+          const sz = Math.min(batchSize, rem);
+          batches.push({ id: `BT-${String(idx).padStart(3, "0")}`, size: sz });
+          rem -= sz;
+          idx++;
+        }
+      } else {
+        for (let i = 0; i < Math.min(total, 20); i++) {
+          batches.push({ id: `BT-${String(i + 1).padStart(3, "0")}`, size: 1 });
+        }
       }
-    } else {
-      for (let i = 0; i < Math.min(total, 20); i++) {
-        batches.push({ id: `BT-${String(i + 1).padStart(3, "0")}`, size: 1 });
-      }
-    }
-    setGeneratedBatches(batches);
-    toast.success(`已生成 ${batches.length} 个标注批次`);
+      setGeneratedBatches(batches);
+      setIsGenerating(false);
+      setIsGenerated(true);
+      toast.success(`已成功生成 ${batches.length} 个标注批次`);
+    }, 1500);
+  };
+
+  const moveQaNode = (index: number, direction: 'up' | 'down') => {
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= qaNodes.length) return;
+    const newNodes = [...qaNodes];
+    [newNodes[index], newNodes[newIndex]] = [newNodes[newIndex], newNodes[index]];
+    setQaNodes(newNodes);
   };
 
   const handlePublish = () => {
@@ -145,531 +232,1538 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
     onBack();
   };
 
-  const filteredDatasets = mockDatasets.filter(d => {
-    if (selectedCategory && d.type !== selectedCategory) return false;
-    if (datasetSearch && !d.name.includes(datasetSearch)) return false;
+  const filteredDatasets = (() => {
+    const source = datasetTab === 0 ? myMockDatasets : datasetTab === 1 ? subscribedMockDatasets : sharedMockDatasets;
+    return source.filter(d => {
+      if (selectedCategory && d.type !== selectedCategory) return false;
+      if (datasetSearch && !d.name.includes(datasetSearch)) return false;
+      return true;
+    });
+  })();
+
+  const filteredTools = mockTools.filter(t => {
+    // Basic compatibility check with step 0 category
+    if (selectedCategory && t.type !== selectedCategory) return false;
+
+    // Tab filtering (preset tools are considered Market for this mock)
+    if (toolTab === 0 && t.isPreset) return false;
+    if (toolTab === 1 && !t.isPreset) return false;
+
+    // Category filtering
+    if (toolCategory !== "all" && t.type !== toolCategory) return false;
+
+    // Search filtering
+    if (toolSearch && !t.name.includes(toolSearch)) return false;
+
     return true;
   });
 
-  const filteredTools = mockTools.filter(t => !selectedCategory || t.type === selectedCategory);
-
   return (
-    <div className="animate-fade-in">
+    <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="p-2 rounded-lg hover:bg-muted/50"><ArrowLeft className="w-5 h-5" /></button>
-        <div>
-          <h1 className="text-lg font-semibold text-foreground">新建标注任务</h1>
-          <p className="text-sm text-muted-foreground">按步骤完成任务配置后发布</p>
-        </div>
-      </div>
-
-      {/* Step indicator */}
-      <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2">
-        {steps.map((s, i) => (
-          <div key={i} className="flex items-center gap-2 shrink-0">
-            <button onClick={() => i <= step && setStep(i)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                i === step ? "bg-primary text-primary-foreground" :
-                i < step ? "bg-primary/10 text-primary" :
-                "bg-muted text-muted-foreground"
-              }`}>
-              {i < step ? <Check className="w-3 h-3" /> : <span>{i + 1}</span>}
-              <span>{s}</span>
+      <header className="sticky top-0 z-30 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container max-w-[1440px] h-16 flex items-center justify-between px-6">
+          <div className="flex items-center gap-4">
+            <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-muted/50 transition-colors">
+              <ArrowLeft className="w-5 h-5" />
             </button>
-            {i < steps.length - 1 && <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
-          </div>
-        ))}
-      </div>
-
-      {/* Step content */}
-      <div className="max-w-4xl">
-        {/* Step 0: Basic Info */}
-        {step === 0 && (
-          <div className="space-y-6">
-            <div className="rounded-lg border bg-card p-6 space-y-4">
-              <h3 className="font-medium flex items-center gap-2"><FileText className="w-4 h-4 text-primary" /> 基础信息</h3>
-              <div>
-                <label className="text-sm text-muted-foreground mb-1 block">任务名称 <span className="text-destructive">*</span></label>
-                <input value={taskName} onChange={e => setTaskName(e.target.value.slice(0, 50))} placeholder="请输入任务名称" className="w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                <p className="text-xs text-muted-foreground mt-1">{taskName.length}/50 字符</p>
-              </div>
-              <div>
-                <label className="text-sm text-muted-foreground mb-1 block">任务描述</label>
-                <textarea value={taskDesc} onChange={e => setTaskDesc(e.target.value.slice(0, 300))} placeholder="请输入任务描述" rows={3} className="w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none" />
-                <p className="text-xs text-muted-foreground mt-1">{taskDesc.length}/300 字符</p>
+            <div>
+              <h1 className="text-base font-bold tracking-tight">新建标注任务</h1>
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                <span>TrustData Hub</span>
+                <span>/</span>
+                <span>标注引擎</span>
               </div>
             </div>
+          </div>
 
-            <div className="rounded-lg border bg-card p-6 space-y-4">
-              <h3 className="font-medium flex items-center gap-2"><Layers className="w-4 h-4 text-primary" /> 项目类型 <span className="text-destructive text-sm">*</span></h3>
-              <p className="text-xs text-muted-foreground flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> 创建后不可修改，不支持混合多种类型</p>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {projectTypes.map(pt => {
-                  const Icon = pt.icon;
-                  return (
-                    <button key={pt.category} onClick={() => { setSelectedCategory(pt.category); setSelectedSubType(""); }}
-                      className={`p-4 rounded-lg border text-left transition-all ${selectedCategory === pt.category ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:bg-muted/30"}`}>
-                      <div className={`w-8 h-8 rounded-lg ${pt.color} flex items-center justify-center mb-2`}><Icon className="w-4 h-4" /></div>
-                      <p className="text-sm font-medium">{pt.category}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{pt.sub.length} 种标注能力</p>
-                    </button>
-                  );
-                })}
-              </div>
-              {selectedCategory && (
-                <div className="mt-4">
-                  <label className="text-sm text-muted-foreground mb-2 block">选择标注能力</label>
-                  <div className="flex flex-wrap gap-2">
-                    {projectTypes.find(p => p.category === selectedCategory)?.sub.map(sub => (
-                      <button key={sub} onClick={() => setSelectedSubType(sub)}
-                        className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${selectedSubType === sub ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted/50"}`}>{sub}</button>
-                    ))}
-                  </div>
+          <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-xl border">
+            {steps.map((s, i) => (
+              <div key={i} className="flex items-center">
+                <div
+                  className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${i === step ? "bg-background text-primary shadow-sm" :
+                    i < step ? "text-primary/60 hover:text-primary" : "text-muted-foreground/60"
+                    }`}
+                >
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${i === step ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" :
+                    i < step ? "bg-primary/10" : "bg-muted"
+                    }`}>
+                    {i < step ? <Check className="w-3 h-3" /> : i + 1}
+                  </span>
+                  <span className="hidden lg:inline">{s}</span>
                 </div>
-              )}
+                {i < steps.length - 1 && (
+                  <div className="w-4 h-[1px] bg-muted-foreground/10 mx-1" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button onClick={onBack} className="text-xs font-medium text-muted-foreground hover:text-foreground">取消</button>
+            <div className="w-[1px] h-4 bg-muted mx-1" />
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+                {taskName ? taskName.charAt(0).toUpperCase() : "?"}
+              </div>
             </div>
           </div>
-        )}
+        </div>
+      </header>
 
-        {/* Step 1: Dataset */}
-        {step === 1 && (
-          <div className="space-y-6">
-            <div className="rounded-lg border bg-card p-6 space-y-4">
-              <h3 className="font-medium flex items-center gap-2"><Database className="w-4 h-4 text-primary" /> 数据集配置</h3>
-              <p className="text-xs text-muted-foreground">选择与项目类型匹配的数据集，支持选择多个数据集的某个版本</p>
-              <div className="flex items-center gap-3">
-                <div className="relative flex-1">
-                  <input value={datasetSearch} onChange={e => setDatasetSearch(e.target.value)} placeholder="搜索数据集..." className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                </div>
-              </div>
-              <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                {filteredDatasets.map(ds => {
-                  const selected = selectedDatasets.find(s => s.id === ds.id);
-                  return (
-                    <div key={ds.id} className={`p-3 rounded-lg border flex items-center justify-between ${selected ? "border-primary bg-primary/5" : "hover:bg-muted/30"}`}>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{ds.name}</span>
-                          <span className="text-xs text-muted-foreground">{ds.id}</span>
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] ${typeColors[ds.type] || "bg-muted text-muted-foreground"}`}>{ds.type}</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1">{ds.files.toLocaleString()} 文件 · {ds.size} · {ds.creator}</div>
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-hidden">
+        <div className="container max-w-[1440px] h-full flex px-6 py-8 gap-8 overflow-hidden">
+          {/* Left: Step Content */}
+          <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar">
+            <div className="max-w-[1000px] pb-32">
+
+              {/* Step content */}
+              <div className="max-w-6xl">
+                {/* Step 0: Basic Info */}
+                {step === 0 && (
+                  <div className="space-y-6">
+                    <div className="rounded-lg border bg-card p-6 space-y-4">
+                      <h3 className="font-medium flex items-center gap-2"><FileText className="w-4 h-4 text-primary" /> 基础信息</h3>
+                      <div>
+                        <label className="text-sm text-muted-foreground mb-1 block">任务名称 <span className="text-destructive">*</span></label>
+                        <input value={taskName} onChange={e => setTaskName(e.target.value.slice(0, 50))} placeholder="请输入任务名称" className="w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                        <p className="text-xs text-muted-foreground mt-1">{taskName.length}/50 字符</p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {selected ? (
-                          <>
-                            <select value={selected.version} onChange={e => setSelectedDatasets(prev => prev.map(s => s.id === ds.id ? { ...s, version: e.target.value } : s))}
-                              className="px-2 py-1 text-xs border rounded bg-background">
-                              {ds.versions.map(v => <option key={v}>{v}</option>)}
-                            </select>
-                            <button onClick={() => setSelectedDatasets(prev => prev.filter(s => s.id !== ds.id))} className="p-1 rounded hover:bg-destructive/10"><X className="w-4 h-4 text-destructive" /></button>
-                          </>
-                        ) : (
-                          <button onClick={() => setSelectedDatasets(prev => [...prev, { id: ds.id, version: ds.versions[ds.versions.length - 1] }])}
-                            className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90">选择</button>
+                      <div>
+                        <label className="text-sm text-muted-foreground mb-1 block">任务描述</label>
+                        <textarea value={taskDesc} onChange={e => setTaskDesc(e.target.value.slice(0, 300))} placeholder="请输入任务描述" rows={3} className="w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none" />
+                        <p className="text-xs text-muted-foreground mt-1">{taskDesc.length}/300 字符</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border bg-card p-6 space-y-4">
+                      <h3 className="font-medium flex items-center gap-2"><Layers className="w-4 h-4 text-primary" /> 项目类型 <span className="text-destructive text-sm">*</span></h3>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> 创建后不可修改，不支持混合多种类型</p>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {projectTypes.map(pt => {
+                          const Icon = pt.icon;
+                          return (
+                            <button key={pt.category} onClick={() => { setSelectedCategory(pt.category); }}
+                              className={`p-4 rounded-lg border text-left transition-all ${selectedCategory === pt.category ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:bg-muted/30"}`}>
+                              <div className={`w-8 h-8 rounded-lg ${pt.color} flex items-center justify-center mb-2`}><Icon className="w-4 h-4" /></div>
+                              <p className="text-sm font-medium">{pt.category}</p>
+                              <p className="text-xs text-muted-foreground mt-1">{pt.sub.join('、')}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 1: Dataset */}
+                {step === 1 && (
+                  <div className="space-y-6">
+                    <div className="rounded-lg border bg-card p-6 space-y-4">
+                      <h3 className="font-medium flex items-center gap-2"><Database className="w-4 h-4 text-primary" /> 数据集配置</h3>
+                      <p className="text-xs text-muted-foreground">选择与项目类型匹配的数据集，支持选择数据集的一个版本进行标注</p>
+
+                      <div className="flex border-b relative">
+                        {["我的数据集", "我订购的", "分享给我的"].map((label, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setDatasetTab(i)}
+                            className={`px-4 py-2 text-sm font-medium transition-colors relative ${datasetTab === i ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                              }`}
+                          >
+                            {label}
+                            {datasetTab === i && (
+                              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary animate-in fade-in slide-in-from-bottom-1" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-2">
+                        <div className="relative flex-1">
+                          <input value={datasetSearch} onChange={e => setDatasetSearch(e.target.value)} placeholder="搜索数据集..." className="w-full h-9 pl-9 pr-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-sans" />
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        </div>
+                      </div>
+                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                        {filteredDatasets.map(ds => {
+                          const selected = selectedDatasets.find(s => s.id === ds.id);
+                          return (
+                            <div key={ds.id} className={`p-3 rounded-lg border flex items-center justify-between ${selected ? "border-primary bg-primary/5" : "hover:bg-muted/30"}`}>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-sm">{ds.name}</span>
+                                  <span className="text-xs text-muted-foreground">{ds.id}</span>
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] ${typeColors[ds.type] || "bg-muted text-muted-foreground"}`}>{ds.type}</span>
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {ds.files.toLocaleString()} 文件 · {ds.size} · {datasetTab === 0 ? "创建人" : datasetTab === 1 ? "发布方" : "分享人"}: {ds.creator}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {selected ? (
+                                  <>
+                                    <select value={selected.version} onChange={e => setSelectedDatasets([{ id: ds.id, version: e.target.value }])}
+                                      className="px-2 py-1 text-xs border rounded bg-background">
+                                      {ds.versions.map(v => <option key={v}>{v}</option>)}
+                                    </select>
+                                    <span className="px-2 py-1 text-xs bg-primary/10 text-primary rounded border border-primary/20 flex items-center gap-1 font-medium">
+                                      <Check className="w-3 h-3" /> 已选
+                                    </span>
+                                  </>
+                                ) : (
+                                  <button onClick={() => setSelectedDatasets([{ id: ds.id, version: ds.versions[ds.versions.length - 1] }])}
+                                    className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors">选择</button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {selectedDatasets.length > 0 && (
+                        <div className="pt-3 border-t">
+                          <p className="text-sm font-medium mb-2">当前已选</p>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedDatasets.map(s => {
+                              const ds = [...myMockDatasets, ...subscribedMockDatasets, ...sharedMockDatasets].find(d => d.id === s.id);
+                              return (
+                                <span key={s.id} className="px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-xs flex items-center gap-2 border border-primary/20 font-medium">
+                                  <Database className="w-3.5 h-3.5" />
+                                  {ds?.name} ({s.version})
+                                  <button onClick={() => setSelectedDatasets([])} className="hover:bg-primary/20 rounded p-0.5"><X className="w-3.5 h-3.5" /></button>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 2: Tool */}
+                {step === 2 && (
+                  <div className="flex gap-6 min-h-[600px]">
+                    {/* Sidebar */}
+                    <div className="w-64 flex-shrink-0 flex flex-col gap-4 border-r pr-4">
+                      <div className="relative">
+                        <input
+                          value={toolSearch}
+                          onChange={e => setToolSearch(e.target.value)}
+                          placeholder="按名称搜索"
+                          className="w-full h-9 pl-9 pr-3 py-2 text-sm border rounded bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      </div>
+
+                      <button className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:bg-primary/90 transition-all shadow-sm active:scale-[0.98]">
+                        <Plus className="w-4 h-4" /> 新建标注工具
+                      </button>
+
+                      <div className="space-y-1 mt-2">
+                        <button
+                          onClick={() => { setToolTab(0); setToolCategory("all"); }}
+                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${toolTab === 0 ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                        >
+                          <Users className="w-4 h-4" /> 我的标注工具
+                        </button>
+
+                        <div className="pt-2 pb-1 px-3 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">标注工具市场</div>
+                        {[
+                          { label: "文本类标注工具", cat: "文本类", icon: Type },
+                          { label: "图像类标注工具", cat: "图像类", icon: Image },
+                          { label: "音频类标注工具", cat: "音频类", icon: Mic },
+                          { label: "视频类标注工具", cat: "视频类", icon: Video },
+                          { label: "表格类标注工具", cat: "表格类", icon: Table2 },
+                          { label: "跨模态标注工具", cat: "跨模态类", icon: Layers },
+                        ].map((item) => (
+                          <button
+                            key={item.cat}
+                            onClick={() => { setToolTab(1); setToolCategory(item.cat); }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${toolTab === 1 && toolCategory === item.cat ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <item.icon className="w-4 h-4" />
+                              <span>{item.label}</span>
+                            </div>
+                            <ChevronRight className="w-3 h-3 opacity-50" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Main Content */}
+                    <div className="flex-1 flex flex-col h-full overflow-hidden">
+                      {!selectedTool ? (
+                        <>
+                          <div className="mb-4 flex items-center justify-between">
+                            <h3 className="font-semibold text-lg flex items-center gap-2">
+                              {toolTab === 0 ? "我的标注工具" : `市场工具: ${toolCategory === "all" ? "全部" : toolCategory}`}
+                            </h3>
+                            <span className="text-xs text-muted-foreground">共 {filteredTools.length} 个结果</span>
+                          </div>
+
+                          <div className="flex-1 overflow-y-auto pr-2 pb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {filteredTools.map((tool) => (
+                                <div
+                                  key={tool.id}
+                                  onClick={() => setSelectedTool(tool.id)}
+                                  className={`group group/tool cursor-pointer rounded-xl border bg-card overflow-hidden transition-all duration-300 hover:shadow-lg ${selectedTool === tool.id ? "ring-2 ring-primary border-transparent" : "hover:border-primary/50"}`}
+                                >
+                                  {/* Banner Image */}
+                                  <div className="aspect-video relative overflow-hidden bg-muted">
+                                    <img
+                                      src={(tool as any).image}
+                                      alt={tool.name}
+                                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
+                                    {selectedTool === tool.id && (
+                                      <div className="absolute top-2 right-2 bg-primary text-primary-foreground p-1 rounded-full shadow-lg">
+                                        <Check className="w-3 h-3" />
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Content */}
+                                  <div className="p-4 space-y-3">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <h4 className="font-bold text-sm line-clamp-1">{tool.name}</h4>
+                                      <span className={`px-2 py-0.5 rounded text-[10px] whitespace-nowrap ${tool.type === "文本类" ? "bg-blue-100 text-blue-700" :
+                                        tool.type === "图像类" ? "bg-green-100 text-green-700" :
+                                          "bg-muted text-muted-foreground"
+                                        }`}>
+                                        {tool.type}
+                                      </span>
+                                    </div>
+                                    <div className="relative">
+                                      <p className="text-xs text-muted-foreground line-clamp-3 min-h-[3rem] leading-relaxed">
+                                        {(tool as any).desc}
+                                      </p>
+                                      {/* Hover show all tooltip */}
+                                      <div className="absolute inset-0 bg-card/95 hidden group-hover/tool:block z-20 overflow-y-auto custom-scrollbar">
+                                        <p className="text-xs text-foreground leading-relaxed p-1">
+                                          {(tool as any).desc}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            {filteredTools.length === 0 && (
+                              <div className="h-60 flex flex-col items-center justify-center text-muted-foreground">
+                                <Settings className="w-12 h-12 opacity-20 mb-2" />
+                                <p className="text-sm italic">暂无符合条件的标注工具</p>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-right-4 duration-300">
+                          <div className="mb-6 flex items-center justify-between border-b pb-4">
+                            <div className="flex items-center gap-4">
+                              <button onClick={() => setSelectedTool(null)} className="p-2 hover:bg-muted rounded-full transition-colors">
+                                <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+                              </button>
+                              <div>
+                                <h3 className="font-bold text-xl">{mockTools.find(t => t.id === selectedTool)?.name}</h3>
+                                <p className="text-xs text-muted-foreground">工具 ID: {selectedTool} · 分类: {mockTools.find(t => t.id === selectedTool)?.type}</p>
+                              </div>
+                            </div>
+                            <button onClick={() => setStep(3)} className="px-8 py-2.5 bg-primary text-primary-foreground rounded-xl font-bold text-sm hover:shadow-lg active:scale-95 transition-all">
+                              完成配置并继续
+                            </button>
+                          </div>
+
+                          <div className="flex-1 overflow-y-auto pr-4 px-2 pt-6 space-y-12 pb-10 custom-scrollbar">
+                            {(() => {
+                              const tool = mockTools.find(t => t.id === selectedTool);
+                              if (!tool || !tool.objects) return null;
+
+                              return tool.objects.map((obj, objIdx) => (
+                                <div key={obj.name} className="space-y-8 p-6 pt-10 bg-white/50 rounded-2xl border border-slate-200/60 relative shadow-sm">
+                                  {/* Object Badge */}
+                                  <div className="absolute -top-3 left-6 px-4 py-1.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full shadow-lg shadow-primary/30 flex items-center gap-2 uppercase tracking-widest z-10 hover:scale-105 transition-transform">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                    待标注对象: {obj.name}
+                                  </div>
+
+                                  {/* Field Mapping */}
+                                  <section className="space-y-4">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-1 h-4 bg-primary rounded-full" />
+                                      <h4 className="font-bold text-sm">【{obj.name}】内容字段映射</h4>
+                                    </div>
+                                    <div className="bg-white p-5 rounded-xl border border-slate-200/60 shadow-sm relative">
+                                      <label className="text-xs font-semibold text-muted-foreground mb-2 block tracking-tight">选择映射字段 (从数据集读取) <span className="text-destructive">*</span></label>
+
+                                      <div className="relative group/select">
+                                        <select
+                                          value={annotationFields[obj.name] || ""}
+                                          onChange={e => setAnnotationFields(prev => ({ ...prev, [obj.name]: e.target.value }))}
+                                          className="w-full pl-4 pr-10 py-3 text-sm border rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-sans appearance-none cursor-pointer"
+                                        >
+                                          <option value="" disabled>请选择要标注的字段</option>
+                                          {(() => {
+                                            const allMockDs = [...myMockDatasets, ...subscribedMockDatasets, ...sharedMockDatasets];
+                                            const selectedDsIds = selectedDatasets.map(sd => sd.id);
+                                            // In multi-dataset scenario, we'd intersection or union, but here we take the first one's fields as simple mock logic
+                                            const ds = allMockDs.find(d => selectedDsIds.includes(d.id));
+                                            return ds?.fields?.map(f => (
+                                              <option key={f.name} value={f.name}>
+                                                {f.name} (示例: {f.example.slice(0, 20)}...)
+                                              </option>
+                                            ));
+                                          })()}
+                                        </select>
+                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within/select:text-primary transition-colors pointer-events-none" />
+                                      </div>
+
+                                      {/* Example Box */}
+                                      {annotationFields[obj.name] && (
+                                        <div className="mt-3 p-3 bg-muted/20 rounded-lg border border-slate-100 flex items-start gap-2.5 animate-in fade-in slide-in-from-top-1 duration-300">
+                                          <div className="mt-0.5 p-1 bg-primary/10 rounded">
+                                            <Eye className="w-3 h-3 text-primary" />
+                                          </div>
+                                          <div className="flex-1">
+                                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight mb-1">字段示例内容</p>
+                                            <p className="text-xs text-slate-600 leading-relaxed italic">
+                                              "{((): string => {
+                                                const allMockDs = [...myMockDatasets, ...subscribedMockDatasets, ...sharedMockDatasets];
+                                                const selectedDsIds = selectedDatasets.map(sd => sd.id);
+                                                const ds = allMockDs.find(d => selectedDsIds.includes(d.id));
+                                                return ds?.fields?.find(f => f.name === annotationFields[obj.name])?.example || "暂无示例";
+                                              })()}"
+                                            </p>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      <p className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1">
+                                        <Info className="w-3 h-3" /> 系统将从数据集中提取该字段，不包含该字段的数据将自动跳过标注
+                                      </p>
+                                    </div>
+                                  </section>
+
+                                  {/* Label Config (Conditional) */}
+                                  {obj.methods.includes("标签") && (
+                                    <section className="space-y-4">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-1 h-4 bg-primary rounded-full" />
+                                          <h4 className="font-bold text-sm">【{obj.name}】标签配置</h4>
+                                        </div>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {(objectLabels[obj.name] || [
+                                          { value: "正面", color: "#22c55e" },
+                                          { value: "负面", color: "#ef4444" },
+                                          { value: "中性", color: "#6b7280" },
+                                        ]).map((l, i) => (
+                                          <div key={i} className="flex items-center gap-3 p-3 bg-white border rounded-xl group/label hover:ring-2 hover:ring-primary/10 transition-all border-slate-200/60">
+                                            <div className="relative">
+                                              <input
+                                                type="color"
+                                                value={l.color}
+                                                onChange={e => {
+                                                  const newLabels = [...(objectLabels[obj.name] || [])];
+                                                  if (newLabels[i]) newLabels[i].color = e.target.value;
+                                                  setObjectLabels(prev => ({ ...prev, [obj.name]: newLabels }));
+                                                }}
+                                                className="w-10 h-10 rounded-lg border-none p-0 cursor-pointer overflow-hidden shadow-sm"
+                                              />
+                                              <div className="absolute inset-0 ring-1 ring-inset ring-black/5 pointer-events-none rounded-lg" />
+                                            </div>
+                                            <div className="flex-1 flex flex-col">
+                                              <label className="text-[10px] font-bold text-muted-foreground mb-1 uppercase tracking-tighter">标签名称</label>
+                                              <input
+                                                value={l.value}
+                                                onChange={e => {
+                                                  const newLabels = [...(objectLabels[obj.name] || [])];
+                                                  if (newLabels[i]) newLabels[i].value = e.target.value;
+                                                  setObjectLabels(prev => ({ ...prev, [obj.name]: newLabels }));
+                                                }}
+                                                className="bg-transparent border-none p-0 text-sm font-semibold focus:ring-0 placeholder:text-slate-300"
+                                                placeholder="未命名标签"
+                                              />
+                                            </div>
+                                            <button
+                                              onClick={() => {
+                                                const newLabels = (objectLabels[obj.name] || []).filter((_, j) => j !== i);
+                                                setObjectLabels(prev => ({ ...prev, [obj.name]: newLabels }));
+                                              }}
+                                              className="opacity-0 group-hover/label:opacity-100 p-2 hover:bg-rose-50 rounded-lg transition-all"
+                                            >
+                                              <Trash2 className="w-4 h-4 text-rose-500" />
+                                            </button>
+                                          </div>
+                                        ))}
+                                        <button
+                                          onClick={() => {
+                                            const current = objectLabels[obj.name] || [
+                                              { value: "正面", color: "#22c55e" },
+                                              { value: "负面", color: "#ef4444" },
+                                              { value: "中性", color: "#6b7280" },
+                                            ];
+                                            setObjectLabels(prev => ({ ...prev, [obj.name]: [...current, { value: "", color: "#3b82f6" }] }));
+                                          }}
+                                          className="border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center p-4 text-slate-400 hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all group/btn"
+                                        >
+                                          <Plus className="w-5 h-5 mr-2 group-hover/btn:scale-110 transition-transform" />
+                                          <span className="text-sm font-bold">添加{obj.name}标签</span>
+                                        </button>
+                                      </div>
+                                    </section>
+                                  )}
+                                </div>
+                              ));
+                            })()}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 3: Task config */}
+                {step === 3 && (
+                  <div className="space-y-6">
+                    {/* Batch config */}
+                    <div className="rounded-lg border bg-card p-6 space-y-4 relative">
+                      {/* Execution Overlay */}
+                      {isGenerating && (
+                        <div className="absolute inset-0 z-50 bg-white/80 backdrop-blur-[2px] flex flex-col items-center justify-center animate-in fade-in duration-300">
+                          <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
+                          <p className="text-sm font-bold text-slate-700 tracking-widest animate-pulse">正在执行中...</p>
+                          <p className="text-[10px] text-muted-foreground mt-2">系统正在根据数据集规模计算最佳批次拆分方案</p>
+                        </div>
+                      )}
+
+                      <h3 className="font-medium flex items-center gap-2"><Zap className="w-4 h-4 text-primary" /> 标注批次配置</h3>
+                      <div className="space-y-2">
+                        {([
+                          { key: "dataset", label: "以数据集维度打包成一个标注批次" },
+                          { key: "count", label: "每N条数据打包成一个标注批次" },
+                          { key: "single", label: "单条数据打包成一个标注批次" },
+                        ] as const).map(opt => (
+                          <label key={opt.key} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${batchMode === opt.key ? "border-primary bg-primary/5" : "hover:bg-muted/30"}`}>
+                            <input type="radio" checked={batchMode === opt.key} onChange={() => { setBatchMode(opt.key); setIsGenerated(false); }} disabled={isGenerating} />
+                            <span className="text-sm">{opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {batchMode === "count" && (
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm text-muted-foreground">每</label>
+                          <input type="number" value={batchSize} onChange={e => { setBatchSize(Number(e.target.value)); setIsGenerated(false); }} disabled={isGenerating} className="w-24 px-2 py-1.5 text-sm border rounded bg-background" min={1} />
+                          <label className="text-sm text-muted-foreground">条为一个批次</label>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm text-muted-foreground">数据抽样：</label>
+                        <select value={samplingOrder} onChange={e => { setSamplingOrder(e.target.value as any); setIsGenerated(false); }} disabled={isGenerating} className="px-2 py-1.5 text-sm border rounded bg-background">
+                          <option value="original">按数据原始顺序抽样</option>
+                          <option value="random">随机排序抽样</option>
+                        </select>
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-2">
+                        <button
+                          onClick={handleGenerateBatches}
+                          disabled={isGenerating}
+                          className={`px-6 py-2.5 text-sm font-bold rounded-xl transition-all flex items-center gap-2 shadow-sm ${isGenerating ? "bg-muted text-muted-foreground cursor-not-allowed" :
+                            isGenerated ? "bg-slate-100 text-slate-700 hover:bg-slate-200" : "bg-primary text-primary-foreground hover:shadow-md active:scale-95"
+                            }`}
+                        >
+                          {isGenerating ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              执行中...
+                            </>
+                          ) : isGenerated ? "重新生成标注批次" : "立即生成标注批次"}
+                        </button>
+
+                        {isGenerated && (
+                          <button
+                            onClick={() => setShowBatchList(!showBatchList)}
+                            className="px-6 py-2.5 text-sm font-bold text-primary hover:bg-primary/5 rounded-xl transition-all flex items-center gap-2 border border-primary/20"
+                          >
+                            <Eye className="w-4 h-4" />
+                            {showBatchList ? "隐藏生成结果" : "查看生成结果"}
+                          </button>
                         )}
                       </div>
+
+                      {isGenerated && showBatchList && generatedBatches.length > 0 && (
+                        <div className="mt-4 p-5 bg-slate-50 border rounded-2xl animate-in fade-in slide-in-from-top-2 duration-500">
+                          <div className="flex items-center justify-between mb-4">
+                            <p className="text-sm font-bold text-slate-700">已成功生成 {generatedBatches.length} 个标注批次</p>
+                            <div className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-[10px] font-bold uppercase tracking-wider">Computation Complete</div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {generatedBatches.map(b => (
+                              <div key={b.id} className="px-3 py-2 bg-white rounded-xl border border-slate-200 shadow-sm text-xs flex flex-col gap-1 min-w-[80px] hover:border-primary/40 transition-colors">
+                                <span className="font-bold text-primary">{b.id}</span>
+                                <span className="text-[10px] text-muted-foreground">{b.size} 条数据</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
-              {selectedDatasets.length > 0 && (
-                <div className="pt-3 border-t">
-                  <p className="text-sm font-medium mb-2">已选 {selectedDatasets.length} 个数据集</p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedDatasets.map(s => {
-                      const ds = mockDatasets.find(d => d.id === s.id);
-                      return (
-                        <span key={s.id} className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs flex items-center gap-1">
-                          {ds?.name} ({s.version})
-                          <button onClick={() => setSelectedDatasets(prev => prev.filter(p => p.id !== s.id))}><X className="w-3 h-3" /></button>
-                        </span>
-                      );
-                    })}
+
+                    {/* Personnel config */}
+                    <div className="rounded-lg border bg-card p-6 space-y-4">
+                      <h3 className="font-medium flex items-center gap-2"><Users className="w-4 h-4 text-primary" /> 标注人员配置</h3>
+                      <div className="flex gap-2">
+                        {(["person", "team", "pool"] as const).map(m => (
+                          <button key={m} onClick={() => setAssignMode(m)}
+                            className={`px-3 py-1.5 text-xs rounded-full border ${assignMode === m ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted/50"}`}>
+                            {m === "person" ? "分配至个人" : m === "team" ? "分配至团队" : "分配至任务池"}
+                          </button>
+                        ))}
+                      </div>
+                      {assignMode === "person" && (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">标注人员分组配置</p>
+                            <button
+                              onClick={() => setPersonGroups(prev => [...prev, { id: "g-" + Date.now(), name: `分组 ${prev.length + 1}`, persons: [], batchLimit: 5 }])}
+                              className="text-xs font-bold text-primary flex items-center gap-1 hover:bg-primary/5 px-2 py-1 rounded"
+                            >
+                              <Plus className="w-3.5 h-3.5" /> 添加配置小组
+                            </button>
+                          </div>
+
+                          <div className="space-y-4">
+                            {personGroups.map((group, gIdx) => (
+                              <div key={group.id} className="p-5 bg-white border border-slate-100 rounded-2xl relative group/card shadow-sm hover:shadow-md transition-all animate-in fade-in slide-in-from-left-2 duration-300">
+                                <button
+                                  onClick={() => setPersonGroups(prev => prev.filter(g => g.id !== group.id))}
+                                  className="absolute top-2 right-2 p-1.5 opacity-0 group-hover/card:opacity-100 hover:bg-rose-50 rounded-lg text-rose-500 transition-all"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+
+                                <div className="grid grid-cols-1 md:grid-cols-[1fr_200px] gap-8">
+                                  <div className="space-y-4">
+                                    <div className="flex items-center justify-between pb-2 border-b border-slate-50">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-1 h-4 bg-primary rounded-full" />
+                                        <input
+                                          value={group.name}
+                                          onChange={e => {
+                                            const next = [...personGroups];
+                                            next[gIdx].name = e.target.value;
+                                            setPersonGroups(next);
+                                          }}
+                                          className="text-sm font-bold bg-transparent border-none p-0 focus:ring-0 w-32 text-slate-800 placeholder:text-slate-300"
+                                          placeholder="分组名称..."
+                                        />
+                                      </div>
+                                      <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold bg-slate-50 px-2 py-0.5 rounded-full">成员 {group.persons.length}</span>
+                                    </div>
+
+                                    {/* Selected Persons Tags */}
+                                    <div className="flex flex-wrap gap-2 min-h-[40px]">
+                                      {group.persons.map((p, pIdx) => (
+                                        <div key={p.account} className="group/tag inline-flex items-center gap-2 px-2 py-1.5 bg-slate-50 border border-slate-100 rounded-xl hover:bg-white hover:border-primary/20 hover:shadow-sm transition-all duration-200 animate-in zoom-in-95">
+                                          <div className="w-6 h-6 rounded-full bg-white border border-slate-100 flex items-center justify-center text-[10px] font-bold text-primary shrink-0 shadow-inner">
+                                            {p.name.slice(0, 1)}
+                                          </div>
+                                          <div className="flex flex-col">
+                                            <span className="text-xs font-bold text-slate-700 leading-none">{p.name}</span>
+                                            <span className="text-[9px] text-muted-foreground font-mono mt-0.5">{p.account.split('@')[0]}</span>
+                                          </div>
+                                          <button
+                                            onClick={() => {
+                                              const next = [...personGroups];
+                                              next[gIdx].persons = next[gIdx].persons.filter((_, idx) => idx !== pIdx);
+                                              setPersonGroups(next);
+                                            }}
+                                            className="ml-1 w-4 h-4 rounded-lg flex items-center justify-center opacity-0 group-hover/tag:opacity-100 hover:bg-rose-500 hover:text-white text-slate-400 transition-all duration-200"
+                                          >
+                                            <X className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                      {group.persons.length === 0 && (
+                                        <div className="flex items-center gap-2 text-slate-300 text-[11px] italic py-2">
+                                          <Users className="w-3.5 h-3.5" />
+                                          尚未添加任何完成人员...
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Searchable Adder with Dropdown */}
+                                    <div className="relative w-full max-w-sm search-adder-container">
+                                      <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+                                        <Search className="w-3.5 h-3.5 text-muted-foreground" />
+                                        <input
+                                          placeholder="搜索姓名或账号添加成员..."
+                                          className="flex-1 text-xs bg-transparent border-none p-0 focus:ring-0 placeholder:text-slate-300"
+                                          value={activeSearchGroupId === group.id ? searchText : ""}
+                                          onChange={e => {
+                                            setActiveSearchGroupId(group.id);
+                                            setSearchText(e.target.value);
+                                          }}
+                                          onFocus={() => setActiveSearchGroupId(group.id)}
+                                        />
+                                        {activeSearchGroupId === group.id && searchText && (
+                                          <button onClick={() => setSearchText("")} className="hover:text-rose-500"><X className="w-3 h-3 text-muted-foreground" /></button>
+                                        )}
+                                      </div>
+
+                                      {/* Dropdown Results */}
+                                      {activeSearchGroupId === group.id && (
+                                        <div className="absolute top-full left-0 right-0 z-[100] mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                                          {(() => {
+                                            const filtered = mockUsers.filter(u =>
+                                              (u.name.toLowerCase().includes(searchText.toLowerCase()) ||
+                                                u.account.toLowerCase().includes(searchText.toLowerCase())) &&
+                                              !group.persons.some(p => p.account === u.account) // Not in current group
+                                            ).sort((a, b) => {
+                                              const aInOther = personGroups.some(g => g.id !== group.id && g.persons.some(p => p.account === a.account));
+                                              const bInOther = personGroups.some(g => g.id !== group.id && g.persons.some(p => p.account === b.account));
+                                              if (aInOther === bInOther) return 0;
+                                              return aInOther ? 1 : -1;
+                                            });
+
+                                            if (filtered.length === 0) {
+                                              return (
+                                                <div className="p-8 text-center">
+                                                  <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-2">
+                                                    <Search className="w-6 h-6 text-slate-300" />
+                                                  </div>
+                                                  <p className="text-[11px] text-muted-foreground">未找到匹配人员</p>
+                                                </div>
+                                              );
+                                            }
+
+                                            return (
+                                              <div className="py-1">
+                                                {searchText.length === 0 && (
+                                                  <div className="px-4 py-2 bg-slate-50/50 border-b border-slate-100 mb-1">
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">建议添加人员</p>
+                                                  </div>
+                                                )}
+                                                {filtered.map(user => {
+                                                  const isExistedInOther = personGroups.some(g => g.id !== group.id && g.persons.some(p => p.account === user.account));
+
+                                                  return (
+                                                    <button
+                                                      key={user.account}
+                                                      disabled={isExistedInOther}
+                                                      onClick={() => {
+                                                        const next = [...personGroups];
+                                                        next[gIdx].persons.push(user);
+                                                        setPersonGroups(next);
+                                                        setSearchText("");
+                                                        setActiveSearchGroupId(null);
+                                                      }}
+                                                      className={`w-full text-left px-4 py-3 flex items-center justify-between hover:bg-primary/5 transition-colors border-b border-slate-50 last:border-0 group/item ${isExistedInOther ? "opacity-40 cursor-not-allowed grayscale" : "cursor-pointer"}`}
+                                                    >
+                                                      <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 overflow-hidden shrink-0 group-hover/item:bg-primary/10 group-hover/item:text-primary transition-colors">
+                                                          {user.name.slice(0, 1)}
+                                                        </div>
+                                                        <div className="flex flex-col gap-0.5">
+                                                          <span className="text-xs font-bold text-slate-700">{user.name}</span>
+                                                          <span className="text-[10px] text-muted-foreground font-mono">{user.account}</span>
+                                                        </div>
+                                                      </div>
+                                                      {isExistedInOther && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 bg-slate-200 text-slate-500 rounded-full font-bold">已在其他组</span>
+                                                      )}
+                                                      {!isExistedInOther && (
+                                                        <Plus className="w-4 h-4 text-primary opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                                                      )}
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+                                      )}
+                                      <p className="text-[9px] text-muted-foreground mt-1 ml-1 scale-90 origin-left italic">输入关键字即时过滤，同一人员组间不重叠</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-col justify-center border-l border-slate-100 pl-8">
+                                    <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
+                                      <label className="text-[10px] font-bold text-slate-400 mb-2 block uppercase tracking-tighter">批次分配上限</label>
+                                      <div className="flex items-center gap-3">
+                                        <input
+                                          type="number"
+                                          min={1}
+                                          value={group.batchLimit}
+                                          onChange={e => {
+                                            const next = [...personGroups];
+                                            next[gIdx].batchLimit = Number(e.target.value);
+                                            setPersonGroups(next);
+                                          }}
+                                          className="w-full h-10 px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all font-bold text-center"
+                                        />
+                                        <span className="text-xs text-slate-500 font-bold shrink-0">批次</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {assignMode === "team" && (
+                        <div className="p-10 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-muted-foreground bg-slate-50/30">
+                          <Users className="w-10 h-10 opacity-20 mb-3" />
+                          <p className="text-sm font-medium">团队分配模式暂未开启外部资源池</p>
+                          <p className="text-xs opacity-60 mt-1">请先在空间设置中挂载标注团队</p>
+                        </div>
+                      )}
+
+                      {assignMode === "pool" && (
+                        <div className="p-6 bg-blue-50/50 border border-blue-100 rounded-2xl flex items-start gap-3">
+                          <Info className="w-4 h-4 text-blue-500 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-bold text-blue-900">分配至任务池 (抢单模式)</p>
+                            <p className="text-xs text-blue-700/80 leading-relaxed mt-1">
+                              选定空间内的所有成员均可查阅并领取该任务下的标注批次。人员可根据自身进度自主申领，单人申领上限受空间全局策略控制。
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* QA config */}
+                    <div className="rounded-lg border bg-card p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-medium flex items-center gap-2"><Shield className="w-4 h-4 text-primary" /> 质检节点配置</h3>
+                        <Switch checked={qaEnabled} onCheckedChange={setQaEnabled} />
+                      </div>
+                      {qaEnabled && (
+                        <div className="space-y-4">
+                          {qaNodes.map((node, ni) => (
+                            <div key={ni} className="p-5 bg-white border border-slate-100 rounded-2xl relative group/node shadow-sm hover:shadow-md transition-all animate-in fade-in slide-in-from-right-2 duration-300">
+                              <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-all">
+                                <button
+                                  disabled={ni === 0}
+                                  onClick={() => moveQaNode(ni, 'up')}
+                                  className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-primary transition-all disabled:opacity-30 disabled:hover:bg-transparent"
+                                  title="上移"
+                                >
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  disabled={ni === qaNodes.length - 1}
+                                  onClick={() => moveQaNode(ni, 'down')}
+                                  className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-primary transition-all disabled:opacity-30 disabled:hover:bg-transparent"
+                                  title="下移"
+                                >
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setQaNodes(prev => prev.filter((_, i) => i !== ni))}
+                                  className="p-1.5 hover:bg-rose-50 rounded-lg text-rose-500 transition-all"
+                                  title="删除节点"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-50">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-1 h-4 bg-amber-400 rounded-full" />
+                                  <span className="text-sm font-bold text-slate-800">质检节点 {ni + 1}</span>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-[1fr_240px] gap-8">
+                                <div className="space-y-4">
+                                  <div>
+                                    <label className="text-[10px] font-bold text-slate-400 mb-2 block uppercase tracking-tighter">质检人员（{node.persons.length}）</label>
+                                    <div className="flex flex-wrap gap-2 min-h-[40px] mb-3">
+                                      {node.persons.map((p, pi) => (
+                                        <div key={pi} className="group/tag inline-flex items-center gap-2 px-2 py-1.5 bg-slate-50 border border-slate-100 rounded-xl hover:bg-white hover:border-amber-400/20 hover:shadow-sm transition-all duration-200">
+                                          <div className="w-6 h-6 rounded-full bg-white border border-slate-100 flex items-center justify-center text-[10px] font-bold text-amber-600 shrink-0 shadow-inner">
+                                            {p.slice(0, 1)}
+                                          </div>
+                                          <span className="text-xs font-bold text-slate-700 leading-none">{p}</span>
+                                          <button
+                                            onClick={() => { const nn = [...qaNodes]; nn[ni].persons = nn[ni].persons.filter((_, i) => i !== pi); setQaNodes(nn); }}
+                                            className="ml-1 w-4 h-4 rounded-lg flex items-center justify-center opacity-0 group-hover/tag:opacity-100 hover:bg-rose-500 hover:text-white text-slate-400 transition-all duration-200"
+                                          >
+                                            <X className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                      {node.persons.length === 0 && (
+                                        <div className="flex items-center gap-2 text-slate-300 text-[11px] italic py-2">
+                                          尚未添加任何质检人员...
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="relative w-full max-w-sm search-adder-container">
+                                      <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-amber-400/20 transition-all">
+                                        <Search className="w-3.5 h-3.5 text-muted-foreground" />
+                                        <input
+                                          type="text"
+                                          value={activeSearchQaNodeIdx === ni ? searchText : ""}
+                                          onChange={e => setSearchText(e.target.value)}
+                                          onFocus={() => {
+                                            setActiveSearchQaNodeIdx(ni);
+                                            setActiveSearchGroupId(null);
+                                            setSearchText("");
+                                          }}
+                                          className="flex-1 bg-transparent border-none p-0 focus:ring-0 text-xs placeholder:text-slate-300"
+                                          placeholder="搜索姓名或账号添加质检员..."
+                                        />
+                                        {activeSearchQaNodeIdx === ni && searchText && (
+                                          <button onClick={() => setSearchText("")} className="hover:text-rose-500"><X className="w-3 h-3 text-muted-foreground" /></button>
+                                        )}
+                                      </div>
+
+                                      {/* QA Search Dropdown */}
+                                      {activeSearchQaNodeIdx === ni && (
+                                        <div className="absolute top-full left-0 right-0 z-[100] mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                                          {(() => {
+                                            const filtered = mockUsers.filter(u =>
+                                              (u.name.toLowerCase().includes(searchText.toLowerCase()) ||
+                                                u.account.toLowerCase().includes(searchText.toLowerCase())) &&
+                                              !node.persons.includes(u.name) // Not already in current node
+                                            ).sort((a, b) => {
+                                              const aInOther = qaNodes.some((gn, gni) => gni !== ni && gn.persons.includes(a.name));
+                                              const bInOther = qaNodes.some((gn, gni) => gni !== ni && gn.persons.includes(b.name));
+                                              if (aInOther === bInOther) return 0;
+                                              return aInOther ? 1 : -1;
+                                            });
+
+                                            if (filtered.length === 0) {
+                                              return (
+                                                <div className="p-8 text-center">
+                                                  <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-2">
+                                                    <Search className="w-6 h-6 text-slate-300" />
+                                                  </div>
+                                                  <p className="text-[11px] text-muted-foreground">未找到匹配质检员</p>
+                                                </div>
+                                              );
+                                            }
+
+                                            return (
+                                              <div className="py-1">
+                                                {searchText.length === 0 && (
+                                                  <div className="px-4 py-2 bg-slate-50/50 border-b border-slate-100 mb-1">
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">建议添加质检员</p>
+                                                  </div>
+                                                )}
+                                                {filtered.map(user => {
+                                                  const isExistedInOther = qaNodes.some((gn, gni) => gni !== ni && gn.persons.includes(user.name));
+
+                                                  return (
+                                                    <button
+                                                      key={user.account}
+                                                      disabled={isExistedInOther}
+                                                      onClick={() => {
+                                                        const next = [...qaNodes];
+                                                        next[ni].persons.push(user.name);
+                                                        setQaNodes(next);
+                                                        setSearchText("");
+                                                        setActiveSearchQaNodeIdx(null);
+                                                      }}
+                                                      className={`w-full text-left px-4 py-3 flex items-center justify-between hover:bg-amber-400/5 transition-colors border-b border-slate-50 last:border-0 group/item ${isExistedInOther ? "opacity-40 cursor-not-allowed grayscale" : "cursor-pointer"}`}
+                                                    >
+                                                      <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 overflow-hidden shrink-0 group-hover/item:bg-amber-400/10 group-hover/item:text-amber-600 transition-colors">
+                                                          {user.name.slice(0, 1)}
+                                                        </div>
+                                                        <div className="flex flex-col gap-0.5">
+                                                          <span className="text-xs font-bold text-slate-700">{user.name}</span>
+                                                          <span className="text-[10px] text-muted-foreground font-mono">{user.account}</span>
+                                                        </div>
+                                                      </div>
+                                                      {isExistedInOther && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 bg-slate-200 text-slate-500 rounded-full font-bold">已在其他节点</span>
+                                                      )}
+                                                      {!isExistedInOther && (
+                                                        <Plus className="w-4 h-4 text-amber-500 opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                                                      )}
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex flex-col justify-center border-l border-slate-100 pl-8 space-y-4">
+                                  <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-3">
+                                    <div>
+                                      <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-tighter">质检方式</label>
+                                      <select value={node.method} onChange={e => { const nn = [...qaNodes]; nn[ni].method = e.target.value; setQaNodes(nn); }}
+                                        className="w-full h-9 px-3 py-1 text-xs bg-white border border-slate-200 rounded-xl focus:border-amber-400 focus:ring-4 focus:ring-amber-400/5 transition-all outline-none">
+                                        <option value="batch">按批次抽检</option>
+                                        <option value="task_batch">按任务抽检随机批次全部数据</option>
+                                        <option value="task_random">按任务抽检随机批次随机数据</option>
+                                      </select>
+                                    </div>
+
+                                    {(node.method === "batch" || node.method === "task_random") && (
+                                      <div>
+                                        <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-tighter">批次内数据抽检比例</label>
+                                        <div className="flex items-center gap-2">
+                                          <input type="number" value={node.dataRatio} onChange={e => { const nn = [...qaNodes]; nn[ni].dataRatio = Number(e.target.value); setQaNodes(nn); }}
+                                            className="w-full h-9 px-3 py-1 text-xs bg-white border border-slate-200 rounded-xl focus:border-amber-400 focus:ring-4 focus:ring-amber-400/5 transition-all text-center font-bold" min={0} max={100} />
+                                          <span className="text-xs text-slate-500 font-bold">%</span>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {(node.method === "task_batch" || node.method === "task_random") && (
+                                      <div>
+                                        <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-tighter">批次抽检比例</label>
+                                        <div className="flex items-center gap-2">
+                                          <input type="number" value={node.batchRatio} onChange={e => { const nn = [...qaNodes]; nn[ni].batchRatio = Number(e.target.value); setQaNodes(nn); }}
+                                            className="w-full h-9 px-3 py-1 text-xs bg-white border border-slate-200 rounded-xl focus:border-amber-400 focus:ring-4 focus:ring-amber-400/5 transition-all text-center font-bold" min={0} max={100} />
+                                          <span className="text-xs text-slate-500 font-bold">%</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          <button onClick={() => setQaNodes(prev => [...prev, { persons: [], method: "batch", batchRatio: 100, dataRatio: 30 }])}
+                            className="w-full py-4 border-2 border-dashed border-slate-100 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-primary hover:border-primary/20 hover:bg-primary/5 transition-all group/add">
+                            <Plus className="w-4 h-4 group-hover/add:scale-110 transition-transform" />
+                            添加质检节点
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Accept config */}
+                    <div className="rounded-lg border bg-card p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-medium flex items-center gap-2"><Check className="w-5 h-5 text-green-500" /> 验收环节配置</h3>
+                        <Switch checked={acceptEnabled} onCheckedChange={setAcceptEnabled} />
+                      </div>
+
+                      {acceptEnabled && (
+                        <div className="space-y-4">
+                          {acceptNodes.map((node, ni) => (
+                            <div key={ni} className="p-5 bg-white border border-slate-100 rounded-2xl relative group/node shadow-sm hover:shadow-md transition-all animate-in fade-in slide-in-from-right-2 duration-300">
+                              <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-all">
+                                <button
+                                  disabled={ni === 0}
+                                  onClick={() => {
+                                    const next = [...acceptNodes];
+                                    [next[ni], next[ni - 1]] = [next[ni - 1], next[ni]];
+                                    setAcceptNodes(next);
+                                  }}
+                                  className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-green-500 transition-all disabled:opacity-30 disabled:hover:bg-transparent"
+                                  title="上移"
+                                >
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  disabled={ni === acceptNodes.length - 1}
+                                  onClick={() => {
+                                    const next = [...acceptNodes];
+                                    [next[ni], next[ni + 1]] = [next[ni + 1], next[ni]];
+                                    setAcceptNodes(next);
+                                  }}
+                                  className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-green-500 transition-all disabled:opacity-30 disabled:hover:bg-transparent"
+                                  title="下移"
+                                >
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setAcceptNodes(prev => prev.filter((_, i) => i !== ni))}
+                                  className="p-1.5 hover:bg-rose-50 rounded-lg text-rose-500 transition-all"
+                                  title="删除节点"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-50">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-1 h-4 bg-green-500 rounded-full" />
+                                  <span className="text-sm font-bold text-slate-800">{ni === acceptNodes.length - 1 && acceptNodes.length > 1 ? "最终验收环节" : `验收节点 ${ni + 1}`}</span>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-[1fr_240px] gap-8">
+                                <div className="space-y-4">
+                                  <div>
+                                    <label className="text-[10px] font-bold text-slate-400 mb-2 block uppercase tracking-tighter">验收人员（{node.persons.length}）</label>
+                                    <div className="flex flex-wrap gap-2 min-h-[40px] mb-3">
+                                      {node.persons.map((p, pi) => (
+                                        <div key={pi} className="group/tag inline-flex items-center gap-2 px-2 py-1.5 bg-slate-50 border border-slate-100 rounded-xl hover:bg-white hover:border-green-400/20 hover:shadow-sm transition-all duration-200">
+                                          <div className="w-6 h-6 rounded-full bg-white border border-slate-100 flex items-center justify-center text-[10px] font-bold text-green-600 shrink-0 shadow-inner">
+                                            {p.slice(0, 1)}
+                                          </div>
+                                          <span className="text-xs font-bold text-slate-700 leading-none">{p}</span>
+                                          <button
+                                            onClick={() => { const nn = [...acceptNodes]; nn[ni].persons = nn[ni].persons.filter((_, i) => i !== pi); setAcceptNodes(nn); }}
+                                            className="ml-1 w-4 h-4 rounded-lg flex items-center justify-center opacity-0 group-hover/tag:opacity-100 hover:bg-rose-500 hover:text-white text-slate-400 transition-all duration-200"
+                                          >
+                                            <X className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                      {node.persons.length === 0 && (
+                                        <div className="flex items-center gap-2 text-slate-300 text-[11px] italic py-2">
+                                          尚未添加任何验收人员...
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="relative w-full max-w-sm search-adder-container">
+                                      <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-green-500/20 transition-all">
+                                        <Search className="w-3.5 h-3.5 text-muted-foreground" />
+                                        <input
+                                          type="text"
+                                          value={activeSearchAcceptNodeIdx === ni ? searchText : ""}
+                                          onChange={e => setSearchText(e.target.value)}
+                                          onFocus={() => {
+                                            setActiveSearchAcceptNodeIdx(ni);
+                                            setActiveSearchQaNodeIdx(null);
+                                            setActiveSearchGroupId(null);
+                                            setSearchText("");
+                                          }}
+                                          className="flex-1 bg-transparent border-none p-0 focus:ring-0 text-xs placeholder:text-slate-300"
+                                          placeholder="搜索姓名或账号添加验收员..."
+                                        />
+                                        {activeSearchAcceptNodeIdx === ni && searchText && (
+                                          <button onClick={() => setSearchText("")} className="hover:text-rose-500"><X className="w-3 h-3 text-muted-foreground" /></button>
+                                        )}
+                                      </div>
+
+                                      {/* Accept Search Dropdown */}
+                                      {activeSearchAcceptNodeIdx === ni && (
+                                        <div className="absolute top-full left-0 right-0 z-[100] mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                                          {(() => {
+                                            const filtered = mockUsers.filter(u =>
+                                              (u.name.toLowerCase().includes(searchText.toLowerCase()) ||
+                                                u.account.toLowerCase().includes(searchText.toLowerCase())) &&
+                                              !node.persons.includes(u.name) // Not already in current node
+                                            ).sort((a, b) => {
+                                              const aInOther = acceptNodes.some((an, ani) => ani !== ni && an.persons.includes(a.name));
+                                              const bInOther = acceptNodes.some((an, ani) => ani !== ni && an.persons.includes(b.name));
+                                              if (aInOther === bInOther) return 0;
+                                              return aInOther ? 1 : -1;
+                                            });
+
+                                            if (filtered.length === 0) {
+                                              return (
+                                                <div className="p-8 text-center">
+                                                  <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-2">
+                                                    <Search className="w-6 h-6 text-slate-300" />
+                                                  </div>
+                                                  <p className="text-[11px] text-muted-foreground">未找到匹配验收员</p>
+                                                </div>
+                                              );
+                                            }
+
+                                            return (
+                                              <div className="py-1">
+                                                {searchText.length === 0 && (
+                                                  <div className="px-4 py-2 bg-slate-50/50 border-b border-slate-100 mb-1">
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">建议添加验收员</p>
+                                                  </div>
+                                                )}
+                                                {filtered.map(user => {
+                                                  const isExistedInOther = acceptNodes.some((an, ani) => ani !== ni && an.persons.includes(user.name));
+
+                                                  return (
+                                                    <button
+                                                      key={user.account}
+                                                      disabled={isExistedInOther}
+                                                      onClick={() => {
+                                                        const next = [...acceptNodes];
+                                                        next[ni].persons.push(user.name);
+                                                        setAcceptNodes(next);
+                                                        setSearchText("");
+                                                        setActiveSearchAcceptNodeIdx(null);
+                                                      }}
+                                                      className={`w-full text-left px-4 py-3 flex items-center justify-between hover:bg-green-500/5 transition-colors border-b border-slate-50 last:border-0 group/item ${isExistedInOther ? "opacity-40 cursor-not-allowed grayscale" : "cursor-pointer"}`}
+                                                    >
+                                                      <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 overflow-hidden shrink-0 group-hover/item:bg-green-500/10 group-hover/item:text-green-600 transition-colors">
+                                                          {user.name.slice(0, 1)}
+                                                        </div>
+                                                        <div className="flex flex-col gap-0.5">
+                                                          <span className="text-xs font-bold text-slate-700">{user.name}</span>
+                                                          <span className="text-[10px] text-muted-foreground font-mono">{user.account}</span>
+                                                        </div>
+                                                      </div>
+                                                      {isExistedInOther && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 bg-slate-200 text-slate-500 rounded-full font-bold">已在其他节点</span>
+                                                      )}
+                                                      {!isExistedInOther && (
+                                                        <Plus className="w-4 h-4 text-green-500 opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                                                      )}
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex flex-col justify-center border-l border-slate-100 pl-8 space-y-4">
+                                  <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-3">
+                                    <div>
+                                      <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-tighter">验收方式</label>
+                                      <select value={node.method} onChange={e => { const nn = [...acceptNodes]; nn[ni].method = e.target.value; setAcceptNodes(nn); }}
+                                        className="w-full h-9 px-3 py-1 text-xs bg-white border border-slate-200 rounded-xl focus:border-green-500 focus:ring-4 focus:ring-green-500/5 transition-all outline-none">
+                                        <option value="batch">按批次抽检</option>
+                                        <option value="task_batch">按任务抽检随机批次全部数据</option>
+                                        <option value="task_random">按任务抽检随机批次随机数据</option>
+                                      </select>
+                                    </div>
+
+                                    {(node.method === "batch" || node.method === "task_random") && (
+                                      <div>
+                                        <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-tighter">批次内数据抽检比例</label>
+                                        <div className="flex items-center gap-2">
+                                          <input type="number" value={node.dataRatio} onChange={e => { const nn = [...acceptNodes]; nn[ni].dataRatio = Number(e.target.value); setAcceptNodes(nn); }}
+                                            className="w-full h-9 px-3 py-1 text-xs bg-white border border-slate-200 rounded-xl focus:border-green-500 focus:ring-4 focus:ring-green-500/5 transition-all text-center font-bold" min={0} max={100} />
+                                          <span className="text-xs text-slate-500 font-bold">%</span>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {(node.method === "task_batch" || node.method === "task_random") && (
+                                      <div>
+                                        <label className="text-[10px] font-bold text-slate-400 mb-1.5 block uppercase tracking-tighter">批次抽检比例</label>
+                                        <div className="flex items-center gap-2">
+                                          <input type="number" value={node.batchRatio} onChange={e => { const nn = [...acceptNodes]; nn[ni].batchRatio = Number(e.target.value); setAcceptNodes(nn); }}
+                                            className="w-full h-9 px-3 py-1 text-xs bg-white border border-slate-200 rounded-xl focus:border-green-500 focus:ring-4 focus:ring-green-500/5 transition-all text-center font-bold" min={0} max={100} />
+                                          <span className="text-xs text-slate-500 font-bold">%</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          <button onClick={() => setAcceptNodes(prev => [...prev, { persons: [], method: "batch", batchRatio: 100, dataRatio: 20 }])}
+                            className="w-full py-4 border-2 border-dashed border-slate-100 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-green-500 hover:border-green-500/20 hover:bg-green-500/5 transition-all group/add">
+                            <Plus className="w-4 h-4 group-hover/add:scale-110 transition-transform" />
+                            添加验收节点
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Manager & advanced */}
+                    <div className="rounded-lg border bg-card p-6 space-y-4">
+                      <h3 className="font-medium flex items-center gap-2"><Settings className="w-4 h-4 text-primary" /> 高级配置</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center justify-between p-3 rounded border">
+                          <span className="text-sm">标注批次最大跳过条数</span>
+                          <input type="number" value={maxSkip} onChange={e => setMaxSkip(Number(e.target.value))} className="w-16 px-2 py-1 text-sm border rounded bg-background" />
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded border">
+                          <span className="text-sm">超时回收</span>
+                          <div className="flex items-center gap-2">
+                            <Switch checked={timeoutEnabled} onCheckedChange={setTimeoutEnabled} />
+                            {timeoutEnabled && <input type="number" value={timeoutHours} onChange={e => setTimeoutHours(Number(e.target.value))} className="w-16 px-2 py-1 text-sm border rounded bg-background" />}
+                            {timeoutEnabled && <span className="text-xs text-muted-foreground">小时</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded border">
+                          <span className="text-sm">允许标注人员释放批次</span>
+                          <Switch checked={allowRelease} onCheckedChange={setAllowRelease} />
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded border">
+                          <span className="text-sm">允许追加标注数据集</span>
+                          <Switch checked={allowAppend} onCheckedChange={setAllowAppend} />
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded border">
+                          <span className="text-sm">多人交叉标注</span>
+                          <div className="flex items-center gap-2">
+                            <Switch checked={crossAnnotation} onCheckedChange={setCrossAnnotation} />
+                            {crossAnnotation && <input type="number" value={crossMax} onChange={e => setCrossMax(Number(e.target.value))} className="w-12 px-2 py-1 text-sm border rounded bg-background" min={2} />}
+                            {crossAnnotation && <span className="text-xs text-muted-foreground">人</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded border">
+                          <span className="text-sm">判定专家</span>
+                          <select value={judgeExpert} onChange={e => setJudgeExpert(e.target.value)} className="px-2 py-1 text-sm border rounded bg-background">
+                            {mockUsers.map(m => <option key={m.account} value={m.name}>{m.name}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+
+                {/* Step 4: Spec */}
+                {step === 4 && (
+                  <div className="space-y-6">
+                    <div className="rounded-lg border bg-card p-6 space-y-4">
+                      <h3 className="font-medium flex items-center gap-2"><BookOpen className="w-4 h-4 text-primary" /> 标注规范配置</h3>
+                      <p className="text-xs text-muted-foreground">单任务仅允许选择一种规范方式</p>
+                      <div className="flex gap-2">
+                        {(["none", "text", "file"] as const).map(m => (
+                          <button key={m} onClick={() => setSpecMode(m)}
+                            className={`px-3 py-1.5 text-xs rounded-full border ${specMode === m ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted/50"}`}>
+                            {m === "none" ? "不配置" : m === "text" ? "填写说明文本" : "上传附件"}
+                          </button>
+                        ))}
+                      </div>
+                      {specMode === "text" && (
+                        <div>
+                          <label className="text-xs text-muted-foreground mb-1 block">标注规范（支持 Markdown / HTML）</label>
+                          <textarea value={specText} onChange={e => setSpecText(e.target.value)} placeholder="请输入标注规范说明..." rows={8}
+                            className="w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none font-mono" />
+                        </div>
+                      )}
+                      {specMode === "file" && (
+                        <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                          <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                          <p className="text-sm text-muted-foreground">点击或拖拽上传文件</p>
+                          <p className="text-xs text-muted-foreground mt-1">支持 PDF(1个) 或图片(≤5张)，单文件≤10MB，总计≤20MB</p>
+                        </div>
+                      )}
+                      {specMode !== "none" && (
+                        <div className="flex items-center gap-2">
+                          <Switch checked={specForceRead} onCheckedChange={setSpecForceRead} />
+                          <span className="text-sm">标注前强制阅读规范</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 5: Publish */}
+                {step === 5 && (
+                  <div className="space-y-6">
+                    <div className="rounded-lg border bg-card p-6 space-y-4">
+                      <h3 className="font-medium flex items-center gap-2"><Check className="w-4 h-4 text-primary" /> 发布确认</h3>
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="p-3 rounded bg-muted/30">
+                            <p className="text-xs text-muted-foreground">任务名称</p>
+                            <p className="text-sm font-medium">{taskName}</p>
+                          </div>
+                          <div className="p-3 rounded bg-muted/30">
+                            <p className="text-xs text-muted-foreground">项目类型</p>
+                            <p className="text-sm font-medium">{selectedCategory}</p>
+                          </div>
+                          <div className="p-3 rounded bg-muted/30">
+                            <p className="text-xs text-muted-foreground">数据集</p>
+                            <p className="text-sm font-medium">
+                              {(() => {
+                                const ds = [...myMockDatasets, ...subscribedMockDatasets, ...sharedMockDatasets].find(d => d.id === selectedDatasets[0]?.id);
+                                return ds ? `${ds.name} (${selectedDatasets[0].version})` : "未选择";
+                              })()}
+                            </p>
+                          </div>
+                          <div className="p-3 rounded bg-muted/30">
+                            <p className="text-xs text-muted-foreground">标注工具</p>
+                            <p className="text-sm font-medium">{mockTools.find(t => t.id === selectedTool)?.name || "未选择"}</p>
+                          </div>
+                          <div className="p-3 rounded bg-muted/30">
+                            <p className="text-xs text-muted-foreground">批次模式</p>
+                            <p className="text-sm font-medium">{batchMode === "dataset" ? "数据集维度" : batchMode === "count" ? `每${batchSize}条` : "单条"}</p>
+                          </div>
+                          <div className="p-3 rounded bg-muted/30">
+                            <p className="text-xs text-muted-foreground">分配模式</p>
+                            <p className="text-sm font-medium">{assignMode === "person" ? "分配至个人" : assignMode === "team" ? "分配至团队" : "分配至任务池"}</p>
+                          </div>
+                          <div className="p-3 rounded bg-muted/30">
+                            <p className="text-xs text-muted-foreground">质检</p>
+                            <p className="text-sm font-medium">{qaEnabled ? `${qaNodes.length} 个质检节点` : "未开启"}</p>
+                          </div>
+                          <div className="p-3 rounded bg-muted/30">
+                            <p className="text-xs text-muted-foreground">验收</p>
+                            <p className="text-sm font-medium">{acceptEnabled ? `${acceptNodes.length} 个验收节点` : "未开启"}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <p className="text-xs text-amber-800 dark:text-amber-200">项目类型、标注工具等核心配置发布后无法修改。发布后系统将自动拆分标注批次并放入任务池。</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        )}
 
-        {/* Step 2: Tool */}
-        {step === 2 && (
-          <div className="space-y-6">
-            <div className="rounded-lg border bg-card p-6 space-y-4">
-              <h3 className="font-medium flex items-center gap-2"><Settings className="w-4 h-4 text-primary" /> 标注工具配置</h3>
-              <div className="space-y-2">
-                {filteredTools.map(tool => (
-                  <button key={tool.id} onClick={() => setSelectedTool(tool.id)}
-                    className={`w-full p-3 rounded-lg border text-left flex items-center justify-between ${selectedTool === tool.id ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:bg-muted/30"}`}>
-                    <div>
-                      <span className="text-sm font-medium">{tool.name}</span>
-                      <span className="text-xs text-muted-foreground ml-2">{tool.isPreset ? "预置" : "自定义"}</span>
+          {/* Right: Summary Sidebar */}
+          <aside className="w-80 flex-shrink-0 animate-in fade-in slide-in-from-right-8 duration-500">
+            <div className="h-full flex flex-col gap-6">
+              {/* Task Progress Preview Card */}
+              <div className="bg-card border rounded-2xl shadow-sm overflow-hidden flex flex-col">
+                <div className="bg-primary px-6 py-8 text-primary-foreground relative overflow-hidden">
+                  <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-white/10 rounded-full blur-3xl" />
+                  <div className="relative z-10 flex flex-col items-center text-center">
+                    <div className="w-16 h-16 bg-white/20 rounded-2xl backdrop-blur-md flex items-center justify-center mb-4 shadow-xl border border-white/30">
+                      {selectedCategory ? (
+                        (() => {
+                          const Icon = projectTypes.find(t => t.category === selectedCategory)?.icon || Settings;
+                          return <Icon className="w-8 h-8" />;
+                        })()
+                      ) : <Zap className="w-8 h-8" />}
                     </div>
-                    {selectedTool === tool.id && <Check className="w-4 h-4 text-primary" />}
-                  </button>
-                ))}
+                    <h2 className="font-bold text-lg line-clamp-1 h-7">
+                      {taskName || "未命名任务"}
+                    </h2>
+                    <p className="text-[10px] font-medium opacity-70 uppercase tracking-widest mt-1">
+                      {selectedCategory || "请选择项目类型"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-6 space-y-6 flex-1 overflow-y-auto max-h-[calc(100vh-500px)]">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                      <span>已选资源汇总</span>
+                      <Settings className="w-3 h-3" />
+                    </div>
+
+                    {/* Dataset Info */}
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <Database className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-bold text-muted-foreground">数据集</p>
+                        <p className="text-xs font-medium truncate">
+                          {selectedDatasets.length > 0 ? (
+                            (() => {
+                              const ds = [...myMockDatasets, ...subscribedMockDatasets, ...sharedMockDatasets].find(d => d.id === selectedDatasets[0].id);
+                              return ds ? `${ds.name} (${selectedDatasets[0].version})` : "未知数据集";
+                            })()
+                          ) : "尚未选择"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Tool Info */}
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                        <Settings className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-bold text-muted-foreground">标注工具</p>
+                        <p className="text-xs font-medium truncate">
+                          {selectedTool ? (
+                            mockTools.find(t => t.id === selectedTool)?.name || "未知工具"
+                          ) : "尚未选择"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Personnel Info */}
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                        <Users className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-bold text-muted-foreground">标注人员</p>
+                        <p className="text-xs font-medium">
+                          {assignMode === "person"
+                            ? `${personGroups.reduce((acc, g) => acc + g.persons.length, 0)} 位标注员`
+                            : assignMode === "pool" ? "全空间成员" : "尚未选择"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase">当前步骤进度</span>
+                      <span className="text-xs font-bold text-primary">{Math.round((step / (steps.length - 1)) * 100)}%</span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary transition-all duration-500 ease-out shadow-[0_0_8px_rgba(var(--primary),0.4)]"
+                        style={{ width: `${(step / (steps.length - 1)) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-muted/20 border-t">
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-medium">
+                    <Info className="w-3 h-3" />
+                    <span>系统已自动保存您的配置草稿</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tips Card */}
+              <div className="flex-1 bg-slate-900 rounded-2xl p-6 text-slate-300 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-primary/20 rounded-full blur-2xl -mr-12 -mt-12 transition-transform group-hover:scale-150 duration-700" />
+                <BookOpen className="w-6 h-6 text-primary mb-4" />
+                <h4 className="text-sm font-bold text-white mb-2">配置小贴士</h4>
+                <p className="text-xs leading-relaxed opacity-80">
+                  {step === 0 ? "项目类型选择后不可更改，请根据数据特点（如文本、图像）准确选择。" :
+                    step === 1 ? "选择数据结构清晰、标注对象明确且适配标注工具的数据集版本。" :
+                      step === 2 ? "复杂的标注任务可以配置多级标签组，支持专家模式下的动态字段联动。" :
+                        "发布任务后，系统会自动将数据拆分为批次并在标注大厅中分发。"}
+                </p>
               </div>
             </div>
+          </aside>
+        </div>
+      </main>
 
-            {selectedTool && (
-              <div className="rounded-lg border bg-card p-6 space-y-4">
-                <h4 className="text-sm font-medium">标注内容字段映射</h4>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">标注内容所在字段</label>
-                  <input value={annotationField} onChange={e => setAnnotationField(e.target.value)} placeholder="例如: content, text" className="w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Info className="w-3 h-3" /> 选择数据集中待标注的对应字段</p>
-                </div>
-
-                <h4 className="text-sm font-medium mt-4">标签配置</h4>
-                <div className="flex items-center gap-4 mb-2">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="radio" checked={labelMode === "single"} onChange={() => setLabelMode("single")} /> 单选
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="radio" checked={labelMode === "multi"} onChange={() => setLabelMode("multi")} /> 多选
-                  </label>
-                </div>
-                <div className="space-y-2">
-                  {labels.map((l, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <input type="color" value={l.color} onChange={e => setLabels(prev => prev.map((p, j) => j === i ? { ...p, color: e.target.value } : p))} className="w-8 h-8 rounded border cursor-pointer" />
-                      <input value={l.value} onChange={e => setLabels(prev => prev.map((p, j) => j === i ? { ...p, value: e.target.value } : p))} className="flex-1 px-3 py-1.5 text-sm border rounded bg-background" />
-                      <button onClick={() => setLabels(prev => prev.filter((_, j) => j !== i))} className="p-1 rounded hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
-                    </div>
-                  ))}
-                  <button onClick={() => setLabels(prev => [...prev, { value: "", color: "#3b82f6" }])} className="text-xs text-primary flex items-center gap-1 hover:underline"><Plus className="w-3 h-3" /> 添加标签</button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Step 3: Task config */}
-        {step === 3 && (
-          <div className="space-y-6">
-            {/* Batch config */}
-            <div className="rounded-lg border bg-card p-6 space-y-4">
-              <h3 className="font-medium flex items-center gap-2"><Zap className="w-4 h-4 text-primary" /> 标注批次配置</h3>
-              <div className="space-y-2">
-                {([
-                  { key: "dataset", label: "以数据集维度打包成一个标注批次" },
-                  { key: "count", label: "每N条数据打包成一个标注批次" },
-                  { key: "single", label: "单条数据打包成一个标注批次" },
-                ] as const).map(opt => (
-                  <label key={opt.key} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${batchMode === opt.key ? "border-primary bg-primary/5" : "hover:bg-muted/30"}`}>
-                    <input type="radio" checked={batchMode === opt.key} onChange={() => setBatchMode(opt.key)} />
-                    <span className="text-sm">{opt.label}</span>
-                  </label>
-                ))}
-              </div>
-              {batchMode === "count" && (
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-muted-foreground">每</label>
-                  <input type="number" value={batchSize} onChange={e => setBatchSize(Number(e.target.value))} className="w-24 px-2 py-1.5 text-sm border rounded bg-background" min={1} />
-                  <label className="text-sm text-muted-foreground">条为一个批次</label>
-                </div>
-              )}
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-muted-foreground">数据抽样：</label>
-                <select value={samplingOrder} onChange={e => setSamplingOrder(e.target.value as any)} className="px-2 py-1.5 text-sm border rounded bg-background">
-                  <option value="original">按数据原始顺序抽样</option>
-                  <option value="random">随机排序抽样</option>
-                </select>
-              </div>
-              <button onClick={handleGenerateBatches} className="px-4 py-2 text-sm bg-primary/10 text-primary rounded-lg hover:bg-primary/20">
-                立即生成标注批次
-              </button>
-              {generatedBatches.length > 0 && (
-                <div className="mt-2 p-3 bg-muted/30 rounded-lg max-h-[150px] overflow-y-auto">
-                  <p className="text-xs font-medium mb-2">已生成 {generatedBatches.length} 个批次：</p>
-                  <div className="flex flex-wrap gap-2">
-                    {generatedBatches.map(b => (
-                      <span key={b.id} className="px-2 py-1 bg-card rounded border text-xs">{b.id} ({b.size}条)</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Personnel config */}
-            <div className="rounded-lg border bg-card p-6 space-y-4">
-              <h3 className="font-medium flex items-center gap-2"><Users className="w-4 h-4 text-primary" /> 标注人员配置</h3>
-              <div className="flex gap-2">
-                {(["person","team","pool"] as const).map(m => (
-                  <button key={m} onClick={() => setAssignMode(m)}
-                    className={`px-3 py-1.5 text-xs rounded-full border ${assignMode === m ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted/50"}`}>
-                    {m === "person" ? "分配至个人" : m === "team" ? "分配至团队" : "分配至任务池"}
-                  </button>
-                ))}
-              </div>
-              {assignMode !== "pool" && (
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    {assignedPersons.map((p, i) => (
-                      <span key={i} className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs flex items-center gap-1">
-                        {p} <button onClick={() => setAssignedPersons(prev => prev.filter((_, j) => j !== i))}><X className="w-3 h-3" /></button>
-                      </span>
-                    ))}
-                  </div>
-                  <select onChange={e => { if (e.target.value && !assignedPersons.includes(e.target.value)) setAssignedPersons(prev => [...prev, e.target.value]); e.target.value = ""; }}
-                    className="px-2 py-1.5 text-sm border rounded bg-background">
-                    <option value="">添加人员...</option>
-                    {mockMembers.filter(m => !assignedPersons.includes(m)).map(m => <option key={m}>{m}</option>)}
-                  </select>
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs text-muted-foreground">每人可标注批次上限：</label>
-                    <input type="number" value={personBatchLimit} onChange={e => setPersonBatchLimit(Number(e.target.value))} className="w-20 px-2 py-1 text-sm border rounded bg-background" min={1} />
-                  </div>
-                </div>
-              )}
-              {assignMode === "pool" && <p className="text-xs text-muted-foreground">空间内所有人均可查看并领取批次</p>}
-            </div>
-
-            {/* QA config */}
-            <div className="rounded-lg border bg-card p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium flex items-center gap-2"><Shield className="w-4 h-4 text-primary" /> 质检节点配置</h3>
-                <Switch checked={qaEnabled} onCheckedChange={setQaEnabled} />
-              </div>
-              {qaEnabled && qaNodes.map((node, ni) => (
-                <div key={ni} className="p-3 border rounded-lg space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">质检节点 {ni + 1}</span>
-                    {qaNodes.length > 1 && <button onClick={() => setQaNodes(prev => prev.filter((_, i) => i !== ni))} className="text-xs text-destructive">删除</button>}
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground block mb-1">质检人员</label>
-                    <select onChange={e => { if (e.target.value && !node.persons.includes(e.target.value)) { const newNodes = [...qaNodes]; newNodes[ni].persons.push(e.target.value); setQaNodes(newNodes); } e.target.value = ""; }}
-                      className="px-2 py-1 text-xs border rounded bg-background">
-                      <option value="">添加质检员...</option>
-                      {mockMembers.filter(m => !node.persons.includes(m)).map(m => <option key={m}>{m}</option>)}
-                    </select>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {node.persons.map((p, pi) => (
-                        <span key={pi} className="px-2 py-0.5 bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 rounded text-xs flex items-center gap-1">
-                          {p} <button onClick={() => { const nn = [...qaNodes]; nn[ni].persons = nn[ni].persons.filter((_, i) => i !== pi); setQaNodes(nn); }}><X className="w-2.5 h-2.5" /></button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground block mb-1">质检方式</label>
-                    <select value={node.method} onChange={e => { const nn = [...qaNodes]; nn[ni].method = e.target.value; setQaNodes(nn); }}
-                      className="px-2 py-1.5 text-xs border rounded bg-background">
-                      <option value="batch">按批次抽检</option>
-                      <option value="task_batch">按任务抽检随机批次的全部数据</option>
-                      <option value="task_random">按任务抽检随机批次的随机数据</option>
-                    </select>
-                  </div>
-                  {(node.method === "batch" || node.method === "task_random") && (
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-muted-foreground">批次内数据抽检比例：</label>
-                      <input type="number" value={node.dataRatio} onChange={e => { const nn = [...qaNodes]; nn[ni].dataRatio = Number(e.target.value); setQaNodes(nn); }} className="w-16 px-2 py-1 text-xs border rounded bg-background" min={0} max={100} />
-                      <span className="text-xs text-muted-foreground">%</span>
-                    </div>
-                  )}
-                  {(node.method === "task_batch" || node.method === "task_random") && (
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-muted-foreground">批次抽检比例：</label>
-                      <input type="number" value={node.batchRatio} onChange={e => { const nn = [...qaNodes]; nn[ni].batchRatio = Number(e.target.value); setQaNodes(nn); }} className="w-16 px-2 py-1 text-xs border rounded bg-background" min={0} max={100} />
-                      <span className="text-xs text-muted-foreground">%</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {qaEnabled && (
-                <button onClick={() => setQaNodes(prev => [...prev, { persons: [], method: "batch", batchRatio: 100, dataRatio: 30 }])}
-                  className="text-xs text-primary flex items-center gap-1 hover:underline"><Plus className="w-3 h-3" /> 添加质检节点</button>
-              )}
-            </div>
-
-            {/* Accept config */}
-            <div className="rounded-lg border bg-card p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium flex items-center gap-2"><Shield className="w-4 h-4 text-primary" /> 验收环节配置</h3>
-                <Switch checked={acceptEnabled} onCheckedChange={setAcceptEnabled} />
-              </div>
-              {acceptEnabled && (
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground block mb-1">验收人员</label>
-                    <div className="flex flex-wrap gap-1 mb-1">
-                      {acceptPersons.map((p, i) => (
-                        <span key={i} className="px-2 py-0.5 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded text-xs flex items-center gap-1">
-                          {p} <button onClick={() => setAcceptPersons(prev => prev.filter((_, j) => j !== i))}><X className="w-2.5 h-2.5" /></button>
-                        </span>
-                      ))}
-                    </div>
-                    <select onChange={e => { if (e.target.value && !acceptPersons.includes(e.target.value)) setAcceptPersons(prev => [...prev, e.target.value]); e.target.value = ""; }}
-                      className="px-2 py-1 text-xs border rounded bg-background">
-                      <option value="">添加验收员...</option>
-                      {mockMembers.filter(m => !acceptPersons.includes(m)).map(m => <option key={m}>{m}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground block mb-1">验收方式</label>
-                    <select value={acceptMethod} onChange={e => setAcceptMethod(e.target.value)} className="px-2 py-1.5 text-xs border rounded bg-background">
-                      <option value="batch">按批次抽检</option>
-                      <option value="task_batch">按任务抽检随机批次的全部数据</option>
-                      <option value="task_random">按任务抽检随机批次的随机数据</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Manager & advanced */}
-            <div className="rounded-lg border bg-card p-6 space-y-4">
-              <h3 className="font-medium flex items-center gap-2"><Settings className="w-4 h-4 text-primary" /> 高级配置</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center justify-between p-3 rounded border">
-                  <span className="text-sm">标注批次最大跳过条数</span>
-                  <input type="number" value={maxSkip} onChange={e => setMaxSkip(Number(e.target.value))} className="w-16 px-2 py-1 text-sm border rounded bg-background" />
-                </div>
-                <div className="flex items-center justify-between p-3 rounded border">
-                  <span className="text-sm">超时回收</span>
-                  <div className="flex items-center gap-2">
-                    <Switch checked={timeoutEnabled} onCheckedChange={setTimeoutEnabled} />
-                    {timeoutEnabled && <input type="number" value={timeoutHours} onChange={e => setTimeoutHours(Number(e.target.value))} className="w-16 px-2 py-1 text-sm border rounded bg-background" />}
-                    {timeoutEnabled && <span className="text-xs text-muted-foreground">小时</span>}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded border">
-                  <span className="text-sm">允许标注人员释放批次</span>
-                  <Switch checked={allowRelease} onCheckedChange={setAllowRelease} />
-                </div>
-                <div className="flex items-center justify-between p-3 rounded border">
-                  <span className="text-sm">允许追加标注数据集</span>
-                  <Switch checked={allowAppend} onCheckedChange={setAllowAppend} />
-                </div>
-                <div className="flex items-center justify-between p-3 rounded border">
-                  <span className="text-sm">多人交叉标注</span>
-                  <div className="flex items-center gap-2">
-                    <Switch checked={crossAnnotation} onCheckedChange={setCrossAnnotation} />
-                    {crossAnnotation && <input type="number" value={crossMax} onChange={e => setCrossMax(Number(e.target.value))} className="w-12 px-2 py-1 text-sm border rounded bg-background" min={2} />}
-                    {crossAnnotation && <span className="text-xs text-muted-foreground">人</span>}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded border">
-                  <span className="text-sm">判定专家</span>
-                  <select value={judgeExpert} onChange={e => setJudgeExpert(e.target.value)} className="px-2 py-1 text-sm border rounded bg-background">
-                    {mockMembers.map(m => <option key={m}>{m}</option>)}
-                  </select>
-                </div>
-              </div>
+      {/* Sticky Footer */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-background/80 backdrop-blur-md border-t h-20">
+        <div className="container max-w-[1440px] h-full flex items-center justify-between px-6">
+          <div className="flex items-center gap-6">
+            <button
+              onClick={() => step > 0 ? setStep(step - 1) : onBack()}
+              className="px-6 py-2 content-center text-sm font-bold text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl transition-all"
+            >
+              {step === 0 ? "取消创建" : "返回上一步"}
+            </button>
+            <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground italic">
+              {/* Sync status removed per user request */}
             </div>
           </div>
-        )}
 
-        {/* Step 4: Spec */}
-        {step === 4 && (
-          <div className="space-y-6">
-            <div className="rounded-lg border bg-card p-6 space-y-4">
-              <h3 className="font-medium flex items-center gap-2"><BookOpen className="w-4 h-4 text-primary" /> 标注规范配置</h3>
-              <p className="text-xs text-muted-foreground">单任务仅允许选择一种规范方式</p>
-              <div className="flex gap-2">
-                {(["none","text","file"] as const).map(m => (
-                  <button key={m} onClick={() => setSpecMode(m)}
-                    className={`px-3 py-1.5 text-xs rounded-full border ${specMode === m ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted/50"}`}>
-                    {m === "none" ? "不配置" : m === "text" ? "填写说明文本" : "上传附件"}
-                  </button>
-                ))}
-              </div>
-              {specMode === "text" && (
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">标注规范（支持 Markdown / HTML）</label>
-                  <textarea value={specText} onChange={e => setSpecText(e.target.value)} placeholder="请输入标注规范说明..." rows={8}
-                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none font-mono" />
-                </div>
-              )}
-              {specMode === "file" && (
-                <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                  <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">点击或拖拽上传文件</p>
-                  <p className="text-xs text-muted-foreground mt-1">支持 PDF(1个) 或图片(≤5张)，单文件≤10MB，总计≤20MB</p>
-                </div>
-              )}
-              {specMode !== "none" && (
-                <div className="flex items-center gap-2">
-                  <Switch checked={specForceRead} onCheckedChange={setSpecForceRead} />
-                  <span className="text-sm">标注前强制阅读规范</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Step 5: Publish */}
-        {step === 5 && (
-          <div className="space-y-6">
-            <div className="rounded-lg border bg-card p-6 space-y-4">
-              <h3 className="font-medium flex items-center gap-2"><Check className="w-4 h-4 text-primary" /> 发布确认</h3>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 rounded bg-muted/30">
-                    <p className="text-xs text-muted-foreground">任务名称</p>
-                    <p className="text-sm font-medium">{taskName}</p>
-                  </div>
-                  <div className="p-3 rounded bg-muted/30">
-                    <p className="text-xs text-muted-foreground">项目类型</p>
-                    <p className="text-sm font-medium">{selectedCategory} - {selectedSubType}</p>
-                  </div>
-                  <div className="p-3 rounded bg-muted/30">
-                    <p className="text-xs text-muted-foreground">数据集</p>
-                    <p className="text-sm font-medium">{selectedDatasets.length} 个数据集</p>
-                  </div>
-                  <div className="p-3 rounded bg-muted/30">
-                    <p className="text-xs text-muted-foreground">标注工具</p>
-                    <p className="text-sm font-medium">{mockTools.find(t => t.id === selectedTool)?.name || "未选择"}</p>
-                  </div>
-                  <div className="p-3 rounded bg-muted/30">
-                    <p className="text-xs text-muted-foreground">批次模式</p>
-                    <p className="text-sm font-medium">{batchMode === "dataset" ? "数据集维度" : batchMode === "count" ? `每${batchSize}条` : "单条"}</p>
-                  </div>
-                  <div className="p-3 rounded bg-muted/30">
-                    <p className="text-xs text-muted-foreground">分配模式</p>
-                    <p className="text-sm font-medium">{assignMode === "person" ? "分配至个人" : assignMode === "team" ? "分配至团队" : "分配至任务池"}</p>
-                  </div>
-                  <div className="p-3 rounded bg-muted/30">
-                    <p className="text-xs text-muted-foreground">质检</p>
-                    <p className="text-sm font-medium">{qaEnabled ? `${qaNodes.length} 个质检节点` : "未开启"}</p>
-                  </div>
-                  <div className="p-3 rounded bg-muted/30">
-                    <p className="text-xs text-muted-foreground">验收</p>
-                    <p className="text-sm font-medium">{acceptEnabled ? `${acceptPersons.length} 名验收员` : "未开启"}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-800 dark:text-amber-200">项目类型、标注工具等核心配置发布后无法修改。发布后系统将自动拆分标注批次并放入任务池。</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Navigation */}
-        <div className="flex items-center justify-between mt-8 pt-4 border-t">
-          <button onClick={() => step > 0 ? setStep(step - 1) : onBack()} className="px-4 py-2 text-sm border rounded-lg hover:bg-muted/50">
-            {step === 0 ? "取消" : "上一步"}
-          </button>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-4">
             {step < steps.length - 1 ? (
-              <button onClick={() => canProceed() && setStep(step + 1)} disabled={!canProceed()}
-                className="px-6 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50">
-                下一步
+              <button
+                onClick={() => canProceed() && setStep(step + 1)}
+                disabled={!canProceed()}
+                className="group relative px-10 py-3 bg-primary text-primary-foreground rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:shadow-xl hover:translate-y-[-2px] active:translate-y-0 disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none transition-all"
+              >
+                <span>下一步: {steps[step + 1]}</span>
+                <ChevronRight className="w-4 h-4 inline-block ml-2 group-hover:translate-x-1 transition-transform" />
               </button>
             ) : (
-              <button onClick={() => setPublishConfirmOpen(true)} className="px-6 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">
-                发布任务
+              <button
+                onClick={() => setPublishConfirmOpen(true)}
+                className="group relative px-10 py-3 bg-primary text-primary-foreground rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:shadow-xl hover:translate-y-[-2px] active:translate-y-0 transition-all"
+              >
+                <Zap className="w-4 h-4 inline-block mr-2 text-yellow-400" />
+                发布并拉起标注任务
               </button>
             )}
           </div>
         </div>
-      </div>
+      </footer>
 
       {/* Publish confirmation dialog */}
       {publishConfirmOpen && (

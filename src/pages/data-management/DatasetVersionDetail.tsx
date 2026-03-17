@@ -410,7 +410,15 @@ export default function DatasetVersionDetail({ dataset, version, onBack, onUploa
                       {f.isFolder ? (
                         <button className="font-medium text-primary hover:underline" onClick={() => setCurrentPath([...currentPath, f.name])}>{f.name}</button>
                       ) : (
-                        <span className="text-foreground">{f.name}</span>
+                        <span
+                          className={cn(
+                            "text-foreground transition-colors",
+                            f.status === "导入完成" && "cursor-pointer hover:text-primary hover:underline font-medium"
+                          )}
+                          onClick={() => { if (f.status === "导入完成") setPreviewFile(f); }}
+                        >
+                          {f.name}
+                        </span>
                       )}
                     </div>
                   </td>
@@ -434,14 +442,9 @@ export default function DatasetVersionDetail({ dataset, version, onBack, onUploa
                   <td className="py-3 px-3">
                     <div className="flex items-center gap-0.5">
                       {!f.isFolder && f.status === "导入完成" && (
-                        <>
-                          <button className="p-1 rounded hover:bg-muted/50" title="预览" onClick={() => setPreviewFile(f)}>
-                            <Eye className="w-3.5 h-3.5 text-muted-foreground" />
-                          </button>
-                          <button className="p-1 rounded hover:bg-muted/50" title="下载" onClick={() => toast({ title: `正在下载 ${f.name}` })}>
-                            <Download className="w-3.5 h-3.5 text-muted-foreground" />
-                          </button>
-                        </>
+                        <button className="p-1 rounded hover:bg-muted/50" title="下载" onClick={() => toast({ title: `正在下载 ${f.name}` })}>
+                          <Download className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
                       )}
                       {!f.isFolder && (f.status === "导入失败" || f.status === "解析失败") && (
                         <button className="p-1 rounded hover:bg-muted/50" title="重新上传" onClick={() => toast({ title: `${f.name} 重新导入任务已创建` })}>
