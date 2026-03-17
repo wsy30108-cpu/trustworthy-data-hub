@@ -164,7 +164,6 @@ export const platformMenus: Record<string, MenuItem[]> = {
       route: "#",
       children: [
         { id: "tasks", label: "标注任务", icon: ClipboardList, route: "/data-annotation/tasks" },
-        { id: "task-logs", label: "任务日志", icon: FileText, route: "/data-annotation/task-logs" },
       ]
     },
     {

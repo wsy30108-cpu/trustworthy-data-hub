@@ -104,7 +104,6 @@ const App = () => (
 
                   {/* 005 数据标注 */}
                   <Route path="/data-annotation/tasks" element={<DataAnnotationTasks />} />
-                  <Route path="/data-annotation/task-logs" element={<DataAnnotationTasks />} />
                   <Route path="/data-annotation/task-hall" element={<DataAnnotationTaskHall />} />
                   <Route path="/data-annotation/my-tasks" element={<DataAnnotationMyTasks />} />
                   <Route path="/data-annotation/tools" element={<DataAnnotationTools />} />

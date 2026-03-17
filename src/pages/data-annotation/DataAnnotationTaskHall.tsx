@@ -1,7 +1,8 @@
 import { useState } from "react";
 import {
   Search, ClipboardList, Users, Clock, Eye, FileText, Filter,
-  CheckCircle, AlertTriangle, BookOpen, ChevronDown, X
+  CheckCircle, AlertTriangle, BookOpen, ChevronDown, X,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,12 +23,21 @@ interface HallBatch {
 }
 
 const mockBatches: HallBatch[] = [
-  { id: "BT-001", taskName: "金融文本情感标注", taskId: "AT-001", projectType: "文本类", taskType: "情感与倾向", dataCount: 200, creator: "张明", createdAt: "2026-02-20", authorizedTo: "任务池", status: "可领取", description: "对金融新闻和研报进行正面/负面/中性情感极性标注", labels: ["正面","负面","中性"], spec: "请根据文本整体情感倾向进行标注..." },
-  { id: "BT-002", taskName: "医疗图像分类标注", taskId: "AT-002", projectType: "图像类", taskType: "图像分类", dataCount: 100, creator: "李芳", createdAt: "2026-02-15", authorizedTo: "AI数据团队", status: "可领取", description: "CT/MRI影像分类标注", labels: ["正常","异常-良性","异常-恶性"], spec: "请根据影像特征进行分类..." },
-  { id: "BT-003", taskName: "客服对话意图标注", taskId: "AT-003", projectType: "文本类", taskType: "内容分类与审核", dataCount: 500, creator: "王强", createdAt: "2026-01-28", authorizedTo: "任务池", status: "可领取", description: "客服对话文本意图分类", labels: ["咨询","投诉","建议","其他"], spec: "根据对话内容判断用户意图..." },
+  { id: "BT-001", taskName: "金融文本情感标注", taskId: "AT-001", projectType: "文本类", taskType: "情感与倾向", dataCount: 200, creator: "张明", createdAt: "2026-02-20", authorizedTo: "任务池", status: "可领取", description: "对金融新闻和研报进行正面/负面/中性情感极性标注", labels: ["正面", "负面", "中性"], spec: "请根据文本整体情感倾向进行标注..." },
+  { id: "BT-002", taskName: "医疗图像分类标注", taskId: "AT-002", projectType: "图像类", taskType: "图像分类", dataCount: 100, creator: "李芳", createdAt: "2026-02-15", authorizedTo: "AI数据团队", status: "可领取", description: "CT/MRI影像分类标注", labels: ["正常", "异常-良性", "异常-恶性"], spec: "请根据影像特征进行分类..." },
+  { id: "BT-003", taskName: "客服对话意图标注", taskId: "AT-003", projectType: "文本类", taskType: "内容分类与审核", dataCount: 500, creator: "王强", createdAt: "2026-01-28", authorizedTo: "任务池", status: "可领取", description: "客服对话文本意图分类", labels: ["咨询", "投诉", "建议", "其他"], spec: "根据对话内容判断用户意图..." },
   { id: "BT-004", taskName: "语音转写质检", taskId: "AT-004", projectType: "音频类", taskType: "音频转写", dataCount: 50, creator: "赵丽", createdAt: "2026-03-01", authorizedTo: "NLP研发组", status: "可领取", description: "语音转写结果校正", labels: [], spec: "请校正转写文本中的错误..." },
-  { id: "BT-005", taskName: "视频内容审核标注", taskId: "AT-005", projectType: "视频类", taskType: "视频分类", dataCount: 30, creator: "孙伟", createdAt: "2026-03-05", authorizedTo: "任务池", status: "可领取", description: "短视频内容审核与分类", labels: ["合规","违规-暴力","违规-色情","违规-其他"], spec: "请审核视频内容合规性..." },
-  { id: "BT-006", taskName: "金融文本情感标注", taskId: "AT-001", projectType: "文本类", taskType: "情感与倾向", dataCount: 200, creator: "张明", createdAt: "2026-02-20", authorizedTo: "任务池", status: "可领取", description: "对金融新闻和研报进行情感极性标注", labels: ["正面","负面","中性"], spec: "请根据文本整体情感倾向进行标注..." },
+  { id: "BT-005", taskName: "视频内容审核标注", taskId: "AT-005", projectType: "视频类", taskType: "视频分类", dataCount: 30, creator: "孙伟", createdAt: "2026-03-05", authorizedTo: "任务池", status: "可领取", description: "短视频内容审核与分类", labels: ["合规", "违规-暴力", "违规-色情", "违规-其他"], spec: "请审核视频内容合规性..." },
+  { id: "BT-006", taskName: "金融文本情感标注", taskId: "AT-001", projectType: "文本类", taskType: "情感与倾向", dataCount: 200, creator: "张明", createdAt: "2026-02-20", authorizedTo: "任务池", status: "可领取", description: "对金融新闻和研报进行情感极性标注", labels: ["正面", "负面", "中性"], spec: "请根据文本整体情感倾向进行标注..." },
+  { id: "BT-007", taskName: "多轮对话意图抽取", taskId: "AT-006", projectType: "文本类", taskType: "对话抽取", dataCount: 150, creator: "陈静", createdAt: "2026-03-10", authorizedTo: "任务池", status: "可领取", description: "从多轮对话逻辑中提取核心意图", labels: ["购买", "退款", "查询"], spec: "注意上下文关联性..." },
+  { id: "BT-008", taskName: "人脸关键点标注", taskId: "AT-007", projectType: "图像类", taskType: "特征提取", dataCount: 400, creator: "高博", createdAt: "2026-03-11", authorizedTo: "任务池", status: "可领取", description: "标注人脸 68 个核心关键点", labels: [], spec: "精度要求单像素级别..." },
+  { id: "BT-009", taskName: "自动驾驶障碍物识别", taskId: "AT-008", projectType: "图像类", taskType: "目标检测", dataCount: 1000, creator: "李雷", createdAt: "2026-03-12", authorizedTo: "任务池", status: "可领取", description: "标注行、车、交通标线等障碍物", labels: ["行人", "车辆", "障碍物"], spec: "遵循道路安全标注规范..." },
+  { id: "BT-010", taskName: "古籍文字识别 OCR", taskId: "AT-009", projectType: "文本类", taskType: "文本转录", dataCount: 50, creator: "韩梅梅", createdAt: "2026-03-13", authorizedTo: "NLP研发组", status: "可领取", description: "复杂排版古籍文字校对", labels: [], spec: "注意繁简字转换规则..." },
+  { id: "BT-011", taskName: "泰语翻译评价", taskId: "AT-010", projectType: "文本类", taskType: "翻译评估", dataCount: 300, creator: "周泰", createdAt: "2026-03-14", authorizedTo: "任务池", status: "可领取", description: "对机器翻译质量进行 5 分制打分", labels: ["信", "达", "雅"], spec: "参考专业翻译评估标准..." },
+  { id: "BT-012", taskName: "卫星遥感地物分类", taskId: "AT-011", projectType: "图像类", taskType: "语义分割", dataCount: 80, creator: "吴卫", createdAt: "2026-03-15", authorizedTo: "任务池", status: "可领取", description: "对遥感图像中的建筑、植被进行分割", labels: ["建筑", "植被", "水体"], spec: "注意边缘平滑度..." },
+  { id: "BT-013", taskName: "电商评价关键词提取", taskId: "AT-012", projectType: "文本类", taskType: "关键词提取", dataCount: 600, creator: "林悦", createdAt: "2026-03-16", authorizedTo: "任务池", status: "可领取", description: "提取商品评价中的核心关键词", labels: ["好评", "差评", "物流", "价格"], spec: "提取具有区分性的词汇..." },
+  { id: "BT-014", taskName: "道路场景车道线标注", taskId: "AT-013", projectType: "图像类", taskType: "语义分割", dataCount: 220, creator: "王伟", createdAt: "2026-03-16", authorizedTo: "任务池", status: "可领取", description: "对车载摄像头拍摄的车道线进行像素级标注", labels: ["实线", "虚线", "黄色实线"], spec: "注意连续性..." },
+  { id: "BT-015", taskName: "动物行为分类标注", taskId: "AT-014", projectType: "视频类", taskType: "行为识别", dataCount: 15, creator: "刘敏", createdAt: "2026-03-17", authorizedTo: "任务池", status: "可领取", description: "标注视频中动物的各类行为行为", labels: ["奔跑", "进食", "休息"], spec: "细粒度记录开始结束帧..." },
 ];
 
 const typeColors: Record<string, string> = {
@@ -39,6 +49,8 @@ const typeColors: Record<string, string> = {
   "跨模态类": "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300",
 };
 
+const PAGE_SIZES = [10, 20, 50];
+
 const DataAnnotationTaskHall = () => {
   const [searchText, setSearchText] = useState("");
   const [typeFilter, setTypeFilter] = useState("全部");
@@ -46,6 +58,8 @@ const DataAnnotationTaskHall = () => {
   const [batches, setBatches] = useState(mockBatches);
   const [detailBatch, setDetailBatch] = useState<HallBatch | null>(null);
   const [claimConfirm, setClaimConfirm] = useState<HallBatch | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const filtered = batches.filter(b => {
     if (b.status !== "可领取") return false;
@@ -54,6 +68,9 @@ const DataAnnotationTaskHall = () => {
     if (searchText && !b.taskName.includes(searchText) && !b.id.includes(searchText)) return false;
     return true;
   });
+
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
 
   const handleClaim = (batch: HallBatch) => {
     setBatches(prev => prev.map(b => b.id === batch.id ? { ...b, status: "已领取" as const } : b));
@@ -92,17 +109,17 @@ const DataAnnotationTaskHall = () => {
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="搜索任务名称或批次ID..." className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+          <input value={searchText} onChange={e => { setSearchText(e.target.value); setPage(1); }} placeholder="搜索任务名称或批次ID..." className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
         </div>
-        <select value={authFilter} onChange={e => setAuthFilter(e.target.value)} className="px-3 py-2 text-sm border rounded-lg bg-card">
+        <select value={authFilter} onChange={e => { setAuthFilter(e.target.value); setPage(1); }} className="px-3 py-2 text-sm border rounded-lg bg-card">
           <option>全部</option>
           <option>任务池</option>
           <option>AI数据团队</option>
           <option>NLP研发组</option>
         </select>
-        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="px-3 py-2 text-sm border rounded-lg bg-card">
+        <select value={typeFilter} onChange={e => { setTypeFilter(e.target.value); setPage(1); }} className="px-3 py-2 text-sm border rounded-lg bg-card">
           <option>全部</option>
-          {["文本类","图像类","音频类","视频类","表格类","跨模态类"].map(t => <option key={t}>{t}</option>)}
+          {["文本类", "图像类", "音频类", "视频类", "表格类", "跨模态类"].map(t => <option key={t}>{t}</option>)}
         </select>
       </div>
 
@@ -123,7 +140,7 @@ const DataAnnotationTaskHall = () => {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(b => (
+            {paginated.map(b => (
               <tr key={b.id} className="border-b last:border-0 hover:bg-muted/20">
                 <td className="py-3 px-4 font-medium text-foreground">{b.taskName}</td>
                 <td className="py-3 px-4 text-muted-foreground">{b.id}</td>
@@ -143,8 +160,57 @@ const DataAnnotationTaskHall = () => {
             ))}
           </tbody>
         </table>
+        {/* Pagination Bar */}
         <div className="flex items-center justify-between px-4 py-3 border-t">
           <span className="text-xs text-muted-foreground">共 {filtered.length} 个可领取批次</span>
+          <div className="flex items-center gap-2">
+            <select
+              value={pageSize}
+              onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+              className="px-2 py-1 text-xs border rounded bg-card"
+            >
+              {PAGE_SIZES.map(s => <option key={s} value={s}>{s}条/页</option>)}
+            </select>
+            <div className="flex gap-0.5">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage(1)}
+                className="w-7 h-7 text-xs rounded border hover:bg-muted/50 disabled:opacity-30 inline-flex items-center justify-center transition-colors"
+                title="第一页"
+              >
+                <ChevronsLeft className="w-3 h-3" />
+              </button>
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage(prev => prev - 1)}
+                className="w-7 h-7 text-xs rounded border hover:bg-muted/50 disabled:opacity-30 inline-flex items-center justify-center transition-colors"
+                title="上一页"
+              >
+                <ChevronLeft className="w-3 h-3" />
+              </button>
+
+              <div className="flex items-center px-2 text-xs text-foreground font-medium">
+                第 {page} / {totalPages} 页
+              </div>
+
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setPage(prev => prev + 1)}
+                className="w-7 h-7 text-xs rounded border hover:bg-muted/50 disabled:opacity-30 inline-flex items-center justify-center transition-colors"
+                title="下一页"
+              >
+                <ChevronRight className="w-3 h-3" />
+              </button>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setPage(totalPages)}
+                className="w-7 h-7 text-xs rounded border hover:bg-muted/50 disabled:opacity-30 inline-flex items-center justify-center transition-colors"
+                title="最后一页"
+              >
+                <ChevronsRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
