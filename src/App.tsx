@@ -108,7 +108,6 @@ const App = () => (
                   <Route path="/data-annotation/my-tasks" element={<DataAnnotationMyTasks />} />
                   <Route path="/data-annotation/tools" element={<DataAnnotationTools />} />
                   <Route path="/data-annotation/tool-editor" element={<AnnotationToolEditor />} />
-                  <Route path="/data-annotation/model-config" element={<DataAnnotationTools />} />
                   <Route path="/data-annotation/performance" element={<DataAnnotationPerformance />} />
                   <Route path="/data-annotation/statistics" element={<DataAnnotationStatistics />} />
 

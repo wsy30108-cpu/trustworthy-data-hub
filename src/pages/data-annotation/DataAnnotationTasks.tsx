@@ -69,6 +69,7 @@ const DataAnnotationTasks = () => {
   const [statusFilter, setStatusFilter] = useState("全部状态");
   const [showFilters, setShowFilters] = useState(false);
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [creatorFilter, setCreatorFilter] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -198,12 +199,116 @@ const DataAnnotationTasks = () => {
             <input value={creatorFilter} onChange={e => setCreatorFilter(e.target.value)} placeholder="输入创建人" className="px-2 py-1.5 text-sm border rounded bg-card w-32" />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground">创建时间：</label>
-            <input type="date" value={dateRange.start} onChange={e => setDateRange(p => ({ ...p, start: e.target.value }))} className="px-2 py-1.5 text-sm border rounded bg-card" />
-            <span className="text-muted-foreground">-</span>
-            <input type="date" value={dateRange.end} onChange={e => setDateRange(p => ({ ...p, end: e.target.value }))} className="px-2 py-1.5 text-sm border rounded bg-card" />
+            <label className="text-xs text-muted-foreground whitespace-nowrap">创建时间：</label>
+            <div className="relative">
+              <div
+                className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg bg-card cursor-pointer transition-colors ${showDatePicker ? 'border-primary ring-1 ring-primary/20' : 'border-input hover:border-primary/50'}`}
+                onClick={() => setShowDatePicker(!showDatePicker)}
+              >
+                <div className="flex items-center min-w-[200px]">
+                  <span className={`text-xs flex-1 text-center ${dateRange.start ? 'text-foreground' : 'text-muted-foreground'}`}>
+                    {dateRange.start || 'yyyy/mm/dd'}
+                  </span>
+                  <div className="w-4 h-[1px] bg-border mx-2"></div>
+                  <span className={`text-xs flex-1 text-center ${dateRange.end ? 'text-foreground' : 'text-muted-foreground'}`}>
+                    {dateRange.end || 'yyyy/mm/dd'}
+                  </span>
+                </div>
+                <Calendar className={`w-4 h-4 ml-2 ${showDatePicker ? 'text-primary' : 'text-muted-foreground'}`} />
+              </div>
+
+              {/* Date Picker Dropdown (Mockup) */}
+              {showDatePicker && (
+                <div className="absolute top-full left-0 mt-2 bg-card rounded-lg shadow-xl border p-4 z-50 w-[560px] animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="flex gap-4">
+                    {/* Left Calendar (March 2026) */}
+                    <div className="flex-1">
+                      <div className="flex justify-between items-center mb-4">
+                        <div className="flex gap-2 text-muted-foreground">
+                          <button className="hover:text-foreground leading-none" onClick={(e) => e.stopPropagation()}>«</button>
+                          <button className="hover:text-foreground leading-none" onClick={(e) => e.stopPropagation()}>‹</button>
+                        </div>
+                        <span className="font-bold text-sm text-foreground">2026年 3月</span>
+                        <div className="flex gap-2 text-muted-foreground opacity-0 pointer-events-none">
+                          <button>›</button>
+                          <button>»</button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-7 gap-y-2 text-center text-xs mb-2">
+                        {['一', '二', '三', '四', '五', '六', '日'].map(d => (
+                          <div key={d} className="font-medium text-foreground pb-1">{d}</div>
+                        ))}
+
+                        {/* Previous month days */}
+                        {[23, 24, 25, 26, 27, 28].map(d => (
+                          <div key={`prev-${d}`} className="text-muted-foreground/30 py-1.5">{d}</div>
+                        ))}
+
+                        {/* Current month days */}
+                        {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                          <div
+                            key={d}
+                            className={`py-1.5 rounded cursor-pointer transition-colors ${d === 18 ? 'bg-primary/10 border border-primary/30 text-primary font-medium' : 'hover:bg-muted text-muted-foreground'
+                              }`}
+                            onClick={() => {
+                              setDateRange(prev => ({ ...prev, start: `2026-03-${d.toString().padStart(2, '0')}` }));
+                              if (dateRange.end) setShowDatePicker(false);
+                            }}
+                          >
+                            {d}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="w-[1px] bg-border mx-2"></div>
+
+                    {/* Right Calendar (April 2026) */}
+                    <div className="flex-1">
+                      <div className="flex justify-between items-center mb-4">
+                        <div className="flex gap-2 text-muted-foreground opacity-0 pointer-events-none">
+                          <button>«</button>
+                          <button>‹</button>
+                        </div>
+                        <span className="font-bold text-sm text-foreground">2026年 4月</span>
+                        <div className="flex gap-2 text-muted-foreground">
+                          <button className="hover:text-foreground leading-none" onClick={(e) => e.stopPropagation()}>›</button>
+                          <button className="hover:text-foreground leading-none" onClick={(e) => e.stopPropagation()}>»</button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-7 gap-y-2 text-center text-xs mb-2">
+                        {['一', '二', '三', '四', '五', '六', '日'].map(d => (
+                          <div key={d} className="font-medium text-foreground pb-1">{d}</div>
+                        ))}
+
+                        {/* Previous month days */}
+                        {[30, 31].map(d => (
+                          <div key={`prev-${d}`} className="text-muted-foreground/30 py-1.5">{d}</div>
+                        ))}
+
+                        {/* Current month days */}
+                        {Array.from({ length: 30 }, (_, i) => i + 1).map(d => (
+                          <div
+                            key={d}
+                            className="py-1.5 rounded cursor-pointer hover:bg-muted text-muted-foreground transition-colors"
+                            onClick={() => {
+                              setDateRange(prev => ({ ...prev, end: `2026-04-${d.toString().padStart(2, '0')}` }));
+                              setShowDatePicker(false);
+                            }}
+                          >
+                            {d}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <button onClick={() => { setCreatorFilter(""); setDateRange({ start: "", end: "" }); }} className="text-xs text-primary hover:underline">重置</button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => { setCreatorFilter(""); setDateRange({ start: "", end: "" }); setShowDatePicker(false); }} className="text-xs text-primary hover:underline whitespace-nowrap px-2">清空所有</button>
+          </div>
         </div>
       )}
 

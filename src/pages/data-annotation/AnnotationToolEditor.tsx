@@ -196,6 +196,7 @@ const AnnotationToolEditor = () => {
     if (!toolName.trim()) { toast.error("请填写工具名称"); return; }
     toast.success(`标注工具「${toolName}」已保存`);
     setShowSaveModal(false);
+    navigate("/data-annotation/tools");
   };
 
   const handleTemplateImport = () => {
@@ -543,17 +544,36 @@ const AnnotationToolEditor = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-background flex flex-col">
+    <div className="fixed inset-0 z-[60] bg-background flex flex-col">
       {/* ─── Header ─────────────────────────────────────────── */}
-      <div className="h-12 border-b bg-card flex items-center px-4 gap-3 shrink-0">
-        <button onClick={() => navigate("/data-annotation/tools")} className="p-1.5 rounded hover:bg-muted/50"><ArrowLeft className="w-4 h-4" /></button>
-        <span className="text-sm font-bold">{toolId ? toolName || "编辑标注工具" : "新建标注工具"}</span>
-        <div className="flex-1" />
-        <button onClick={() => setShowTemplateImport(true)} className="px-3 py-1.5 text-xs border rounded hover:bg-muted/50">引用模板</button>
-        <button onClick={() => setShowTestData(true)} className="px-3 py-1.5 text-xs border rounded hover:bg-muted/50">管理测试集</button>
-        <button onClick={() => setShowSaveModal(true)} className="px-3 py-1.5 text-xs border rounded hover:bg-muted/50">保存模板</button>
-        <button onClick={() => setShowPreview(true)} className="px-3 py-1.5 text-xs border rounded hover:bg-muted/50">效果预览</button>
-      </div>
+      <header className="sticky top-0 z-30 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="h-16 flex items-center justify-between px-6 mx-auto w-full">
+          <div className="flex items-center gap-4">
+            <button onClick={() => navigate("/data-annotation/tools")} className="p-2 -ml-2 rounded-full hover:bg-muted/50 transition-colors">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-base font-bold tracking-tight">{toolId ? toolName || "编辑标注工具" : "新建标注工具"}</h1>
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                <span>TrustData Hub</span>
+                <span>/</span>
+                <span>工具编辑</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1" />
+
+          <div className="flex flex-row items-center gap-2 md:gap-3">
+            <button onClick={() => setShowTemplateImport(true)} className="px-3 py-1.5 text-xs font-medium border rounded-md hover:bg-muted/50 transition-colors">引用模板</button>
+            <button onClick={() => setShowTestData(true)} className="px-3 py-1.5 text-xs font-medium border rounded-md hover:bg-muted/50 transition-colors">管理测试集</button>
+            <button onClick={() => setShowPreview(true)} className="px-3 py-1.5 text-xs font-medium border rounded-md hover:bg-muted/50 transition-colors">效果预览</button>
+            <div className="w-[1px] h-4 bg-slate-200 mx-1 hidden md:block" />
+            <button onClick={() => navigate("/data-annotation/tools")} className="px-2 text-xs font-medium text-muted-foreground hover:text-foreground hidden md:block transition-colors">取消</button>
+            <button onClick={() => setShowSaveModal(true)} className="px-4 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm ml-1">保存并返回</button>
+          </div>
+        </div>
+      </header>
 
       {/* ─── Main 3-column layout ───────────────────────────── */}
       <div className="flex-1 flex min-h-0">

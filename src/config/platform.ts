@@ -184,7 +184,6 @@ export const platformMenus: Record<string, MenuItem[]> = {
       route: "#",
       children: [
         { id: "tools", label: "标注工具", icon: Hammer, route: "/data-annotation/tools" },
-        { id: "model-config", label: "模型配置", icon: Cpu, route: "/data-annotation/model-config" },
       ]
     },
   ],
