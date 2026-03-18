@@ -43,6 +43,7 @@ const DataAnnotationTools = lazy(() => import("./pages/data-annotation/DataAnnot
 const DataAnnotationPerformance = lazy(() => import("./pages/data-annotation/DataAnnotationPerformance"));
 const DataAnnotationStatistics = lazy(() => import("./pages/data-annotation/DataAnnotationStatistics"));
 const AnnotationToolEditor = lazy(() => import("./pages/data-annotation/AnnotationToolEditor"));
+const DataAnnotationToolDetail = lazy(() => import("./pages/data-annotation/DataAnnotationToolDetail"));
 
 const DataServiceMarketplace = lazy(() => import("./pages/data-service/DataServiceMarketplace"));
 const DatasetDetail = lazy(() => import("./pages/data-service/DatasetDetail"));
@@ -107,6 +108,7 @@ const App = () => (
                   <Route path="/data-annotation/task-hall" element={<DataAnnotationTaskHall />} />
                   <Route path="/data-annotation/my-tasks" element={<DataAnnotationMyTasks />} />
                   <Route path="/data-annotation/tools" element={<DataAnnotationTools />} />
+                  <Route path="/data-annotation/tools/:id" element={<DataAnnotationToolDetail />} />
                   <Route path="/data-annotation/tool-editor" element={<AnnotationToolEditor />} />
                   <Route path="/data-annotation/performance" element={<DataAnnotationPerformance />} />
                   <Route path="/data-annotation/statistics" element={<DataAnnotationStatistics />} />

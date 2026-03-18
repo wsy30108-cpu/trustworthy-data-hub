@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import ShareToolDialog from "./ShareToolDialog";
 
 interface Tool {
   id: string;
@@ -122,18 +123,17 @@ const DataAnnotationTools = () => {
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filtered.map(t => (
-          <div key={t.id} className="rounded-lg border bg-card p-5 hover:shadow-md transition-shadow cursor-pointer group relative">
+          <div key={t.id} onClick={() => navigate(`/data-annotation/tools/${t.id}`)}
+            className="group relative bg-card border rounded-xl p-5 hover:shadow-lg transition-all cursor-pointer hover:border-primary/50">
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-2">
                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-lg">{t.icon}</div>
                 {t.isPreset && <Lock className="w-3 h-3 text-muted-foreground" />}
               </div>
-              {!t.isPreset && tab === "mine" && (
-                <button onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === t.id ? null : t.id); }}
-                  className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-muted/50 transition-opacity">
-                  <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
-                </button>
-              )}
+              <button onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === t.id ? null : t.id); }}
+                className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-muted/50 transition-opacity">
+                <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+              </button>
               {actionMenu === t.id && (
                 <div className="absolute right-4 top-14 z-50 bg-card border rounded-lg shadow-lg py-1 min-w-[140px]">
                   <button onClick={() => { setActionMenu(null); navigate(`/data-annotation/tool-editor?id=${t.id}`); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50"><Edit className="w-4 h-4" /> 编辑</button>
@@ -153,11 +153,6 @@ const DataAnnotationTools = () => {
             </div>
             <div className="flex items-center justify-between text-xs text-muted-foreground pt-3 border-t">
               <span>{t.creator} · 使用{t.usageCount}次</span>
-              <div className="flex gap-1">
-                <button onClick={(e) => { e.stopPropagation(); setDetailTool(t); }} className="p-1 rounded hover:bg-muted/50"><Eye className="w-3.5 h-3.5" /></button>
-                {!t.isPreset && tab === "mine" && <button onClick={(e) => { e.stopPropagation(); navigate(`/data-annotation/tool-editor?id=${t.id}`); }} className="p-1 rounded hover:bg-muted/50"><Edit className="w-3.5 h-3.5" /></button>}
-                <button onClick={(e) => { e.stopPropagation(); handleCopy(t); }} className="p-1 rounded hover:bg-muted/50"><Copy className="w-3.5 h-3.5" /></button>
-              </div>
             </div>
           </div>
         ))}
@@ -244,26 +239,12 @@ const DataAnnotationTools = () => {
         </div>
       )}
 
-      {/* Share modal */}
-      {shareModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card rounded-lg border shadow-xl p-6 max-w-sm w-full mx-4">
-            <h3 className="font-semibold mb-3">分享工具「{shareModal.name}」</h3>
-            <div className="space-y-2 mb-4">
-              {[{ key: "team", label: "分享到团队工作空间" }, { key: "org", label: "分享到机构工作空间" }, { key: "market", label: "分享到标注工具市场" }].map(opt => (
-                <label key={opt.key} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${shareScope === opt.key ? "border-primary bg-primary/5" : "hover:bg-muted/30"}`}>
-                  <input type="radio" checked={shareScope === opt.key} onChange={() => setShareScope(opt.key)} />
-                  <span className="text-sm">{opt.label}</span>
-                </label>
-              ))}
-            </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShareModal(null)} className="px-4 py-2 text-sm border rounded-lg hover:bg-muted/50">取消</button>
-              <button onClick={handleShare} className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">确认分享</button>
-            </div>
-          </div>
-        </div>
-      )}
+
+      <ShareToolDialog
+        open={!!shareModal}
+        onOpenChange={(open) => !open && setShareModal(null)}
+        toolName={shareModal?.name}
+      />
     </div>
   );
 };
