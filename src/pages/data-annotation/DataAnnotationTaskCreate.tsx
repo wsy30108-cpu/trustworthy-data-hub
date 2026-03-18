@@ -81,6 +81,7 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   const [taskName, setTaskName] = useState("");
   const [taskDesc, setTaskDesc] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedWorkflow, setSelectedWorkflow] = useState("标注");
 
   // Step 1: Dataset
   const [selectedDatasets, setSelectedDatasets] = useState<{ id: string; version: string }[]>([]);
@@ -362,8 +363,8 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                     </div>
 
                     <div className="rounded-lg border bg-card p-6 space-y-4">
-                      <h3 className="font-medium flex items-center gap-2"><Layers className="w-4 h-4 text-primary" /> 项目类型 <span className="text-destructive text-sm">*</span></h3>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> 创建后不可修改，不支持混合多种类型</p>
+                      <h3 className="font-medium flex items-center gap-2"><Layers className="w-4 h-4 text-primary" /> 任务类型 <span className="text-destructive text-sm">*</span></h3>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> 创建后不可修改，指代数据领域（如文本、图像等）</p>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         {projectTypes.map(pt => {
                           const Icon = pt.icon;
@@ -376,6 +377,30 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                             </button>
                           );
                         })}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border bg-card p-6 space-y-4">
+                      <h3 className="font-medium flex items-center gap-2"><Zap className="w-4 h-4 text-primary" /> 任务流程 <span className="text-destructive text-sm">*</span></h3>
+                      <p className="text-xs text-muted-foreground">定义任务的处理阶段，如是否需要质检或验收环节</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { id: "标注", name: "标注", desc: "仅包含原始标注环节" },
+                          { id: "标注-质检", name: "标注-质检", desc: "包含标注和人工质检环节" },
+                          { id: "标注-质检-验收", name: "标注-质检-验收", desc: "最完整的标注、质检、验收三阶段流程" },
+                          { id: "标注-验收", name: "标注-验收", desc: "跳过质检，标注完成后直接进入验收" }
+                        ].map(wf => (
+                          <button key={wf.id} onClick={() => {
+                            setSelectedWorkflow(wf.id);
+                            // Sync Step 3 flags
+                            setQaEnabled(wf.id.includes("质检"));
+                            setAcceptEnabled(wf.id.includes("验收"));
+                          }}
+                            className={`p-4 rounded-lg border text-left transition-all ${selectedWorkflow === wf.id ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:bg-muted/30"}`}>
+                            <p className="text-sm font-medium">{wf.name}</p>
+                            <p className="text-xs text-muted-foreground mt-1">{wf.desc}</p>
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>

@@ -13,8 +13,8 @@ interface AnnotationTask {
   id: string;
   name: string;
   description: string;
-  type: string;
-  projectType: string;
+  type: string; // 任务流程: 标注, 标注-质检, 等
+  projectType: string; // 任务类型: 文本类, 图像类, 等
   annotationProgress: number;
   qaProgress: number;
   acceptProgress: number;
@@ -32,16 +32,16 @@ interface AnnotationTask {
 }
 
 const mockTasks: AnnotationTask[] = [
-  { id: "AT-001", name: "金融文本情感标注", description: "对金融新闻和研报进行情感极性标注", type: "文本类", projectType: "内容分类与审核", annotationProgress: 78, qaProgress: 65, acceptProgress: 45, creator: "张明", createdAt: "2026-02-20", status: "进行中", totalBatches: 25, claimedBatches: 22, totalData: 12500, annotatedData: 9750, totalQA: 12500, annotatedQA: 8125, totalAccept: 12500, annotatedAccept: 5625 },
-  { id: "AT-002", name: "医疗图像分类标注", description: "CT/MRI影像分类与病灶区域标注", type: "图像类", projectType: "图像分类", annotationProgress: 100, qaProgress: 90, acceptProgress: 80, creator: "李芳", createdAt: "2026-02-15", status: "进行中", totalBatches: 10, claimedBatches: 10, totalData: 5000, annotatedData: 5000, totalQA: 5000, annotatedQA: 4500, totalAccept: 5000, annotatedAccept: 4000 },
-  { id: "AT-003", name: "客服对话意图标注", description: "客服对话文本意图分类标注", type: "文本类", projectType: "内容分类与审核", annotationProgress: 100, qaProgress: 100, acceptProgress: 100, creator: "王强", createdAt: "2026-01-28", status: "已完成", totalBatches: 40, claimedBatches: 40, totalData: 20000, annotatedData: 20000, totalQA: 20000, annotatedQA: 20000, totalAccept: 20000, annotatedAccept: 20000 },
-  { id: "AT-004", name: "语音转写质检", description: "语音转写结果校正与质检", type: "音频类", projectType: "音频转写", annotationProgress: 35, qaProgress: 0, acceptProgress: 0, creator: "赵丽", createdAt: "2026-03-01", status: "进行中", totalBatches: 15, claimedBatches: 8, totalData: 3000, annotatedData: 1050, totalQA: 1050, annotatedQA: 0, totalAccept: 1050, annotatedAccept: 0 },
-  { id: "AT-005", name: "视频内容审核标注", description: "短视频内容审核与分类标注", type: "视频类", projectType: "视频分类", annotationProgress: 0, qaProgress: 0, acceptProgress: 0, creator: "孙伟", createdAt: "2026-03-05", status: "已发布", totalBatches: 8, claimedBatches: 1, totalData: 1500, annotatedData: 0, totalQA: 0, annotatedQA: 0, totalAccept: 0, annotatedAccept: 0 },
-  { id: "AT-006", name: "表格数据时序标注", description: "金融时序数据异常点标注", type: "表格类", projectType: "时间序列标注", annotationProgress: 50, qaProgress: 20, acceptProgress: 0, creator: "张明", createdAt: "2026-03-08", status: "进行中", totalBatches: 12, claimedBatches: 10, totalData: 6000, annotatedData: 3000, totalQA: 3000, annotatedQA: 600, totalAccept: 600, annotatedAccept: 0 },
-  { id: "AT-007", name: "圖文跨模態對齊", description: "圖像與文本描述對齊標注", type: "跨模態類", projectType: "跨模態對齊", annotationProgress: 15, qaProgress: 0, acceptProgress: 0, creator: "李芳", createdAt: "2026-03-10", status: "已发布", totalBatches: 20, claimedBatches: 5, totalData: 10000, annotatedData: 1500, totalQA: 1500, annotatedQA: 0, totalAccept: 1500, annotatedAccept: 0 },
-  { id: "AT-008", name: "自动驾驶场景点云标注", description: "Lidar点云动态目标连续帧标注", type: "跨模态类", projectType: "3D点云标注", annotationProgress: 0, qaProgress: 0, acceptProgress: 0, creator: "张明", createdAt: "2026-03-15", status: "待处理", totalBatches: 0, claimedBatches: 0, totalData: 8000, annotatedData: 0, totalQA: 0, annotatedQA: 0, totalAccept: 0, annotatedAccept: 0 },
-  { id: "AT-009", name: "多语言语音合成评测", description: "英文/德语合成语音质量主观评价", type: "音频类", projectType: "语音质量评测", annotationProgress: 0, qaProgress: 0, acceptProgress: 0, creator: "李芳", createdAt: "2026-03-16", status: "待处理", totalBatches: 0, claimedBatches: 0, totalData: 1500, annotatedData: 0, totalQA: 0, annotatedQA: 0, totalAccept: 0, annotatedAccept: 0 },
-  { id: "AT-010", name: "结构化文档提取标注", description: "复杂发票与合同关键字段提取", type: "文本类", projectType: "内容分类与审核", annotationProgress: 0, qaProgress: 0, acceptProgress: 0, creator: "王强", createdAt: "2026-03-17", status: "待处理", totalBatches: 0, claimedBatches: 0, totalData: 3500, annotatedData: 0, totalQA: 0, annotatedQA: 0, totalAccept: 0, annotatedAccept: 0 },
+  { id: "AT-001", name: "金融文本情感标注", description: "对金融新闻和研报进行情感极性标注", type: "标注-质检-验收", projectType: "文本类", annotationProgress: 78, qaProgress: 65, acceptProgress: 45, creator: "张明", createdAt: "2026-02-20", status: "进行中", totalBatches: 25, claimedBatches: 22, totalData: 12500, annotatedData: 9750, totalQA: 12500, annotatedQA: 8125, totalAccept: 12500, annotatedAccept: 5625 },
+  { id: "AT-002", name: "医疗图像分类标注", description: "CT/MRI影像分类与病灶区域标注", type: "标注-质检", projectType: "图像类", annotationProgress: 100, qaProgress: 90, acceptProgress: 80, creator: "李芳", createdAt: "2026-02-15", status: "进行中", totalBatches: 10, claimedBatches: 10, totalData: 5000, annotatedData: 5000, totalQA: 5000, annotatedQA: 4500, totalAccept: 5000, annotatedAccept: 4000 },
+  { id: "AT-003", name: "客服对话意图标注", description: "客服对话文本意图分类标注", type: "标注-质检-验收", projectType: "文本类", annotationProgress: 100, qaProgress: 100, acceptProgress: 100, creator: "王强", createdAt: "2026-01-28", status: "已完成", totalBatches: 40, claimedBatches: 40, totalData: 20000, annotatedData: 20000, totalQA: 20000, annotatedQA: 20000, totalAccept: 20000, annotatedAccept: 20000 },
+  { id: "AT-004", name: "语音转写质检", description: "语音转写结果校正与质检", type: "标注-质检", projectType: "音频类", annotationProgress: 35, qaProgress: 0, acceptProgress: 0, creator: "赵丽", createdAt: "2026-03-01", status: "进行中", totalBatches: 15, claimedBatches: 8, totalData: 3000, annotatedData: 1050, totalQA: 1050, annotatedQA: 0, totalAccept: 1050, annotatedAccept: 0 },
+  { id: "AT-005", name: "视频内容审核标注", description: "短视频内容审核与分类标注", type: "标注-验收", projectType: "视频类", annotationProgress: 0, qaProgress: 0, acceptProgress: 0, creator: "孙伟", createdAt: "2026-03-05", status: "已发布", totalBatches: 8, claimedBatches: 1, totalData: 1500, annotatedData: 0, totalQA: 0, annotatedQA: 0, totalAccept: 0, annotatedAccept: 0 },
+  { id: "AT-006", name: "表格数据时序标注", description: "金融时序数据异常点标注", type: "标注-质检", projectType: "表格类", annotationProgress: 50, qaProgress: 20, acceptProgress: 0, creator: "张明", createdAt: "2026-03-08", status: "进行中", totalBatches: 12, claimedBatches: 10, totalData: 6000, annotatedData: 3000, totalQA: 3000, annotatedQA: 600, totalAccept: 600, annotatedAccept: 0 },
+  { id: "AT-007", name: "圖文跨模態對齊", description: "圖像與文本描述對齊標注", type: "标注", projectType: "跨模態類", annotationProgress: 15, qaProgress: 0, acceptProgress: 0, creator: "李芳", createdAt: "2026-03-10", status: "已发布", totalBatches: 20, claimedBatches: 5, totalData: 10000, annotatedData: 1500, totalQA: 1500, annotatedQA: 0, totalAccept: 1500, annotatedAccept: 0 },
+  { id: "AT-008", name: "自动驾驶场景点云标注", description: "Lidar点云动态目标连续帧标注", type: "标注-质检-验收", projectType: "跨模态类", annotationProgress: 0, qaProgress: 0, acceptProgress: 0, creator: "张明", createdAt: "2026-03-15", status: "待处理", totalBatches: 0, claimedBatches: 0, totalData: 8000, annotatedData: 0, totalQA: 0, annotatedQA: 0, totalAccept: 0, annotatedAccept: 0 },
+  { id: "AT-009", name: "多语言语音合成评测", description: "英文/德语合成语音质量主观评价", type: "标注", projectType: "音频类", annotationProgress: 0, qaProgress: 0, acceptProgress: 0, creator: "李芳", createdAt: "2026-03-16", status: "待处理", totalBatches: 0, claimedBatches: 0, totalData: 1500, annotatedData: 0, totalQA: 0, annotatedQA: 0, totalAccept: 0, annotatedAccept: 0 },
+  { id: "AT-010", name: "结构化文档提取标注", description: "复杂发票与合同关键字段提取", type: "标注-验收", projectType: "文本类", annotationProgress: 0, qaProgress: 0, acceptProgress: 0, creator: "王强", createdAt: "2026-03-17", status: "待处理", totalBatches: 0, claimedBatches: 0, totalData: 3500, annotatedData: 0, totalQA: 0, annotatedQA: 0, totalAccept: 0, annotatedAccept: 0 },
 ];
 
 const typeColors: Record<string, string> = {
@@ -64,7 +64,8 @@ const statusColors: Record<string, string> = {
 
 const DataAnnotationTasks = () => {
   const [searchText, setSearchText] = useState("");
-  const [typeFilter, setTypeFilter] = useState("全部类型");
+  const [typeFilter, setTypeFilter] = useState("全部流程");
+  const [projectTypeFilter, setProjectTypeFilter] = useState("全部类型");
   const [statusFilter, setStatusFilter] = useState("全部状态");
   const [showFilters, setShowFilters] = useState(false);
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
@@ -78,7 +79,8 @@ const DataAnnotationTasks = () => {
   const [tasks, setTasks] = useState(mockTasks);
 
   const filtered = tasks.filter(t => {
-    if (typeFilter !== "全部类型" && t.type !== typeFilter) return false;
+    if (typeFilter !== "全部流程" && t.type !== typeFilter) return false;
+    if (projectTypeFilter !== "全部类型" && t.projectType !== projectTypeFilter) return false;
     if (statusFilter !== "全部状态" && t.status !== statusFilter) return false;
     if (searchText && !t.name.includes(searchText) && !t.id.includes(searchText) && !t.creator.includes(searchText)) return false;
     if (creatorFilter && !t.creator.includes(creatorFilter)) return false;
@@ -173,6 +175,10 @@ const DataAnnotationTasks = () => {
           <input value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="搜索任务名称、ID或创建人..." className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
         </div>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="px-3 py-2 text-sm border rounded-lg bg-card">
+          <option>全部流程</option>
+          {["标注", "标注-质检", "标注-质检-验收", "标注-验收"].map(t => <option key={t}>{t}</option>)}
+        </select>
+        <select value={projectTypeFilter} onChange={e => setProjectTypeFilter(e.target.value)} className="px-3 py-2 text-sm border rounded-lg bg-card">
           <option>全部类型</option>
           {["文本类", "图像类", "音频类", "视频类", "表格类", "跨模态类"].map(t => <option key={t}>{t}</option>)}
         </select>
@@ -207,7 +213,8 @@ const DataAnnotationTasks = () => {
           <thead>
             <tr className="bg-muted/30 border-b">
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">任务名称</th>
-              <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">类型</th>
+              <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">任务类型</th>
+              <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">任务流程</th>
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">标注进度</th>
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">质检进度</th>
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">验收进度</th>
@@ -224,7 +231,8 @@ const DataAnnotationTasks = () => {
                   <div className="font-medium text-foreground cursor-pointer hover:text-primary" onClick={() => setDetailTask(task)}>{task.name}</div>
                   <div className="text-xs text-muted-foreground">{task.id}</div>
                 </td>
-                <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColors[task.type] || "bg-muted text-muted-foreground"}`}>{task.type}</span></td>
+                <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColors[task.projectType] || "bg-muted text-muted-foreground"}`}>{task.projectType}</span></td>
+                <td className="py-3 px-4"><span className="text-xs text-muted-foreground font-medium">{task.type}</span></td>
                 <td className="py-3 px-4">
                   <div className="flex flex-col gap-1 min-w-[100px]">
                     <div className="flex justify-between items-center text-[10px]">

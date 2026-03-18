@@ -2,13 +2,15 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import {
   ArrowLeft, Undo2, Redo2, BookOpen, Keyboard, Ban, Send,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Tag, Clock, List, Link2,
-  X, AlertTriangle, Plus, Filter, SortAsc, Search, PanelRightClose, PanelRightOpen
+  X, AlertTriangle, Plus, Filter, SortAsc, Search, PanelRightClose, PanelRightOpen,
+  Play, Pause, RotateCcw, Maximize, Type, Image as ImageIcon, Video
 } from "lucide-react";
 import { toast } from "sonner";
 
 interface Props {
-  task: { id: string; taskName: string; total: number; done: number };
+  task: { id: string; taskName: string; total: number; done: number; projectType: string };
   onBack: () => void;
+  initialResourceId?: number;
 }
 
 type SampleStatus = "未标注" | "已标注" | "无效跳过";
@@ -53,25 +55,48 @@ const labels = [
   { value: "中性", color: "#6b7280", shortcut: "3" },
 ];
 
-const DataAnnotationWorkbench = ({ task, onBack }: Props) => {
+const relationTypes = ["属于", "等同", "并列", "由于", "涉及", "冲突"];
+
+const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => {
   const [samples] = useState<Sample[]>(() =>
-    Array.from({ length: task.total }, (_, i) => ({
-      id: i + 1,
-      content: i % 3 === 0
-        ? "央行今日公布最新货币政策，维持基准利率不变。市场分析人士认为，这一决定符合预期，有助于稳定当前经济形势。"
-        : i % 3 === 1
-          ? "某科技公司股价暴跌20%，投资者恐慌性抛售。公司回应称正在积极调整战略，但市场信心仍然不足。"
-          : "A股今日窄幅震荡，成交量持续萎缩。多空双方力量均衡，市场等待进一步政策指引。",
-      status: i < task.done ? "已标注" : "未标注",
-      label: i < task.done ? labels[i % 3].value : null,
-      metadata: {},
-    }))
+    Array.from({ length: task.total }, (_, i) => {
+      let content = "";
+      if (task.projectType === "音频类") {
+        content = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
+      } else if (task.projectType === "图像类") {
+        content = `https://picsum.photos/seed/${i + 1}/800/600`;
+      } else if (task.projectType === "视频类") {
+        content = "https://www.w3schools.com/html/mov_bbb.mp4";
+      } else {
+        content = i % 3 === 0
+          ? "央行今日公布最新货币政策，维持基准利率不变。市场分析人士认为，这一决定符合预期，有助于稳定当前经济形势。"
+          : i % 3 === 1
+            ? "某科技公司股价暴跌20%，投资者恐慌性抛售。公司回应称正在积极调整战略，但市场信心仍然不足。"
+            : "A股今日窄幅震荡，成交量持续萎缩。多空双方力量均衡，市场等待进一步政策指引。";
+      }
+      return {
+        id: i + 1,
+        content,
+        status: i < task.done ? "已标注" : "未标注",
+        label: i < task.done ? labels[i % 3].value : null,
+        metadata: {},
+      };
+    })
   );
 
-  const [currentIndex, setCurrentIndex] = useState(task.done < task.total ? task.done : 0);
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    if (initialResourceId !== undefined) {
+      const idx = initialResourceId - 1;
+      if (idx >= 0 && idx < task.total) return idx;
+    }
+    return task.done < task.total ? task.done : 0;
+  });
   const [sampleStates, setSampleStates] = useState<Map<number, { status: SampleStatus; label: string | null }>>(
     () => new Map(samples.map(s => [s.id, { status: s.status, label: s.label }]))
   );
+
+  const current = samples[currentIndex];
+  const currentState = sampleStates.get(current.id) || { status: "未标注", label: null };
   const [rightUpperTab, setRightUpperTab] = useState<"info" | "log">("info");
   const [rightLowerTab, setRightLowerTab] = useState<"list" | "relation">("list");
   const [showSpec, setShowSpec] = useState(false);
@@ -89,14 +114,192 @@ const DataAnnotationWorkbench = ({ task, onBack }: Props) => {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [logs, setLogs] = useState<AnnotationLogEntry[]>([]);
 
+  // Multi-modal states
+  const [transcription, setTranscription] = useState<Record<number, string>>({});
+  const [shapes, setShapes] = useState<Record<number, any[]>>({});
+  const [videoTime, setVideoTime] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [isMediaPlaying, setIsMediaPlaying] = useState(false);
+
   // Label relations
   const [relations, setRelations] = useState<LabelRelation[]>([]);
   const [showAddRelation, setShowAddRelation] = useState(false);
   const [newRelFrom, setNewRelFrom] = useState("");
   const [newRelTo, setNewRelTo] = useState("");
-  const [newRelType, setNewRelType] = useState("相关");
+  const [newRelType, setNewRelType] = useState(relationTypes[0]);
   const [labelSearch, setLabelSearch] = useState("");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const renderTextContent = () => (
+    <section>
+      <h2 className="text-xl font-bold text-slate-800 mb-2">请阅读标注内容</h2>
+      <div className="text-sm text-slate-500 mb-4">Sample: #{current.id} · {currentState.status}</div>
+      <div className="rounded-xl border border-slate-200 bg-card overflow-hidden shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
+        <div className="flex divide-x divide-slate-100">
+          <div className="bg-slate-50/50 py-8 px-4 flex flex-col items-end select-none text-slate-300 font-mono text-xs gap-[1.6em]">
+            {current.content.split("\n").map((_, i) => (
+              <span key={i}>{i + 1} |</span>
+            ))}
+          </div>
+          <div className="flex-1 p-8 text-[17px] leading-[1.6] text-slate-700 select-text cursor-text whitespace-pre-wrap font-medium">
+            {current.content.split("\n").map((line, i) => (
+              <div key={i} className="min-h-[1.6em]">
+                {line || " "}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+
+  const renderAudioContent = () => (
+    <section className="space-y-6">
+      <h2 className="text-xl font-bold text-slate-800 mb-2">请听取音频并核对转写</h2>
+      <div className="text-sm text-slate-500 mb-4">Sample: #{current.id} · {currentState.status}</div>
+      <div className="p-8 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-8">
+        <div className="bg-slate-50 rounded-xl p-6 border border-slate-100">
+          <div className="flex items-center gap-6">
+            <button
+              onClick={() => setIsMediaPlaying(!isMediaPlaying)}
+              className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-primary/20"
+            >
+              {isMediaPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
+            </button>
+            <div className="flex-1 space-y-2">
+              <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                <div className="h-full bg-primary/40 w-1/3 rounded-full" />
+              </div>
+              <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                <span>00:12</span>
+                <span>00:45</span>
+              </div>
+            </div>
+            <select
+              value={playbackRate}
+              onChange={e => setPlaybackRate(Number(e.target.value))}
+              className="text-xs bg-white border rounded px-2 py-1 outline-none"
+            >
+              {[0.5, 0.8, 1.0, 1.2, 1.5, 2.0].map(r => (
+                <option key={r} value={r}>{r}x</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Type className="w-3.5 h-3.5" /> 音频转写文字
+            </label>
+            <span className="text-[10px] text-slate-400">已保存</span>
+          </div>
+          <textarea
+            value={transcription[current.id] || "这里是模拟的音频转译文字内容，请根据听到的音频进行校对和修改..."}
+            onChange={e => setTranscription(prev => ({ ...prev, [current.id]: e.target.value }))}
+            className="w-full h-32 p-4 text-sm border rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all resize-none leading-relaxed"
+            placeholder="请输入音频转写内容..."
+          />
+        </div>
+      </div>
+    </section>
+  );
+
+  const renderImageContent = () => (
+    <section className="space-y-6 h-full flex flex-col">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800 mb-1 font-heading">请在图像中绘制标注框</h2>
+          <div className="text-sm text-slate-500">Sample: #{current.id} · {currentState.status}</div>
+        </div>
+        <div className="flex gap-2">
+          <button className="p-2 rounded-lg border bg-white hover:bg-slate-50 text-slate-600 shadow-sm" title="适应屏幕"><Maximize className="w-4 h-4" /></button>
+          <button className="p-2 rounded-lg border bg-white hover:bg-slate-50 text-slate-600 shadow-sm" title="重置"><RotateCcw className="w-4 h-4" /></button>
+        </div>
+      </div>
+
+      <div className="flex-1 relative rounded-2xl border border-slate-200 bg-slate-900 overflow-hidden shadow-2xl group cursor-crosshair">
+        <img
+          src={current.content}
+          alt="Annotation"
+          className="w-full h-full object-contain opacity-90 group-hover:opacity-100 transition-opacity"
+        />
+        <div className="absolute top-[20%] left-[30%] w-[15%] h-[20%] border-2 border-primary bg-primary/10 rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.5)]">
+          <span className="absolute -top-6 left-0 bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-t-sm font-bold shadow-sm">车辆</span>
+        </div>
+        <div className="absolute top-[45%] left-[55%] w-[10%] h-[15%] border-2 border-emerald-500 bg-emerald-500/10 rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.5)]">
+          <span className="absolute -top-6 left-0 bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-t-sm font-bold shadow-sm">行人</span>
+        </div>
+
+        <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-[10px] text-white flex items-center gap-3 border border-white/10 uppercase tracking-widest font-mono">
+          <span>X: 1024</span>
+          <span>Y: 768</span>
+          <span>Zoom: 100%</span>
+        </div>
+      </div>
+    </section>
+  );
+
+  const renderVideoContent = () => (
+    <section className="space-y-6 h-full flex flex-col">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800 mb-1 font-heading">请针对视频画面进行动态标注</h2>
+          <div className="text-sm text-slate-500">Sample: #{current.id} · {currentState.status}</div>
+        </div>
+      </div>
+
+      <div className="flex-1 relative rounded-2xl border border-slate-200 bg-black overflow-hidden shadow-2xl flex flex-col">
+        <div className="flex-1 relative bg-slate-950 flex items-center justify-center">
+          <video
+            src={current.content}
+            className="max-h-full max-w-full"
+            onTimeUpdate={e => setVideoTime(e.currentTarget.currentTime)}
+          />
+          <div className="absolute top-[30%] left-[40%] w-[100px] h-[100px] border-2 border-amber-500 bg-amber-500/20" />
+        </div>
+
+        <div className="bg-slate-900/95 backdrop-blur-md border-t border-white/10 p-4 space-y-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setIsMediaPlaying(!isMediaPlaying)}
+              className="text-white hover:text-primary transition-colors"
+            >
+              {isMediaPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current" />}
+            </button>
+            <div className="flex-1 h-1.5 bg-white/10 rounded-full relative cursor-pointer">
+              <div className="h-full bg-primary rounded-full" style={{ width: '45%' }} />
+              <div className="absolute top-1/2 -translate-y-1/2 left-[10%] w-1.5 h-1.5 bg-white rounded-full shadow-sm" />
+              <div className="absolute top-1/2 -translate-y-1/2 left-[30%] w-1.5 h-1.5 bg-white rounded-full shadow-sm" />
+              <div className="absolute top-1/2 -translate-y-1/2 left-[45%] w-2.5 h-2.5 bg-primary border-2 border-white rounded-full shadow-lg" />
+            </div>
+            <span className="text-[10px] font-mono text-white/60">00:15 / 00:34</span>
+          </div>
+
+          <div className="flex items-center gap-4 border-t border-white/5 pt-4">
+            <div className="flex gap-2">
+              {['0.5x', '1.0x', '1.5x', '2.0x'].map(v => (
+                <button key={v} className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[9px] text-white/50 hover:bg-white/10 hover:text-white transition-all uppercase tracking-tighter">{v}</button>
+              ))}
+            </div>
+            <div className="ml-auto flex items-center gap-3">
+              <button className="text-white/40 hover:text-white transition-colors"><RotateCcw className="w-4 h-4" /></button>
+              <button className="text-white/40 hover:text-white transition-colors"><Maximize className="w-4 h-4" /></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+
+  const renderContent = () => {
+    switch (task.projectType) {
+      case "音频类": return renderAudioContent();
+      case "图像类": return renderImageContent();
+      case "视频类": return renderVideoContent();
+      default: return renderTextContent();
+    }
+  };
 
   // Annotations list for current sample
   const [annotations, setAnnotations] = useState<Annotation[]>(() => {
@@ -116,6 +319,10 @@ const DataAnnotationWorkbench = ({ task, onBack }: Props) => {
     return initial;
   });
 
+  const annotatedLabelsInCurrentSample = Array.from(
+    new Set(annotations.filter(a => a.sampleId === current.id).map(a => a.label))
+  );
+
   // Initialize mock logs
   useEffect(() => {
     if (logs.length === 0 && annotations.length > 0) {
@@ -130,8 +337,7 @@ const DataAnnotationWorkbench = ({ task, onBack }: Props) => {
     }
   }, [annotations]);
 
-  const current = samples[currentIndex];
-  const currentState = sampleStates.get(current.id) || { status: "未标注", label: null };
+
 
   const setLabel = useCallback((label: string) => {
     const prev = sampleStates.get(current.id)!;
@@ -272,6 +478,7 @@ const DataAnnotationWorkbench = ({ task, onBack }: Props) => {
   // Group annotations
   const getGroupedAnnotations = () => {
     let filteredAnnotations = annotations.filter(a => {
+      if (a.sampleId !== current.id) return false;
       const matchesSearch = listSearch === "" ||
         a.label.includes(listSearch) ||
         a.content.includes(listSearch) ||
@@ -293,7 +500,6 @@ const DataAnnotationWorkbench = ({ task, onBack }: Props) => {
       let key = "其它";
       if (listGroupMode === "label") key = a.label;
       else if (listGroupMode === "tool") key = a.tool;
-      else if (listGroupMode === "manual") key = a.group;
 
       if (!groups[key]) groups[key] = [];
       groups[key].push(a);
@@ -395,26 +601,7 @@ const DataAnnotationWorkbench = ({ task, onBack }: Props) => {
           {/* Content area - annotation canvas */}
           <div className="flex-1 p-12 overflow-y-auto flex items-start justify-center bg-[#f8fafc] dark:bg-slate-900/10">
             <div className="max-w-4xl w-full space-y-8">
-              <section>
-                <h2 className="text-xl font-bold text-slate-800 mb-2">请阅读标注内容</h2>
-                <div className="text-sm text-slate-500 mb-4">Sample: #{current.id} · {currentState.status}</div>
-                <div className="rounded-xl border border-slate-200 bg-card overflow-hidden shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
-                  <div className="flex divide-x divide-slate-100">
-                    <div className="bg-slate-50/50 py-8 px-4 flex flex-col items-end select-none text-slate-300 font-mono text-xs gap-[1.6em]">
-                      {current.content.split("\n").map((_, i) => (
-                        <span key={i}>{i + 1} |</span>
-                      ))}
-                    </div>
-                    <div className="flex-1 p-8 text-[17px] leading-[1.6] text-slate-700 select-text cursor-text whitespace-pre-wrap font-medium">
-                      {current.content.split("\n").map((line, i) => (
-                        <div key={i} className="min-h-[1.6em]">
-                          {line || " "}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </section>
+              {renderContent()}
 
               <section>
                 <h2 className="text-xl font-bold text-slate-800 mb-4">选择对应标注片段的答案：</h2>
@@ -628,7 +815,6 @@ const DataAnnotationWorkbench = ({ task, onBack }: Props) => {
                           className="w-full text-[10px] border rounded-md pl-6 pr-1 py-1 bg-slate-50 focus:ring-1 focus:ring-primary/20 outline-none appearance-none cursor-pointer hover:bg-slate-100 transition-colors"
                         >
                           <option value="none">不分组</option>
-                          <option value="manual">手动分组</option>
                           <option value="tool">按工具分组</option>
                           <option value="label">按标签分组</option>
                         </select>
@@ -708,7 +894,7 @@ const DataAnnotationWorkbench = ({ task, onBack }: Props) => {
                           </div>
                         );
                       })}
-                      {annotations.length === 0 && (
+                      {Object.keys(getGroupedAnnotations()).length === 0 && (
                         <div className="text-center py-10 opacity-40">
                           <List className="w-10 h-10 mx-auto mb-2 text-slate-300" />
                           <p className="text-xs text-slate-400">当前样本暂无标注</p>
@@ -763,7 +949,7 @@ const DataAnnotationWorkbench = ({ task, onBack }: Props) => {
                             <label className="text-[10px] font-bold text-primary/60 uppercase">Source Label</label>
                             <select value={newRelFrom} onChange={e => setNewRelFrom(e.target.value)} className="w-full text-xs border rounded-md px-3 py-1.5 bg-background shadow-inner outline-none focus:ring-1 focus:ring-primary/30">
                               <option value="">选择起始标签</option>
-                              {labels.map(l => <option key={l.value} value={l.value}>{l.value}</option>)}
+                              {annotatedLabelsInCurrentSample.map(l => <option key={l} value={l}>{l}</option>)}
                             </select>
                           </div>
                           <div className="flex items-center justify-center py-1">
@@ -775,13 +961,15 @@ const DataAnnotationWorkbench = ({ task, onBack }: Props) => {
                             <label className="text-[10px] font-bold text-primary/60 uppercase">Target Label</label>
                             <select value={newRelTo} onChange={e => setNewRelTo(e.target.value)} className="w-full text-xs border rounded-md px-3 py-1.5 bg-background shadow-inner outline-none focus:ring-1 focus:ring-primary/30">
                               <option value="">选择目标标签</option>
-                              {labels.map(l => <option key={l.value} value={l.value}>{l.value}</option>)}
+                              {annotatedLabelsInCurrentSample.map(l => <option key={l} value={l}>{l}</option>)}
                             </select>
                           </div>
                         </div>
                         <div className="space-y-1">
                           <label className="text-[10px] font-bold text-primary/60 uppercase">Relationship Type</label>
-                          <input value={newRelType} onChange={e => setNewRelType(e.target.value)} placeholder="关系类型 (如: 属于)" className="w-full text-xs border rounded-md px-3 py-1.5 bg-background shadow-inner outline-none focus:ring-1 focus:ring-primary/30" />
+                          <select value={newRelType} onChange={e => setNewRelType(e.target.value)} className="w-full text-xs border rounded-md px-3 py-1.5 bg-background shadow-inner outline-none focus:ring-1 focus:ring-primary/30">
+                            {relationTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
                         </div>
                         <div className="flex gap-2 pt-2">
                           <button onClick={() => setShowAddRelation(false)} className="flex-1 px-3 py-1.5 text-xs rounded-md border border-slate-200 hover:bg-slate-50 transition-colors">取消</button>

@@ -55,7 +55,7 @@ const mockAcceptResults = [
 
 interface Props {
   task: {
-    id: string; name: string; type: string; status: string; creator: string; createdAt: string;
+    id: string; name: string; type: string; projectType: string; status: string; creator: string; createdAt: string;
     totalData: number; annotatedData: number;
     totalBatches: number; claimedBatches: number;
     annotationProgress: number; qaProgress: number; acceptProgress: number;
@@ -327,7 +327,7 @@ const DataAnnotationTaskDetail = ({ task, onBack }: Props) => {
         <button onClick={onBack} className="p-2 rounded-lg hover:bg-muted/50"><ArrowLeft className="w-5 h-5" /></button>
         <div className="flex-1">
           <h1 className="text-lg font-semibold text-foreground">{task.name}</h1>
-          <p className="text-sm text-muted-foreground">{task.id} · {task.type} · {task.status}</p>
+          <p className="text-sm text-muted-foreground">{task.id} · {task.projectType} · {task.type} · {task.status}</p>
         </div>
       </div>
 
