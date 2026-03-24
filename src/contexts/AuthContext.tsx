@@ -9,7 +9,7 @@ export interface AuthUser {
 
 // Demo accounts
 const DEMO_ACCOUNTS: Array<{ username: string; password: string; phone: string; name: string; role: string }> = [
-  { username: "admin", password: "Admin123！", phone: "13800000000", name: "超级管理员", role: "超级管理员" },
+  { username: "admin", password: "Admin123!", phone: "13800000000", name: "超级管理员", role: "超级管理员" },
 ];
 
 // Registered users storage key

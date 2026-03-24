@@ -4,10 +4,14 @@ import { ChevronLeft, ChevronRight, Search, ChevronDown, ChevronUp, Settings, Us
 import { subPlatforms, platformMenus, mockWorkspaces } from "@/config/platform";
 import { cn } from "@/lib/utils";
 
-export function GlobalSidebar() {
+interface GlobalSidebarProps {
+  collapsed: boolean;
+  onCollapsedChange: (collapsed: boolean) => void;
+}
+
+export function GlobalSidebar({ collapsed, onCollapsedChange }: GlobalSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [collapsed, setCollapsed] = useState(false);
   const [currentWorkspace, setCurrentWorkspace] = useState(mockWorkspaces[0]);
   const [showWorkspaces, setShowWorkspaces] = useState(false);
   const [wsSearch, setWsSearch] = useState("");
@@ -256,7 +260,7 @@ export function GlobalSidebar() {
 
       {/* 折叠按钮 */}
       <button
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={() => onCollapsedChange(!collapsed)}
         className="absolute top-3 -right-3 w-6 h-6 rounded-full border bg-card shadow-sm flex items-center justify-center hover:bg-muted/50 z-10"
       >
         {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}

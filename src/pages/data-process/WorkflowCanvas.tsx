@@ -7,7 +7,7 @@ import {
   Type, Image, Mic, Video, Layers, Database, FileOutput, Wrench,
   AlertTriangle, CheckCircle2, HelpCircle, Eye, Upload, Map,
   PanelRightClose, PanelRightOpen, Code2, LayoutGrid, AlignHorizontalDistributeCenter, Info,
-  Bug, Square, Clock, Activity, Terminal, Loader2
+  Bug, Square, Clock, Activity, Terminal, Loader2, Minimize2, ClipboardList
 } from "lucide-react";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
@@ -815,8 +815,11 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
   const [debugElapsed, setDebugElapsed] = useState(0);
   const [debugNodeStates, setDebugNodeStates] = useState<Record<string, { status: "pending" | "running" | "done" | "error"; count: number; duration: number }>>({});
   const [debugLogs, setDebugLogs] = useState<Record<string, string[]>>({});
-  const [showLogPanel, setShowLogPanel] = useState(false);
   const [logNodeId, setLogNodeId] = useState<string | null>(null);
+  const [isLogExpanded, setIsLogExpanded] = useState(false);
+  const [logHeight, setLogHeight] = useState(300);
+  const [isDraggingLog, setIsDraggingLog] = useState(false);
+  const [rightPanelTab, setRightPanelTab] = useState<"debug" | "config">("debug");
   const debugTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Validation
@@ -1027,17 +1030,21 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
         }));
         setPanStart({ x: e.clientX, y: e.clientY });
       }
+      if (isDraggingLog) {
+        setLogHeight(Math.max(100, Math.min(window.innerHeight - e.clientY, window.innerHeight - 150)));
+      }
     };
     const handleUp = () => {
       setDraggingNode(null);
       setIsPanning(false);
       setMinimapDragging(false);
+      setIsDraggingLog(false);
       if (connecting) setConnecting(null);
     };
     window.addEventListener("mousemove", handleMove);
     window.addEventListener("mouseup", handleUp);
     return () => { window.removeEventListener("mousemove", handleMove); window.removeEventListener("mouseup", handleUp); };
-  }, [draggingNode, dragOffset, isPanning, panStart, connecting, screenToCanvas]);
+  }, [draggingNode, dragOffset, isPanning, panStart, connecting, isDraggingLog, screenToCanvas]);
 
   /* ─── Canvas pan ─── */
   const startPan = (e: React.MouseEvent) => {
@@ -1210,8 +1217,10 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
     if (nodes.length === 0) { toast.error("画布中没有节点"); return; }
     setDebugMode(true);
     setDebugElapsed(0);
-    setShowLogPanel(false);
+    setRightPanelTab("debug");
+    setRightPanelCollapsed(false); // auto-open right panel for debug mode
     setLogNodeId(null);
+    setIsLogExpanded(false); // reset expand state when starting
     // Initialize all nodes as pending
     const initStates: typeof debugNodeStates = {};
     const initLogs: Record<string, string[]> = {};
@@ -1291,8 +1300,9 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
   const stopDebug = useCallback(() => {
     setDebugMode(false);
     if (debugTimerRef.current) { clearInterval(debugTimerRef.current); debugTimerRef.current = null; }
-    setShowLogPanel(false);
+    setIsLogExpanded(false);
     setLogNodeId(null);
+    setRightPanelTab("config");
     setPanelMode("default");
     toast.info("调试已停止");
   }, []);
@@ -1499,17 +1509,18 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
     }
   }, [nodes, zoom]);
 
-  // Debug elapsed timer
-  useEffect(() => {
-    if (debugMode) {
-      debugTimerRef.current = setInterval(() => setDebugElapsed(prev => prev + 1), 1000);
-      return () => { if (debugTimerRef.current) clearInterval(debugTimerRef.current); };
-    }
-  }, [debugMode]);
-
   const debugDoneCount = useMemo(() => Object.values(debugNodeStates).filter(s => s.status === "done").length, [debugNodeStates]);
   const debugRunningCount = useMemo(() => Object.values(debugNodeStates).filter(s => s.status === "running").length, [debugNodeStates]);
   const debugAllDone = debugMode && debugDoneCount === nodes.length && nodes.length > 0;
+
+  // Debug elapsed timer
+  useEffect(() => {
+    if (debugMode && !debugAllDone) {
+      debugTimerRef.current = setInterval(() => setDebugElapsed(prev => prev + 1), 1000);
+      return () => { if (debugTimerRef.current) clearInterval(debugTimerRef.current); };
+    }
+  }, [debugMode, debugAllDone]);
+
   const formatElapsed = (s: number) => {
     const h = String(Math.floor(s / 3600)).padStart(2, "0");
     const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
@@ -1542,6 +1553,134 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
   const renderPropertyPanel = () => {
     if (rightPanelCollapsed) return null;
     const panelWidth = 300;
+
+    // Debug active panel
+    if (debugMode && rightPanelTab === "debug") {
+      return (
+        <div className="border-l bg-card shrink-0 flex flex-col overflow-hidden relative" style={{ width: panelWidth }}>
+          <div className="p-3 border-b flex items-center justify-between">
+            <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+              <Bug className="w-3.5 h-3.5 text-primary" />调试监控
+              <span className="ml-2 flex items-center gap-1 font-normal text-muted-foreground">
+                {debugAllDone ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Loader2 className="w-3 h-3 text-primary animate-spin" />}
+                {debugAllDone ? "已完成" : "运行中..."}
+              </span>
+            </span>
+            <button 
+              onClick={() => setRightPanelCollapsed(true)} 
+              className="p-1 hover:bg-muted/50 rounded text-muted-foreground hover:text-foreground transition-colors"
+              title="关闭面板"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Top Dashboard */}
+            <div className="p-3 border-b bg-muted/10 shrink-0 space-y-3">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">运行时长</span>
+                <span className="font-mono">{formatElapsed(debugElapsed)}</span>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+                  <span>执行进度</span>
+                  <span>{debugDoneCount} / {nodes.length} 节点</span>
+                </div>
+                <div className="h-1.5 w-full bg-muted overflow-hidden rounded-full">
+                  <div 
+                    className="h-full bg-primary transition-all duration-300 ease-out" 
+                    style={{ width: `${nodes.length > 0 ? (debugDoneCount / nodes.length) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Node List */}
+            <div className={`flex-1 overflow-y-auto p-2 space-y-1 border-b`}>
+              <p className="px-1 text-[10px] font-semibold text-foreground uppercase tracking-wider mb-2">执行明细</p>
+              {nodes.map(node => {
+                const state = debugNodeStates[node.id];
+                if (!state) return null;
+                const isSelected = logNodeId === node.id;
+                return (
+                  <button 
+                    key={node.id} 
+                    onClick={() => setLogNodeId(node.id)}
+                    className={`w-full text-left px-2 py-2 rounded-md transition-colors flex flex-col gap-1.5 border ${
+                      isSelected ? "bg-primary/5 border-primary/20 ring-1 ring-primary/20" : "bg-card border-transparent hover:bg-muted/50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs truncate">
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: catColors[node.category] }} />
+                        <span className="truncate max-w-[160px]">{node.customLabel || node.label}</span>
+                      </div>
+                      <div className="shrink-0 flex items-center">
+                        {state.status === "pending" && <span className="text-[10px] text-muted-foreground">等待中</span>}
+                        {state.status === "running" && <Loader2 className="w-3 h-3 text-primary animate-spin" />}
+                        {state.status === "done" && <CheckCircle2 className="w-3 h-3 text-green-500" />}
+                        {state.status === "error" && <AlertTriangle className="w-3 h-3 text-destructive" />}
+                      </div>
+                    </div>
+                    {state.status === "done" && (
+                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground pl-3">
+                        <span className="flex items-center gap-1" title="处理数据量"><Activity className="w-2.5 h-2.5" /> {state.count.toLocaleString()}</span>
+                        <span className="flex items-center gap-1" title="耗时"><Clock className="w-2.5 h-2.5" /> {state.duration}s</span>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Logs Area (Small) */}
+            {!isLogExpanded && (
+              <div className="flex flex-col bg-card h-48 shrink-0 border-t">
+                <div className="px-3 py-1.5 border-b bg-muted/30 flex justify-between items-center shrink-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider">节点日志</span>
+                    <span className="text-[10px] text-muted-foreground truncate max-w-[150px]">
+                      {nodes.find(n => n.id === logNodeId)?.label || "未选择"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => setIsLogExpanded(true)} 
+                      className="p-1 hover:bg-muted/50 rounded text-muted-foreground hover:text-foreground transition-colors"
+                      title="向左侧放大显示"
+                    >
+                      <Maximize2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button 
+                      onClick={() => setLogNodeId(null)} 
+                      className="p-1 hover:bg-muted/50 rounded text-muted-foreground hover:text-foreground transition-colors"
+                      title="关闭日志"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 font-mono text-[10px] text-muted-foreground bg-muted/5">
+                  {!logNodeId ? (
+                    <div className="flex flex-col items-center justify-center h-full text-[10px] text-muted-foreground/60">
+                      <Terminal className="w-4 h-4 mb-2 opacity-50" />
+                      点击上方节点查看日志
+                    </div>
+                  ) : (debugLogs[logNodeId] || []).length === 0 ? (
+                    <div className="text-muted-foreground/50">暂无日志输出...</div>
+                  ) : (
+                    (debugLogs[logNodeId] || []).map((line, i) => (
+                      <div key={i} className="mb-0.5 whitespace-pre-wrap">{line}</div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
 
     // Run submission confirmation panel
     if (panelMode === "runSubmit") {
@@ -2290,19 +2429,33 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
             {!isReadOnly && (
               <>
                 <div className="w-px h-5 bg-border mx-1" />
-                <button onClick={() => { toast.success("工作流已保存"); }} className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted/50 text-muted-foreground flex items-center gap-1.5" disabled={debugMode}><Save className="w-3.5 h-3.5" /> 保存</button>
-                {debugMode ? (
-                  <button onClick={stopDebug} className="px-3 py-1.5 text-xs bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 flex items-center gap-1.5">
-                    <Square className="w-3.5 h-3.5" /> 停止调试
+                <button 
+                  onClick={() => { if (!debugMode || debugAllDone) toast.success("工作流已保存"); }} 
+                  className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted/50 text-muted-foreground flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed" 
+                  disabled={debugMode && !debugAllDone}
+                >
+                  <Save className="w-3.5 h-3.5" /> 保存
+                </button>
+                <div className="flex items-center gap-2 ml-1">
+                  <button 
+                    onClick={debugMode && !debugAllDone ? stopDebug : () => { if (validateWorkflow()) { setPanelMode("debugConfig"); setRightPanelCollapsed(false); } }} 
+                    className={`px-3 py-1.5 text-xs rounded-md flex items-center gap-1.5 transition-all duration-200 border ${
+                      debugMode && !debugAllDone 
+                        ? "bg-destructive text-destructive-foreground border-destructive hover:bg-destructive/90" 
+                        : "border-primary text-primary hover:bg-primary/5"
+                    }`}
+                  >
+                    {debugMode && !debugAllDone ? <Square className="w-3.5 h-3.5 fill-current" /> : <Bug className="w-3.5 h-3.5" />}
+                    {debugMode && !debugAllDone ? "停止调试" : "调试"}
                   </button>
-                ) : (
-                  <>
-                    <button onClick={() => { if (validateWorkflow()) { setPanelMode("debugConfig"); setRightPanelCollapsed(false); } }} className="px-3 py-1.5 text-xs border border-primary text-primary rounded-md hover:bg-primary/10 flex items-center gap-1.5">
-                      <Bug className="w-3.5 h-3.5" /> 调试
-                    </button>
-                    <button onClick={() => { if (validateWorkflow()) { setPanelMode("runSubmit"); setRightPanelCollapsed(false); } }} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> 运行</button>
-                  </>
-                )}
+                  <button 
+                    onClick={() => { if (validateWorkflow()) { setPanelMode("runSubmit"); setRightPanelCollapsed(false); } }} 
+                    disabled={debugMode && !debugAllDone}
+                    className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  >
+                    <Play className="w-3.5 h-3.5" /> 运行
+                  </button>
+                </div>
               </>
             )}
           </div>
@@ -2564,7 +2717,8 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                                 e.stopPropagation();
                                 setSelectedNode(node.id);
                                 setSelectedConnection(null);
-                                if (debugMode) { setLogNodeId(node.id); setShowLogPanel(true); }
+                                setRightPanelTab("config");
+                                setRightPanelCollapsed(false);
                               }}
                               onDoubleClick={(e) => {
                                 e.stopPropagation();
@@ -2623,7 +2777,26 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                                     </div>
                                   )}
 
-                                  <button onClick={(e) => { e.stopPropagation(); toggleNodeCollapsed(node.id); }} className="p-[2px] hover:bg-muted rounded text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {debugMode && (
+                                    <Tooltip delayDuration={300}>
+                                      <TooltipTrigger asChild>
+                                        <button 
+                                          onClick={(e) => { 
+                                            e.stopPropagation(); 
+                                            setLogNodeId(node.id); 
+                                            setRightPanelTab("debug"); 
+                                            setRightPanelCollapsed(false); 
+                                          }} 
+                                          className={`p-1 rounded transition-colors border ${logNodeId === node.id && rightPanelTab === 'debug' ? 'bg-primary/20 text-primary border-primary/30' : 'hover:bg-primary/10 text-primary/70 hover:text-primary border-transparent hover:border-primary/20'}`}
+                                        >
+                                          <ClipboardList className="w-3.5 h-3.5" />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">查看日志</TooltipContent>
+                                    </Tooltip>
+                                  )}
+
+                                  <button onClick={(e) => { e.stopPropagation(); toggleNodeCollapsed(node.id); }} className="p-[2px] hover:bg-muted rounded text-muted-foreground transition-colors">
                                     {node.isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
                                   </button>
                                 </div>
@@ -2823,34 +2996,54 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                 </div>
               )}
 
-              {/* ─── Debug Log Panel ─── */}
-              {debugMode && showLogPanel && logNodeId && (
-                <div className="absolute bottom-0 left-0 right-0 bg-card border-t shadow-lg animate-fade-in" style={{ height: 200 }}>
-                  <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
+              {/* ─── Expanded Debug Log Drawer ─── */}
+              {debugMode && isLogExpanded && (
+                <div 
+                  className="absolute bottom-0 left-0 right-0 bg-card border-t shadow-sm flex flex-col z-50 animate-fade-in"
+                  style={{ height: logHeight }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onWheel={(e) => e.stopPropagation()}
+                >
+                  <div 
+                    onMouseDown={() => setIsDraggingLog(true)} 
+                    className="absolute top-0 left-0 w-full h-1 cursor-row-resize hover:bg-primary/50 z-50 transition-colors"
+                  />
+                  <div className="px-3 py-1.5 border-b bg-muted/20 flex justify-between items-center shrink-0">
                     <div className="flex items-center gap-2">
-                      <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-xs font-medium text-foreground">
-                        {nodes.find(n => n.id === logNodeId)?.label || logNodeId} — 实时日志
+                      <Terminal className="w-3.5 h-3.5 text-primary" />
+                      <span className="text-[10px] font-semibold uppercase tracking-wider">节点日志详情</span>
+                      <span className="text-[10px] text-muted-foreground truncate max-w-[300px]">
+                        {nodes.find(n => n.id === logNodeId)?.label || "未选择节点"}
                       </span>
-                      {debugNodeStates[logNodeId]?.status === "running" && (
-                        <Loader2 className="w-3 h-3 text-primary animate-spin" />
-                      )}
-                      {debugNodeStates[logNodeId]?.status === "done" && (
-                        <CheckCircle2 className="w-3 h-3" style={{ color: "hsl(142 71% 45%)" }} />
-                      )}
                     </div>
-                    <button onClick={() => setShowLogPanel(false)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button 
+                        onClick={() => setIsLogExpanded(false)} 
+                        className="p-1 hover:bg-muted/50 rounded text-muted-foreground hover:text-foreground transition-colors"
+                        title="还原至侧边栏"
+                      >
+                        <Minimize2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
+                        onClick={() => { setIsLogExpanded(false); setLogNodeId(null); }} 
+                        className="p-1 hover:bg-muted/50 rounded text-muted-foreground hover:text-foreground transition-colors"
+                        title="关闭日志"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="overflow-y-auto p-3 font-mono text-[11px] text-foreground/80 space-y-0.5" style={{ height: 160 }}>
-                    {(debugLogs[logNodeId] || []).length === 0 ? (
-                      <p className="text-muted-foreground">等待执行...</p>
+                  <div className="flex-1 overflow-y-auto p-3 font-mono text-[11px] text-foreground/80 bg-muted/5 leading-relaxed cursor-text selection:bg-primary/30">
+                    {!logNodeId ? (
+                      <div className="flex flex-col items-center justify-center h-full text-xs text-muted-foreground/60">
+                        <Terminal className="w-6 h-6 mb-2 opacity-50" />
+                        请在右侧明细中选择节点
+                      </div>
+                    ) : (debugLogs[logNodeId] || []).length === 0 ? (
+                      <div className="text-muted-foreground/50 text-[10px]">暂无日志输出...</div>
                     ) : (
                       (debugLogs[logNodeId] || []).map((line, i) => (
-                        <div key={i} className="leading-relaxed">
-                          <span className="text-muted-foreground">{line}</span>
-                        </div>
+                        <div key={i} className="mb-1 whitespace-pre-wrap">{line}</div>
                       ))
                     )}
                   </div>
