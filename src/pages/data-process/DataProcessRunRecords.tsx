@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Search, Eye, RotateCcw, StopCircle, Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 const mockRecords = [
@@ -18,6 +19,7 @@ const statusConfig: Record<string, { icon: any; color: string; tagClass: string 
 };
 
 const DataProcessRunRecords = () => {
+  const navigate = useNavigate();
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("全部");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
@@ -27,6 +29,10 @@ const DataProcessRunRecords = () => {
     if (searchText && !r.workflow.includes(searchText) && !r.id.includes(searchText)) return false;
     return true;
   });
+
+  const handlePreview = (record: typeof mockRecords[0]) => {
+    navigate(`/data-process/workflow-canvas?mode=view&instanceId=${encodeURIComponent(record.id)}&name=${encodeURIComponent(record.workflow)}`);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -101,7 +107,7 @@ const DataProcessRunRecords = () => {
                     <td className="py-3 px-4 text-muted-foreground text-xs">{r.startTime}</td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-center gap-1">
-                        <button className="p-1 rounded hover:bg-muted/50" title="查看详情"><Eye className="w-4 h-4 text-muted-foreground" /></button>
+                        <button className="p-1 rounded hover:bg-primary/10 text-primary" title="查看执行详情" onClick={(e) => { e.stopPropagation(); handlePreview(r); }}><Eye className="w-4 h-4" /></button>
                         {r.status === "运行中" && <button className="p-1 rounded hover:bg-muted/50" title="停止"><StopCircle className="w-4 h-4 text-destructive" /></button>}
                         {r.status === "失败" && <button className="p-1 rounded hover:bg-muted/50" title="重试"><RotateCcw className="w-4 h-4 text-muted-foreground" /></button>}
                       </div>
