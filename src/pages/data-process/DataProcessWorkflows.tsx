@@ -305,7 +305,14 @@ const DataProcessWorkflows = () => {
                   <td className="p-3">
                     <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", statusColors[wf.status])}>{wf.status}</span>
                   </td>
-                  <td className="p-3 text-muted-foreground">{wf.runCount}</td>
+                  <td className="p-3">
+                    <button
+                      onClick={() => navigate(`/data-process/run-records?workflow=${encodeURIComponent(wf.name)}`)}
+                      className="text-primary hover:underline font-medium"
+                    >
+                      {wf.runCount}
+                    </button>
+                  </td>
                   <td className="p-3 text-muted-foreground text-xs truncate max-w-[180px]" title={wf.input}>{wf.input}</td>
                   <td className="p-3 text-muted-foreground text-xs truncate max-w-[180px]" title={wf.output}>{wf.output}</td>
                   <td className="p-3 text-muted-foreground">{wf.creator}</td>

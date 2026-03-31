@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Search, Eye, RotateCcw, StopCircle, Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 const mockRecords = [
@@ -20,9 +20,18 @@ const statusConfig: Record<string, { icon: any; color: string; tagClass: string 
 
 const DataProcessRunRecords = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("全部");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const workflow = params.get("workflow");
+    if (workflow) {
+      setSearchText(workflow);
+    }
+  }, [location.search]);
 
   const filtered = mockRecords.filter(r => {
     if (statusFilter !== "全部" && r.status !== statusFilter) return false;

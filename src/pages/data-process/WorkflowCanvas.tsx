@@ -2313,9 +2313,15 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                   <p className="text-[10px] text-muted-foreground mt-0.5 bg-muted/30 px-1.5 py-1 rounded">v1.0.0</p>
                 </div>
               </div>
-              <div>
-                <label className="text-[10px] text-muted-foreground">算子名称</label>
-                <p className="text-xs text-foreground mt-0.5">{selectedNodeData.category} · {selectedNodeData.operatorType}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-muted-foreground">算子名称</label>
+                  <p className="text-xs text-foreground mt-0.5">{selectedNodeData.category} · {selectedNodeData.operatorType}</p>
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground">支持格式</label>
+                  <p className="text-xs text-foreground mt-0.5">txt, docx</p>
+                </div>
               </div>
               {selectedNodeData.description && (
                 <div>
@@ -2334,6 +2340,14 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                   value={selectedNodeData.config[p.key]}
                   onChange={v => updateNodeConfig(selectedNodeData.id, p.key, v)} />
               ))}
+            </div>
+
+            {/* Output param description */}
+            <div className="border-t pt-3 space-y-3">
+              <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">输出参数说明</p>
+              <div className="text-[10px] text-muted-foreground bg-muted/30 p-2 rounded leading-relaxed">
+                当前算子执行完毕后，将输出包含处理结果的字段。具体输出视数据与配置而定。
+              </div>
             </div>
 
             {/* Dependencies */}
