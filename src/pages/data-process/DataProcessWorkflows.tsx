@@ -120,7 +120,7 @@ const DataProcessWorkflows = () => {
 
   // Dialogs
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const [showRunDialog, setShowRunDialog] = useState<Workflow | null>(null);
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Workflow | null>(null);
   const [showSaveTemplate, setShowSaveTemplate] = useState<Workflow | null>(null);
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
@@ -129,12 +129,6 @@ const DataProcessWorkflows = () => {
   const [newMode, setNewMode] = useState<"select" | "template">("select");
   const [templateSearch, setTemplateSearch] = useState("");
 
-  // Run dialog state
-  const [runName, setRunName] = useState("");
-  const [runPriority, setRunPriority] = useState("中");
-  const [runInputDatasets, setRunInputDatasets] = useState<string[]>([]);
-  const [runOutputDatasets, setRunOutputDatasets] = useState<string[]>([]);
-  const [runNewVersion, setRunNewVersion] = useState("");
 
   // Save-as-template state
   const [tplName, setTplName] = useState("");
@@ -182,14 +176,6 @@ const DataProcessWorkflows = () => {
   // ─── Actions ───
   const canEdit = (wf: Workflow) => wf.creator === CURRENT_USER;
 
-  const openRunDialog = (wf: Workflow) => {
-    setRunName(`${wf.name}_${format(new Date(), "yyyyMMdd_HHmmss")}`);
-    setRunPriority("中");
-    setRunInputDatasets([]);
-    setRunOutputDatasets([]);
-    setRunNewVersion("");
-    setShowRunDialog(wf);
-  };
 
   const openSaveTemplate = (wf: Workflow) => {
     setTplName(wf.name);
@@ -326,7 +312,7 @@ const DataProcessWorkflows = () => {
                         </button>
                       )}
                       {canEdit(wf) && wf.status === "已发布" && (
-                        <button onClick={() => openRunDialog(wf)} className="p-1.5 rounded hover:bg-muted/50 text-muted-foreground" title="运行">
+                        <button onClick={() => navigate(`/data-process/run-records?workflow=${encodeURIComponent(wf.name)}`)} className="p-1.5 rounded hover:bg-muted/50 text-muted-foreground" title="运行">
                           <Play className="w-4 h-4" />
                         </button>
                       )}
@@ -409,59 +395,7 @@ const DataProcessWorkflows = () => {
         </DialogContent>
       </Dialog>
 
-      {/* ═══ Run Workflow Dialog ═══ */}
-      <Dialog open={!!showRunDialog} onOpenChange={() => setShowRunDialog(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>运行工作流</DialogTitle>
-            <DialogDescription>确认运行参数后提交到执行队列</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <label className="text-sm font-medium">运行记录名称</label>
-              <input value={runName} onChange={e => setRunName(e.target.value)} className="w-full mt-1 px-3 py-2 text-sm border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary/20" />
-            </div>
-            <div>
-              <label className="text-sm font-medium">运行优先级</label>
-              <select value={runPriority} onChange={e => setRunPriority(e.target.value)} className="w-full mt-1 px-3 py-2 text-sm border rounded-lg bg-card">
-                <option value="高">高</option>
-                <option value="中">中</option>
-                <option value="低">低</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium">输入数据集及版本</label>
-              <div className="mt-1 space-y-1 max-h-32 overflow-y-auto border rounded-lg p-2">
-                {datasetOptions.map(ds => (
-                  <label key={ds} className="flex items-center gap-2 text-sm py-0.5 cursor-pointer">
-                    <Checkbox checked={runInputDatasets.includes(ds)} onCheckedChange={() => setRunInputDatasets(prev => prev.includes(ds) ? prev.filter(x => x !== ds) : [...prev, ds])} />
-                    {ds}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium">输出数据集及版本</label>
-              <div className="mt-1 space-y-1 max-h-32 overflow-y-auto border rounded-lg p-2">
-                {datasetOptions.filter(ds => !runInputDatasets.includes(ds)).map(ds => (
-                  <label key={ds} className="flex items-center gap-2 text-sm py-0.5 cursor-pointer">
-                    <Checkbox checked={runOutputDatasets.includes(ds)} onCheckedChange={() => setRunOutputDatasets(prev => prev.includes(ds) ? prev.filter(x => x !== ds) : [...prev, ds])} />
-                    {ds}
-                  </label>
-                ))}
-              </div>
-              <div className="flex items-center gap-2 mt-2">
-                <input value={runNewVersion} onChange={e => setRunNewVersion(e.target.value)} placeholder="新建输出版本名称..." className="flex-1 px-3 py-1.5 text-sm border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                <Button size="sm" variant="outline" disabled={!runNewVersion} onClick={() => { if (runNewVersion) { setRunOutputDatasets(prev => [...prev, runNewVersion]); setRunNewVersion(""); } }}>添加</Button>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRunDialog(null)}>取消</Button>
-            <Button onClick={() => setShowRunDialog(null)}>确认运行</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
 
       {/* ═══ Delete Confirm ═══ */}
       <Dialog open={!!showDeleteConfirm} onOpenChange={() => setShowDeleteConfirm(null)}>

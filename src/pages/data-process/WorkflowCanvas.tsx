@@ -12,6 +12,7 @@ import {
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { DatasetSelectionModal } from "./DatasetSelectionModal";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
@@ -832,6 +833,8 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
   const [logHeight, setLogHeight] = useState(300);
   const [isDraggingLog, setIsDraggingLog] = useState(false);
   const [rightPanelTab, setRightPanelTab] = useState<"debug" | "config">("debug");
+  const [isDatasetModalOpen, setIsDatasetModalOpen] = useState(false);
+  const [datasetModalTarget, setDatasetModalTarget] = useState<{ nodeId: string; varIndex: number } | null>(null);
   const debugTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Validation
@@ -1219,7 +1222,15 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
 
   const updateNodeConfig = (nodeId: string, key: string, value: any) => {
     if (isReadOnly) return;
-    setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, config: { ...n.config, [key]: value } } : n));
+    setNodes(prev => prev.map(n => {
+      if (n.id !== nodeId) return n;
+      const nextConfig = { ...n.config, [key]: value };
+      let nextOutputs = n.outputs;
+      if (key === "_variables" && n.type === "dataset_input") {
+        nextOutputs = (value || []).map((v: any) => v.name || "unnamed");
+      }
+      return { ...n, config: nextConfig, outputs: nextOutputs };
+    }));
   };
 
   /* ─── Auto layout (removed old version) ─── */
@@ -1371,11 +1382,21 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
     } else {
       // Check each input node has a data source configured
       inputNodes.forEach(n => {
-        const hasSource = n.type === "file_input"
-          ? !!n.config._fileUploaded
-          : !!(n.config._dataset && n.config._version);
-        if (!hasSource) {
-          errors.push({ id: `ve-${errIdx++}`, type: "error", message: `输入数据源不存在：${n.label}`, nodeIds: [n.id] });
+        if (n.type === "file_input") {
+          if (!n.config._fileUploaded) {
+            errors.push({ id: `ve-${errIdx++}`, type: "error", message: `输入数据源未上传文件：${n.label}`, nodeIds: [n.id] });
+          }
+        } else if (n.type === "dataset_input") {
+          const vars = n.config._variables || [];
+          if (vars.length === 0) {
+            errors.push({ id: `ve-${errIdx++}`, type: "error", message: `输入节点未配置变量：${n.label}`, nodeIds: [n.id] });
+          } else {
+            vars.forEach((v: any, idx: number) => {
+              if (!v.datasetId) {
+                errors.push({ id: `ve-${errIdx++}`, type: "error", message: `变量 [${v.name || idx}] 未绑定数据集：${n.label}`, nodeIds: [n.id] });
+              }
+            });
+          }
         }
       });
     }
@@ -1384,6 +1405,17 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
     const outputNodes = nodes.filter(n => n.category === "输出节点");
     if (outputNodes.length === 0) {
       errors.push({ id: `ve-${errIdx++}`, type: "error", message: "请先配置至少一个输出节点", nodeIds: [] });
+    } else {
+      outputNodes.forEach(n => {
+        if (n.type === "dataset_output") {
+          const targetType = n.config.outputTargetType || "new";
+          if (targetType === "new" && !n.config.outputNewName) {
+            errors.push({ id: `ve-${errIdx++}`, type: "error", message: `输出节点未填写新数据集名称：${n.label}`, nodeIds: [n.id] });
+          } else if (targetType === "append" && !n.config.outputDataset) {
+            errors.push({ id: `ve-${errIdx++}`, type: "error", message: `输出节点未选择数据集：${n.label}`, nodeIds: [n.id] });
+          }
+        }
+      });
     }
 
     // 3. 节点连通性：所有非孤立节点必须在 Input→Output 路径上
@@ -2056,30 +2088,76 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                   </div>
                 </div>
               ) : (
-                /* Dataset input */
                 <>
                   <div>
-                    <label className="text-[10px] text-muted-foreground/90 font-medium">选择数据集</label>
-                    <select value={inputDataset} onChange={e => { setInputDataset(e.target.value); setInputVersion(""); }}
-                      disabled={isReadOnly}
-                      className={`${baseInputClass} ${isReadOnly ? "bg-gray-50/50 cursor-not-allowed" : ""}`}>
-                      <option value="">请选择数据集</option>
-                      {mockDatasets.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
-                    </select>
-                  </div>
-                  {inputDataset && (
-                    <div>
-                      <label className="text-[10px] text-muted-foreground/90 font-medium">选择版本</label>
-                      <select value={inputVersion} onChange={e => setInputVersion(e.target.value)}
-                        disabled={isReadOnly}
-                        className={`${baseInputClass} ${isReadOnly ? "bg-gray-50/50 cursor-not-allowed" : ""}`}>
-                        <option value="">请选择版本</option>
-                        {mockDatasets.find(d => d.id === inputDataset)?.versions.map(v => (
-                          <option key={v.id} value={v.id}>{v.name}</option>
-                        ))}
-                      </select>
+                    <label className="text-[10px] text-muted-foreground/90 font-medium whitespace-nowrap">配置数据集变量</label>
+                    <div className="mt-2 space-y-2">
+                       { (selectedNodeData.config._variables || []).map((v: any, index: number) => (
+                          <div key={index} className="flex flex-col gap-1.5 border border-primary/20 bg-primary/5 rounded-md p-2 relative group pr-6">
+                             <button
+                               onClick={() => {
+                                 if (isReadOnly) return;
+                                 const newVars = [...(selectedNodeData.config._variables || [])];
+                                 newVars.splice(index, 1);
+                                 updateNodeConfig(selectedNodeData.id, "_variables", newVars);
+                               }}
+                               className={`absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all flex items-center justify-center ${isReadOnly ? "hidden" : ""}`}
+                             >
+                                <X className="w-3.5 h-3.5" />
+                             </button>
+                             <div className="flex items-center gap-2 w-full">
+                               <input 
+                                 value={v.name} 
+                                 onChange={e => {
+                                   const newVars = [...(selectedNodeData.config._variables || [])];
+                                   newVars[index].name = e.target.value;
+                                   updateNodeConfig(selectedNodeData.id, "_variables", newVars);
+                                 }}
+                                 placeholder="变量名"
+                                 className={`${baseInputClass} !mt-0 py-1 px-1.5 text-[10px] h-7 w-[60px] shrink-0 font-mono text-center ${isReadOnly ? "bg-gray-50/50 cursor-not-allowed" : ""}`}
+                                 disabled={isReadOnly}
+                               />
+                               <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={isReadOnly}
+                                  onClick={() => {
+                                    setDatasetModalTarget({ nodeId: selectedNodeData.id, varIndex: index });
+                                    setIsDatasetModalOpen(true);
+                                  }}
+                                  className="flex-1 justify-between h-7 px-2 text-[10px] bg-white border-dashed border-primary/40 hover:border-primary/60 hover:bg-white transition-all disabled:opacity-70 disabled:cursor-not-allowed min-w-0"
+                                >
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    <Database className="w-3 h-3 text-primary/70 shrink-0" />
+                                    {v.datasetId ? (
+                                      <span className="truncate">
+                                        {v.datasetName || v.datasetId}
+                                        {v.versionId && ` · ${v.versionName || v.versionId}`}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground/50">点击绑定数据集</span>
+                                    )}
+                                  </div>
+                                  <ChevronRight className="w-3 h-3 text-muted-foreground/50 shrink-0 ml-1" />
+                                </Button>
+                             </div>
+                          </div>
+                       ))}
+                       <Button
+                         variant="ghost"
+                         size="sm"
+                         disabled={isReadOnly}
+                         onClick={() => {
+                           const newVars = [...(selectedNodeData.config._variables || [])];
+                           newVars.push({ name: `var_${newVars.length + 1}`, datasetId: "", versionId: "", datasetName: "", versionName: "" });
+                           updateNodeConfig(selectedNodeData.id, "_variables", newVars);
+                         }}
+                         className={`w-full h-8 text-[10px] text-primary hover:text-primary hover:bg-primary/10 border border-dashed border-primary/30 ${isReadOnly ? "hidden" : ""}`}
+                       >
+                         <Plus className="w-3 h-3 mr-1" />添加变量
+                       </Button>
                     </div>
-                  )}
+                  </div>
                 </>
               )}
 
@@ -2166,6 +2244,53 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
             <div className="border-t pt-3 space-y-3">
               <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">输出配置</p>
 
+              {/* Dynamic Input Variable Selection */}
+              <div>
+                <label className="text-[10px] text-muted-foreground/90 font-medium">输入源变量</label>
+                {(() => {
+                  const vars: { value: string, label: string }[] = [];
+                  const visited = new Set<string>();
+                  const bwdQueue = [selectedNode];
+                  const adjBackward: Record<string, string[]> = {};
+                  connections.forEach(c => { if (!adjBackward[c.to]) adjBackward[c.to] = []; adjBackward[c.to].push(c.from); });
+                  
+                  while (bwdQueue.length > 0) {
+                    const curr = bwdQueue.shift()!;
+                    for (const prev of adjBackward[curr] || []) {
+                      if (!visited.has(prev)) { 
+                        visited.add(prev); 
+                        bwdQueue.push(prev); 
+                        const prevNode = nodes.find(n => n.id === prev);
+                        if (prevNode) {
+                          if (prevNode.category === "输入节点" && prevNode.type !== "file_input") {
+                            const nodeVars = prevNode.config._variables || [];
+                            nodeVars.forEach((v: any) => vars.push({ value: `${prevNode.id}.${v.name}`, label: `${prevNode.label} - ${v.name || '未命名'}` }));
+                          } else {
+                            vars.push({ value: `${prevNode.id}.output`, label: `${prevNode.label} (输出)` });
+                          }
+                        }
+                      }
+                    }
+                  }
+                  return (
+                    <>
+                      <select 
+                        value={selectedNodeData.config._inputVariable || (vars.length > 0 ? vars[0].value : "")}
+                        onChange={e => updateNodeConfig(selectedNodeData.id, "_inputVariable", e.target.value)}
+                        disabled={isReadOnly || connections.filter(c => c.to === selectedNode).length === 0}
+                        className={`w-full mt-1 px-2.5 py-1.5 text-xs bg-white text-foreground border border-gray-200/80 rounded-md shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary hover:border-gray-300 ${isReadOnly || connections.filter(c => c.to === selectedNode).length === 0 ? "bg-gray-50/50 cursor-not-allowed opacity-80" : ""}`}
+                      >
+                        {vars.length === 0 && <option value="">请先连接前置节点</option>}
+                        {vars.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+                      </select>
+                      {connections.filter(c => c.to === selectedNode).length === 0 && (
+                        <p className="text-[9px] text-muted-foreground mt-1">请先连接前置节点作为输出源</p>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+
               {isFileOutput ? (
                 /* File output */
                 <div className="space-y-3">
@@ -2188,23 +2313,23 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                   <div>
                     <label className="text-[10px] text-muted-foreground/90 font-medium">输出类型</label>
                     <div className="flex gap-2 mt-1">
-                      <button onClick={() => setOutputTargetType("new")}
+                      <button onClick={() => updateNodeConfig(selectedNodeData.id, "outputTargetType", "new")}
                         disabled={isReadOnly}
-                        className={`flex-1 px-2 py-1.5 text-xs rounded-md border shadow-sm transition-all ${outputTargetType === "new" ? "bg-primary text-primary-foreground border-primary" : "bg-white text-muted-foreground border-gray-200/80 hover:border-gray-300 hover:bg-gray-50"} ${isReadOnly ? "cursor-not-allowed opacity-80" : ""}`}>
+                        className={`flex-1 px-2 py-1.5 text-xs rounded-md border shadow-sm transition-all ${selectedNodeData.config.outputTargetType !== "append" ? "bg-primary text-primary-foreground border-primary" : "bg-white text-muted-foreground border-gray-200/80 hover:border-gray-300 hover:bg-gray-50"} ${isReadOnly ? "cursor-not-allowed opacity-80" : ""}`}>
                         新建数据集
                       </button>
-                      <button onClick={() => setOutputTargetType("append")}
+                      <button onClick={() => updateNodeConfig(selectedNodeData.id, "outputTargetType", "append")}
                         disabled={isReadOnly}
-                        className={`flex-1 px-2 py-1.5 text-xs rounded-md border shadow-sm transition-all ${outputTargetType === "append" ? "bg-primary text-primary-foreground border-primary" : "bg-white text-muted-foreground border-gray-200/80 hover:border-gray-300 hover:bg-gray-50"} ${isReadOnly ? "cursor-not-allowed opacity-80" : ""}`}>
+                        className={`flex-1 px-2 py-1.5 text-xs rounded-md border shadow-sm transition-all ${selectedNodeData.config.outputTargetType === "append" ? "bg-primary text-primary-foreground border-primary" : "bg-white text-muted-foreground border-gray-200/80 hover:border-gray-300 hover:bg-gray-50"} ${isReadOnly ? "cursor-not-allowed opacity-80" : ""}`}>
                         追加至已有
                       </button>
                     </div>
                   </div>
 
-                  {outputTargetType === "new" ? (
+                  {selectedNodeData.config.outputTargetType !== "append" ? (
                     <div>
                       <label className="text-[10px] text-muted-foreground/90 font-medium">新数据集名称</label>
-                      <input value={outputNewName} onChange={e => setOutputNewName(e.target.value)}
+                      <input value={selectedNodeData.config.outputNewName || ""} onChange={e => updateNodeConfig(selectedNodeData.id, "outputNewName", e.target.value)}
                         placeholder="请输入数据集名称"
                         readOnly={isReadOnly}
                         className={`${baseInputClass} ${isReadOnly ? "bg-gray-50/50 cursor-not-allowed" : ""}`} />
@@ -2213,21 +2338,27 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                     <>
                       <div>
                         <label className="text-[10px] text-muted-foreground/90 font-medium">选择数据集</label>
-                        <select value={outputDataset} onChange={e => { setOutputDataset(e.target.value); setOutputVersion(""); }}
+                        <select value={selectedNodeData.config.outputDataset || ""} 
+                          onChange={e => { 
+                            const ds = mockDatasets.find(d => d.id === e.target.value);
+                            updateNodeConfig(selectedNodeData.id, "outputDataset", e.target.value); 
+                            updateNodeConfig(selectedNodeData.id, "outputDatasetName", ds?.name || ""); 
+                            updateNodeConfig(selectedNodeData.id, "outputVersion", ""); 
+                          }}
                           disabled={isReadOnly}
                           className={`${baseInputClass} ${isReadOnly ? "bg-gray-50/50 cursor-not-allowed" : ""}`}>
                           <option value="">请选择数据集</option>
                           {mockDatasets.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
                         </select>
                       </div>
-                      {outputDataset && (
+                      {selectedNodeData.config.outputDataset && (
                         <div>
                           <label className="text-[10px] text-muted-foreground/90 font-medium">选择版本</label>
-                          <select value={outputVersion} onChange={e => setOutputVersion(e.target.value)}
+                          <select value={selectedNodeData.config.outputVersion || ""} onChange={e => updateNodeConfig(selectedNodeData.id, "outputVersion", e.target.value)}
                             disabled={isReadOnly}
                             className={`${baseInputClass} ${isReadOnly ? "bg-gray-50/50 cursor-not-allowed" : ""}`}>
                             <option value="">请选择版本</option>
-                            {mockDatasets.find(d => d.id === outputDataset)?.versions.map(v => (
+                            {mockDatasets.find(d => d.id === selectedNodeData.config.outputDataset)?.versions.map(v => (
                               <option key={v.id} value={v.id}>{v.name}</option>
                             ))}
                             <option value="__new__">+ 新建版本</option>
@@ -2241,9 +2372,9 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                         <div className="flex gap-2 mt-1">
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <button onClick={() => setOutputWriteMode("append")}
+                              <button onClick={() => updateNodeConfig(selectedNodeData.id, "outputWriteMode", "append")}
                                 disabled={isReadOnly}
-                                className={`flex-1 px-2 py-1.5 text-xs rounded-md border shadow-sm transition-all ${outputWriteMode === "append" ? "bg-primary text-primary-foreground border-primary" : "bg-white text-muted-foreground border-gray-200/80 hover:border-gray-300 hover:bg-gray-50"} ${isReadOnly ? "cursor-not-allowed opacity-80" : ""}`}>
+                                className={`flex-1 px-2 py-1.5 text-xs rounded-md border shadow-sm transition-all ${selectedNodeData.config.outputWriteMode !== "clear" ? "bg-primary text-primary-foreground border-primary" : "bg-white text-muted-foreground border-gray-200/80 hover:border-gray-300 hover:bg-gray-50"} ${isReadOnly ? "cursor-not-allowed opacity-80" : ""}`}>
                                 追加输出
                               </button>
                             </TooltipTrigger>
@@ -2251,7 +2382,7 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                           </Tooltip>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <button onClick={() => setOutputWriteMode("clear")}
+                              <button onClick={() => updateNodeConfig(selectedNodeData.id, "outputWriteMode", "clear")}
                                 disabled={isReadOnly}
                                 className={`flex-1 px-2 py-1.5 text-xs rounded-md border shadow-sm transition-all ${outputWriteMode === "clear" ? "bg-primary text-primary-foreground border-primary" : "bg-white text-muted-foreground border-gray-200/80 hover:border-gray-300 hover:bg-gray-50"} ${isReadOnly ? "cursor-not-allowed opacity-80" : ""}`}>
                                 清空后输出
@@ -2333,7 +2464,57 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
 
             {/* Middle: param form */}
             <div className="border-t pt-3 space-y-3">
-              <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">参数配置</p>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-semibold text-foreground uppercase tracking-wider">参数配置</p>
+              </div>
+
+              {/* Dynamic Input Variable Selection */}
+              <div>
+                <label className="text-[10px] text-muted-foreground/90 font-medium">输入变量</label>
+                {(() => {
+                  const vars: { value: string, label: string }[] = [];
+                  const visited = new Set<string>();
+                  const bwdQueue = [selectedNode];
+                  const adjBackward: Record<string, string[]> = {};
+                  connections.forEach(c => { if (!adjBackward[c.to]) adjBackward[c.to] = []; adjBackward[c.to].push(c.from); });
+                  
+                  while (bwdQueue.length > 0) {
+                    const curr = bwdQueue.shift()!;
+                    for (const prev of adjBackward[curr] || []) {
+                      if (!visited.has(prev)) { 
+                        visited.add(prev); 
+                        bwdQueue.push(prev); 
+                        const prevNode = nodes.find(n => n.id === prev);
+                        if (prevNode) {
+                          if (prevNode.category === "输入节点" && prevNode.type !== "file_input") {
+                            const nodeVars = prevNode.config._variables || [];
+                            nodeVars.forEach((v: any) => vars.push({ value: `${prevNode.id}.${v.name}`, label: `${prevNode.label} - ${v.name || '未命名'}` }));
+                          } else {
+                            vars.push({ value: `${prevNode.id}.output`, label: `${prevNode.label} (输出)` });
+                          }
+                        }
+                      }
+                    }
+                  }
+                  return (
+                    <>
+                      <select 
+                        value={selectedNodeData.config._inputVariable || (vars.length > 0 ? vars[0].value : "")}
+                        onChange={e => updateNodeConfig(selectedNodeData.id, "_inputVariable", e.target.value)}
+                        disabled={isReadOnly || nodeConnections.filter(c => c.to === selectedNode).length === 0}
+                        className={`w-full mt-1 px-2.5 py-1.5 text-xs bg-white text-foreground border border-gray-200/80 rounded-md shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary hover:border-gray-300 ${isReadOnly || nodeConnections.filter(c => c.to === selectedNode).length === 0 ? "bg-gray-50/50 cursor-not-allowed opacity-80" : ""}`}
+                      >
+                        {vars.length === 0 && <option value="">请先连接前置节点</option>}
+                        {vars.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+                      </select>
+                      {nodeConnections.filter(c => c.to === selectedNode).length === 0 && (
+                        <p className="text-[9px] text-muted-foreground mt-1">请先连接至少一个前置节点</p>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+
               {params.map(p => (
                 <ParamFormField key={p.key} param={p}
                   isReadOnly={isReadOnly}
@@ -2872,58 +3053,47 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                                 </div>
                               </div>
 
-                              {/* Body (Vertical Sections, Horizontal Variables on Right) */}
+                              {/* Body (Conditional Content) */}
                               {!node.isCollapsed && (
-                                <div className="px-3 py-3 space-y-2 animate-in slide-in-from-top-1 duration-200">
-                                  {/* Row 1: Inputs */}
-                                  <div className="flex items-center gap-2 overflow-hidden w-full">
-                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium whitespace-nowrap shrink-0">
-                                      <Terminal className="w-2.5 h-2.5" /> 输入
+                                <div className="px-3 py-2.5 space-y-1.5 animate-in slide-in-from-top-1 duration-200">
+                                  {node.type === "dataset_input" ? (
+                                    <div className="space-y-1">
+                                      {(node.config._variables || []).slice(0, 3).map((v: any, i: number) => (
+                                        <div key={i} className="flex justify-between items-center text-[10px] bg-primary/5 px-2 py-0.5 rounded border border-primary/10">
+                                          <span className="font-mono text-primary font-medium truncate max-w-[50px] shrink-0">{"{{"}{v.name}{"}}"}</span>
+                                          <span className="text-muted-foreground truncate ml-1 flex-1 text-right" title={v.datasetName}>{v.datasetName || "未绑定数据"}</span>
+                                        </div>
+                                      ))}
+                                      {(node.config._variables || []).length > 3 && (
+                                        <div className="text-[9px] text-muted-foreground text-center">+ {(node.config._variables || []).length - 3} 更多变量</div>
+                                      )}
+                                      {(!node.config._variables || node.config._variables.length === 0) && (
+                                        <div className="text-[10px] text-muted-foreground italic text-center py-1 flex items-center justify-center gap-1">
+                                          <Database className="w-3 h-3 opacity-50" /> 未配置变量
+                                        </div>
+                                      )}
                                     </div>
-                                    <div className="flex-1 min-w-0 text-left">
-                                      <Tooltip delayDuration={300}>
-                                        <TooltipTrigger asChild>
-                                          <div className="w-full truncate text-[10px] text-blue-600 font-mono cursor-default bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/50">
-                                            {(node.inputs.length > 0 ? node.inputs : ["data"]).map(v => `{{${v}}}`).join('  ')}
-                                          </div>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="bottom" className="max-w-[250px] flex flex-wrap gap-1">
-                                          {(node.inputs.length > 0 ? node.inputs : ["data"]).map(v => (
-                                            <span key={v} className="px-1.5 py-0.5 rounded bg-blue-50/50 text-blue-600 text-[10px] font-mono border border-blue-100/50 whitespace-nowrap">
-                                              {"{{"}{v}{"}}"}
-                                            </span>
-                                          ))}
-                                        </TooltipContent>
-                                      </Tooltip>
+                                  ) : node.type === "dataset_output" ? (
+                                    <div className="text-[10px] bg-destructive/5 px-2 py-1.5 rounded border border-destructive/10 flex items-center gap-1.5 min-h-[28px]">
+                                      <Database className="w-3 h-3 text-destructive/70 shrink-0" />
+                                      <span className="truncate flex-1 font-medium text-foreground">
+                                        {node.config.outputTargetType === "new" ? (node.config.outputNewName || "新数据集") : (node.config.outputDatasetName || "未选择")}
+                                      </span>
                                     </div>
-                                  </div>
-                                  {/* Row 2: Outputs */}
-                                  <div className="flex items-center gap-2 overflow-hidden w-full">
-                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium whitespace-nowrap shrink-0">
-                                      <Activity className="w-2.5 h-2.5" /> 输出
+                                  ) : node.type === "file_input" ? (
+                                    <div className="text-[10px] text-muted-foreground italic text-center py-1 bg-muted/20 rounded">
+                                      {node.config._fileUploaded ? "文件已加载" : "等待上传文件"}
                                     </div>
-                                    <div className="flex-1 min-w-0 text-left">
-                                      <Tooltip delayDuration={300}>
-                                        <TooltipTrigger asChild>
-                                          <div className="w-full truncate text-[10px] text-blue-600 font-mono cursor-default bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/50">
-                                            {(node.outputs.length > 0 ? node.outputs : ["data"]).map(v => `{{${v}}}`).join('  ')}
-                                          </div>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="bottom" className="max-w-[250px] flex flex-wrap gap-1">
-                                          {(node.outputs.length > 0 ? node.outputs : ["data"]).map(v => (
-                                            <span key={v} className="px-1.5 py-0.5 rounded bg-blue-50/50 text-blue-600 text-[10px] font-mono border border-blue-100/50 whitespace-nowrap">
-                                              {"{{"}{v}{"}}"}
-                                            </span>
-                                          ))}
-                                        </TooltipContent>
-                                      </Tooltip>
+                                  ) : (
+                                    <div className="text-[10px] text-muted-foreground bg-muted/10 px-2 py-2 rounded min-h-[36px] flex items-center">
+                                      <span className="line-clamp-2 w-full leading-tight" title={node.description}>{node.description || "数据处理算子"}</span>
                                     </div>
-                                  </div>
+                                  )}
 
                                   {nodeDebug?.status === "error" && (
-                                    <div className="text-[11px] text-destructive bg-destructive/5 p-2 rounded border border-destructive/10 mt-2 flex items-center gap-2">
+                                    <div className="text-[11px] text-destructive bg-destructive/5 p-2 rounded border border-destructive/10 mt-1 flex items-center gap-2">
                                       <AlertTriangle className="w-3 h-3 shrink-0" />
-                                      <span>算子执行异常</span>
+                                      <span>执行异常</span>
                                     </div>
                                   )}
                                 </div>
@@ -2933,7 +3103,7 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                         </foreignObject>
 
                         {/* Input ports (Left) */}
-                        {node.inputs.map(port => {
+                        {node.type !== "dataset_input" && node.inputs.map(port => {
                           const pos = getPortPos(node, port, true);
                           return (
                             <g key={`in-${port}`} onMouseUp={() => finishConnect(node.id, port)} className="cursor-pointer">
@@ -3128,6 +3298,36 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
           {/* ─── Right: Properties panel (always visible) ─── */}
           {renderPropertyPanel()}
         </div>
+      {isDatasetModalOpen && (
+        <DatasetSelectionModal
+          isOpen={isDatasetModalOpen}
+          onClose={() => { setIsDatasetModalOpen(false); setDatasetModalTarget(null); }}
+          onSelect={(dsId, vId, dsName, vName) => {
+            if (datasetModalTarget && selectedNode) {
+              const node = nodes.find(n => n.id === datasetModalTarget.nodeId);
+              if (node) {
+                const newVars = [...(node.config._variables || [])];
+                if (newVars[datasetModalTarget.varIndex]) {
+                  newVars[datasetModalTarget.varIndex] = {
+                    ...newVars[datasetModalTarget.varIndex],
+                    datasetId: dsId,
+                    versionId: vId,
+                    datasetName: dsName,
+                    versionName: vName
+                  };
+                  updateNodeConfig(datasetModalTarget.nodeId, "_variables", newVars);
+                }
+              }
+            } else {
+              // Fallback for standard input fallback if needed
+              setInputDataset(dsId);
+              setInputVersion(vId);
+            }
+          }}
+          currentDatasetId={datasetModalTarget && selectedNode ? nodes.find(n => n.id === datasetModalTarget.nodeId)?.config._variables?.[datasetModalTarget.varIndex]?.datasetId : inputDataset}
+          currentVersionId={datasetModalTarget && selectedNode ? nodes.find(n => n.id === datasetModalTarget.nodeId)?.config._variables?.[datasetModalTarget.varIndex]?.versionId : inputVersion}
+        />
+      )}
       </div>
     </TooltipProvider>
   );
