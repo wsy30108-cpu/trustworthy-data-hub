@@ -134,7 +134,7 @@ function LoginForm() {
 
       <div className="mt-5 pt-4 border-t">
         <p className="text-xs text-muted-foreground text-center">
-          演示账号：admin / Admin123！
+          演示账号：admin / Admin123!
         </p>
       </div>
     </div>

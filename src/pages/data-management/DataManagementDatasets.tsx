@@ -758,7 +758,7 @@ const DataManagementDatasets = () => {
   if (subPage === "importConfig" && currentDataset && currentVersion) {
     return (
       <DatasetImportConfig
-        dataset={{ id: currentDataset.id, name: currentDataset.name, modality: currentDataset.modality }}
+        dataset={{ id: currentDataset.id, name: currentDataset.name, modality: currentDataset.modality, type: currentDataset.type }}
         version={{ version: currentVersion.version }}
         onBack={() => setSubPage("versionDetail")}
         onComplete={() => setSubPage("versionDetail")}

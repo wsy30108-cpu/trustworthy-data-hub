@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, Edit, Save, X, Plus, Trash2, Search, Eye, ShieldCheck, UserPlus, Power, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, HardDrive, Check, Loader2, AlertTriangle, ExternalLink, Settings, Star, TestTube2, ChevronDown, UserSearch } from "lucide-react";
+import { ArrowLeft, Edit, Save, X, Plus, Trash2, Search, Eye, ShieldCheck, UserPlus, Power, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, HardDrive, Check, Loader2, AlertTriangle, ExternalLink, Settings, Star, TestTube2, ChevronDown, UserSearch, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { mockAnnotationTeams, MOCK_ORG_ANNOTATORS, TEAM_MEMBERS } from "./ConsoleAnnotationTeams";
 
 /* ─── Types ─── */
 interface SpaceData {
@@ -14,7 +15,7 @@ interface SpaceData {
 }
 
 interface SpaceMember {
-  id: string; name: string; account: string; roles: string[]; joinedAt: string; status: "启用" | "停用";
+  id: string; name: string; account: string; roles: string[]; joinedAt: string; status: "启用" | "停用"; linkedTeamId?: string; linkedTeamName?: string;
 }
 
 /* ─── Mock Org Members (same org candidates) ─── */
@@ -325,9 +326,12 @@ interface AddCandidate {
 function PermissionsTab({ space }: { space: SpaceData }) {
   const { toast } = useToast();
   const [members, setMembers] = useState<SpaceMember[]>(MOCK_MEMBERS);
+  const [linkedTeamIds, setLinkedTeamIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
+  const [showTeamDialog, setShowTeamDialog] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [roleTarget, setRoleTarget] = useState<SpaceMember | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; desc: string; onConfirm: () => void } | null>(null);
 
@@ -340,9 +344,27 @@ function PermissionsTab({ space }: { space: SpaceData }) {
   const [candidates, setCandidates] = useState<AddCandidate[]>([]);
   const [foundExtUser, setFoundExtUser] = useState<{ name: string; account: string } | null>(null);
 
-  const filtered = members.filter(m => {
+  // Team dialog state
+  const [teamSelections, setTeamSelections] = useState<string[]>([]);
+
+  // Separate core members and team members; team members at the bottom grouped by team
+  const coreMembers = members.filter(m => !m.linkedTeamId);
+  const teamMembers = members.filter(m => !!m.linkedTeamId);
+
+  // Sort: core first, then team members grouped by team name
+  const sortedMembers = [...coreMembers, ...teamMembers.sort((a, b) => (a.linkedTeamName || "").localeCompare(b.linkedTeamName || ""))];
+
+  const filtered = sortedMembers.filter(m => {
     if (search && !m.name.includes(search) && !m.account.includes(search)) return false;
-    if (roleFilter !== "all" && !m.roles.includes(roleFilter)) return false;
+    if (roleFilter !== "all") {
+      // For team members, match if roleFilter is the base role or the team-specific display
+      if (m.linkedTeamId) {
+        const teamRoleLabel = `标注员（${m.linkedTeamName}）`;
+        if (roleFilter !== "标注员" && roleFilter !== teamRoleLabel && !m.roles.includes(roleFilter)) return false;
+      } else {
+        if (!m.roles.includes(roleFilter)) return false;
+      }
+    }
     return true;
   });
 
@@ -362,10 +384,6 @@ function PermissionsTab({ space }: { space: SpaceData }) {
     });
   };
 
-  const setCandidateRoles = (account: string, roles: string[]) => {
-    setCandidates(prev => prev.map(c => c.account === account ? { ...c, selectedRoles: roles } : c));
-  };
-
   const toggleCandidateRole = (account: string, role: string) => {
     setCandidates(prev => prev.map(c => {
       if (c.account !== account) return c;
@@ -377,14 +395,12 @@ function PermissionsTab({ space }: { space: SpaceData }) {
 
   const handleSearchExtUser = () => {
     if (!addAccountSearch.trim()) return;
-    // Check if already in space
     if (members.some(m => m.account === addAccountSearch.trim())) {
       toast({ title: "该用户已在空间中", variant: "destructive" }); return;
     }
     if (candidates.some(c => c.account === addAccountSearch.trim())) {
       toast({ title: "该用户已在待添加列表中", variant: "destructive" }); return;
     }
-    // Mock: simulate finding a user
     const mockFound = { name: `用户_${addAccountSearch.trim()}`, account: addAccountSearch.trim() };
     setFoundExtUser(mockFound);
   };
@@ -425,9 +441,81 @@ function PermissionsTab({ space }: { space: SpaceData }) {
     setRoleTarget(null);
   };
 
+  // ── Team Dialog Logic ──
+  const openTeamDialog = () => {
+    setTeamSelections([...linkedTeamIds]);
+    setShowTeamDialog(true);
+  };
+
+  const toggleTeamSelection = (teamId: string) => {
+    setTeamSelections(prev => prev.includes(teamId) ? prev.filter(id => id !== teamId) : [...prev, teamId]);
+  };
+
+  const handleTeamDialogConfirm = () => {
+    // Remove members from teams that were unlinked
+    const removedTeams = linkedTeamIds.filter(id => !teamSelections.includes(id));
+    const addedTeams = teamSelections.filter(id => !linkedTeamIds.includes(id));
+
+    let newMembers = members.filter(m => !m.linkedTeamId || teamSelections.includes(m.linkedTeamId));
+
+    // Add members from newly linked teams
+    for (const teamId of addedTeams) {
+      const team = mockAnnotationTeams.find(t => t.id === teamId);
+      if (!team) continue;
+      const teamAccounts = TEAM_MEMBERS[teamId] || [];
+      for (const acc of teamAccounts) {
+        if (newMembers.some(m => m.account === acc && m.linkedTeamId === teamId)) continue;
+        const om = MOCK_ORG_MEMBERS.find(x => x.account === acc) || MOCK_ORG_ANNOTATORS.find(x => x.account === acc);
+        const name = om?.name || acc;
+        // If the member already exists as a core member, mark them with the team
+        const existingIdx = newMembers.findIndex(m => m.account === acc && !m.linkedTeamId);
+        if (existingIdx >= 0) {
+          newMembers[existingIdx] = { ...newMembers[existingIdx], linkedTeamId: teamId, linkedTeamName: team.name };
+        } else {
+          newMembers.push({
+            id: `tm_${teamId}_${acc}`, name, account: acc, roles: ["标注员"],
+            joinedAt: new Date().toISOString().slice(0, 10), status: "启用",
+            linkedTeamId: teamId, linkedTeamName: team.name,
+          });
+        }
+      }
+    }
+
+    setLinkedTeamIds(teamSelections);
+    setMembers(newMembers);
+    setShowTeamDialog(false);
+
+    if (addedTeams.length > 0) toast({ title: `已关联 ${addedTeams.length} 个标注团队` });
+    if (removedTeams.length > 0) toast({ title: `已移除 ${removedTeams.length} 个标注团队` });
+  };
+
+  // Build role stats including team-specific roles
+  const allRoleLabels: { label: string; count: number }[] = [];
+  for (const r of SPACE_ROLES) {
+    const count = coreMembers.filter(m => m.roles.includes(r)).length;
+    if (count > 0) allRoleLabels.push({ label: r, count });
+  }
+  // Add team-specific annotation roles
+  const teamGroups = new Map<string, number>();
+  for (const m of teamMembers) {
+    const label = `标注员（${m.linkedTeamName}）`;
+    teamGroups.set(label, (teamGroups.get(label) || 0) + 1);
+  }
+  for (const [label, count] of teamGroups) {
+    allRoleLabels.push({ label, count });
+  }
+
+  // Add menu ref for closing on outside click
+  const addMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) setAddMenuOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   return (
     <div className="space-y-5">
-      {/* Filter + Add */}
+      {/* Filter + Add (hover dropdown) */}
       <div className="rounded-lg border bg-card p-4">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[180px] max-w-[250px]">
@@ -440,18 +528,36 @@ function PermissionsTab({ space }: { space: SpaceData }) {
             {SPACE_ROLES.map(r => <option key={r}>{r}</option>)}
           </select>
           <div className="flex-1" />
-          <Button size="sm" onClick={() => setShowAdd(true)} className="h-9 gap-1.5 text-xs">
-            <UserPlus className="w-3.5 h-3.5" />新增成员
-          </Button>
+          <div className="relative" ref={addMenuRef}>
+            <Button size="sm" className="h-9 gap-1.5 text-xs"
+              onMouseEnter={() => setAddMenuOpen(true)}
+              onClick={() => setAddMenuOpen(!addMenuOpen)}>
+              <UserPlus className="w-3.5 h-3.5" />新增成员
+              <ChevronDown className="w-3 h-3 ml-0.5" />
+            </Button>
+            {addMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 w-44 bg-card border rounded-lg shadow-lg z-50 p-1"
+                onMouseLeave={() => setAddMenuOpen(false)}>
+                <button onClick={() => { setShowAdd(true); setAddMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded hover:bg-muted/50 text-left">
+                  <UserPlus className="w-3.5 h-3.5" />新增核心成员
+                </button>
+                <button onClick={() => { openTeamDialog(); setAddMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded hover:bg-muted/50 text-left">
+                  <Users className="w-3.5 h-3.5" />添加标注团队
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Role stats */}
       <div className="flex gap-3 flex-wrap">
-        {SPACE_ROLES.filter(r => members.some(m => m.roles.includes(r))).map(r => (
-          <div key={r} className="px-3 py-1.5 rounded-lg border bg-card text-xs">
-            <span className="text-muted-foreground">{r}</span>
-            <span className="ml-2 font-semibold text-foreground">{members.filter(m => m.roles.includes(r)).length}</span>
+        {allRoleLabels.map(r => (
+          <div key={r.label} className="px-3 py-1.5 rounded-lg border bg-card text-xs">
+            <span className="text-muted-foreground">{r.label}</span>
+            <span className="ml-2 font-semibold text-foreground">{r.count}</span>
           </div>
         ))}
       </div>
@@ -467,35 +573,50 @@ function PermissionsTab({ space }: { space: SpaceData }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(m => (
-              <tr key={m.id} className="border-b last:border-0 hover:bg-muted/20">
-                <td className="py-3 px-4 font-medium">{m.name}</td>
-                <td className="py-3 px-4 text-muted-foreground text-xs font-mono">{m.account}</td>
-                <td className="py-3 px-4">
-                  <div className="flex flex-wrap gap-1">
-                    {m.roles.map(r => (
-                      <span key={r} className="px-1.5 py-0.5 rounded text-[10px] bg-primary/10 text-primary font-medium">{r}</span>
-                    ))}
-                  </div>
-                </td>
-                <td className="py-3 px-4 text-muted-foreground text-xs">{m.joinedAt}</td>
-                <td className="py-3 px-4">
-                  <span className={cn("px-2 py-0.5 rounded text-xs font-medium",
-                    m.status === "启用" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                  )}>{m.status}</span>
-                </td>
-                <td className="py-3 px-4">
-                  <div className="flex items-center gap-1">
-                    <button className="p-1 rounded hover:bg-muted/50" title="编辑角色" onClick={() => { setRoleTarget(m); setEditRoles([...m.roles]); }}>
-                      <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
-                    </button>
-                    <button className="p-1 rounded hover:bg-muted/50" title="移除" onClick={() => handleRemove(m)}>
-                      <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {filtered.map(m => {
+              const isTeamMember = !!m.linkedTeamId;
+              return (
+                <tr key={m.id} className="border-b last:border-0 hover:bg-muted/20">
+                  <td className="py-3 px-4 font-medium">{m.name}</td>
+                  <td className="py-3 px-4 text-muted-foreground text-xs font-mono">{m.account}</td>
+                  <td className="py-3 px-4">
+                    <div className="flex flex-wrap gap-1">
+                      {isTeamMember ? (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-100 text-indigo-700 font-medium">标注员（{m.linkedTeamName}）</span>
+                      ) : (
+                        m.roles.map(r => (
+                          <span key={r} className="px-1.5 py-0.5 rounded text-[10px] bg-primary/10 text-primary font-medium">{r}</span>
+                        ))
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 text-muted-foreground text-xs">{m.joinedAt}</td>
+                  <td className="py-3 px-4">
+                    <span className={cn("px-2 py-0.5 rounded text-xs font-medium",
+                      m.status === "启用" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                    )}>{m.status}</span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-1">
+                      <button
+                        className={cn("p-1 rounded", isTeamMember ? "text-muted-foreground/30 cursor-not-allowed" : "hover:bg-muted/50")}
+                        title={isTeamMember ? "标注团队成员角色不可编辑" : "编辑角色"}
+                        onClick={() => { if (!isTeamMember) { setRoleTarget(m); setEditRoles([...m.roles]); } }}
+                        disabled={isTeamMember}>
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        className={cn("p-1 rounded", isTeamMember ? "text-muted-foreground/30 cursor-not-allowed" : "hover:bg-muted/50 text-muted-foreground")}
+                        title={isTeamMember ? "来自标注团队，不可单独移除" : "移除"}
+                        onClick={() => !isTeamMember && handleRemove(m)}
+                        disabled={isTeamMember}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {filtered.length === 0 && (
               <tr><td colSpan={6} className="py-12 text-center text-sm text-muted-foreground">暂无成员数据</td></tr>
             )}
@@ -503,10 +624,10 @@ function PermissionsTab({ space }: { space: SpaceData }) {
         </table>
       </div>
 
-      {/* ── Add Member Dialog (enhanced) ── */}
+      {/* ── Add Core Member Dialog (enhanced) ── */}
       <Dialog open={showAdd} onOpenChange={v => { if (!v) { setShowAdd(false); setCandidates([]); setAddSearch(""); setAddAccountSearch(""); setFoundExtUser(null); } }}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
-          <DialogHeader><DialogTitle>新增空间成员</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>新增核心成员</DialogTitle></DialogHeader>
           <div className="flex-1 overflow-hidden flex flex-col gap-4 min-h-0">
             {/* Section 1: Select from org */}
             <div className="space-y-2">
@@ -602,6 +723,55 @@ function PermissionsTab({ space }: { space: SpaceData }) {
             <Button variant="outline" onClick={() => { setShowAdd(false); setCandidates([]); }}>取消</Button>
             <Button onClick={handleAddConfirm} disabled={candidates.length === 0}>
               确认添加 ({candidates.length})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Add Annotation Team Dialog ── */}
+      <Dialog open={showTeamDialog} onOpenChange={v => { if (!v) setShowTeamDialog(false); }}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader><DialogTitle>添加标注团队</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">勾选要关联的标注团队，取消勾选可移除已关联的团队</p>
+          <div className="flex-1 overflow-hidden min-h-0">
+            <div className="max-h-[50vh] overflow-y-auto border rounded-md">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30 sticky top-0">
+                    <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground w-10"></th>
+                    {["团队名称", "所属组织", "描述", "负责人", "成员数"].map(h => (
+                      <th key={h} className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {mockAnnotationTeams.map(t => {
+                    const isSelected = teamSelections.includes(t.id);
+                    return (
+                      <tr key={t.id} className={cn("border-b last:border-0 hover:bg-muted/20 cursor-pointer", isSelected && "bg-primary/5")}
+                        onClick={() => toggleTeamSelection(t.id)}>
+                        <td className="py-2.5 px-3">
+                          <div className={cn("w-4 h-4 rounded border flex items-center justify-center",
+                            isSelected ? "bg-primary border-primary" : "border-muted-foreground/30")}>
+                            {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 font-medium">{t.name}</td>
+                        <td className="py-2.5 px-3 text-muted-foreground text-xs">{t.org}</td>
+                        <td className="py-2.5 px-3 text-muted-foreground text-xs max-w-[180px] truncate" title={t.desc}>{t.desc}</td>
+                        <td className="py-2.5 px-3 text-xs">{t.admin}</td>
+                        <td className="py-2.5 px-3 text-muted-foreground text-xs">{TEAM_MEMBERS[t.id]?.length || 0}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <DialogFooter className="mt-2">
+            <Button variant="outline" onClick={() => setShowTeamDialog(false)}>取消</Button>
+            <Button onClick={handleTeamDialogConfirm}>
+              确认 ({teamSelections.length} 个团队)
             </Button>
           </DialogFooter>
         </DialogContent>

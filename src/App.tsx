@@ -13,6 +13,7 @@ import { lazy, Suspense } from "react";
 
 const ConsoleDashboard = lazy(() => import("./pages/console/ConsoleDashboard"));
 const ConsoleSpaces = lazy(() => import("./pages/console/ConsoleSpaces"));
+const ConsoleAnnotationTeams = lazy(() => import("./pages/console/ConsoleAnnotationTeams"));
 const ConsoleOrganizations = lazy(() => import("./pages/console/ConsoleOrganizations"));
 const ConsoleOrgMembers = lazy(() => import("./pages/console/ConsoleOrgMembers"));
 const ConsoleMembers = lazy(() => import("./pages/console/ConsoleMembers"));
@@ -78,6 +79,7 @@ const App = () => (
                   {/* 002 控制台 */}
                   <Route path="/console/dashboard" element={<ConsoleDashboard />} />
                   <Route path="/console/spaces" element={<ConsoleSpaces />} />
+                  <Route path="/console/annotation-teams" element={<ConsoleAnnotationTeams />} />
                   <Route path="/console/organizations" element={<ConsoleOrganizations />} />
                   <Route path="/console/organizations/:orgId/members" element={<ConsoleOrgMembers />} />
                   <Route path="/console/members" element={<ConsoleMembers />} />

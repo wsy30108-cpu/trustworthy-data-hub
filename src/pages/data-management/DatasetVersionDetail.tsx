@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ArrowLeft, Upload, FolderPlus, Trash2, Eye, Download, RotateCcw, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, File, Folder, AlertCircle, Check, Loader2, X, Info, RefreshCw } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ArrowLeft, Upload, FolderPlus, Trash2, Eye, Download, RotateCcw, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, File, Folder, AlertCircle, Check, Loader2, X, Info, RefreshCw, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -217,6 +217,23 @@ export default function DatasetVersionDetail({ dataset, version, onBack, onUploa
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [importDetailFile, setImportDetailFile] = useState<FileItem | null>(null);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(71); // Mock initial progress
+  const [uploadPaused, setUploadPaused] = useState(false);
+
+  // Simulation of upload progress
+  useEffect(() => {
+    let timer: any;
+    if (uploadProgress !== null && uploadProgress < 100 && !uploadPaused) {
+      timer = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev === null) return null;
+          if (prev >= 99) { clearInterval(timer); return 100; }
+          return prev + 1;
+        });
+      }, 500);
+    }
+    return () => clearInterval(timer);
+  }, [uploadProgress, uploadPaused]);
 
   // Navigate folder
   const getCurrentFiles = (): FileItem[] => {
@@ -322,12 +339,61 @@ export default function DatasetVersionDetail({ dataset, version, onBack, onUploa
             )}>{version.publishStatus}</span>
           </div>
         </div>
-        {/* Import stats */}
+        {/* Import stats and Progress */}
         {(failedFiles > 0 || completedFiles < totalFiles) && (
-          <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
-            共计 <span className="font-medium text-foreground">{totalFiles}</span> 个文件需要导入，
-            已完成 <span className="font-medium text-green-600">{completedFiles}</span> 个导入，
-            失败 <span className="font-medium text-destructive">{failedFiles}</span> 个
+          <div className="mt-3 pt-3 border-t flex items-center gap-x-5 flex-wrap text-xs">
+            <div className="text-muted-foreground whitespace-nowrap">
+              共计 <span className="font-medium text-foreground">{totalFiles}</span> 个文件需要导入，
+              已完成 <span className="font-medium text-green-600">{completedFiles}</span> 个导入，
+              失败 <span className="font-medium text-destructive">{failedFiles}</span> 个
+            </div>
+
+            {/* Inline Progress & Breakpoint Resumption - Harmonized */}
+            {uploadProgress !== null && uploadProgress < 100 && (
+              <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left-2 duration-300">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-primary whitespace-nowrap flex items-center gap-1.5">
+                    <Loader2 className={cn("w-3 h-3", !uploadPaused && "animate-spin")} />
+                    正在导入 {uploadProgress}%
+                  </span>
+                  <div className="w-24 h-1 bg-muted rounded-full overflow-hidden">
+                    <div 
+                      className={cn(
+                        "h-full transition-all duration-500",
+                        uploadPaused ? "bg-muted-foreground/50" : "bg-primary"
+                      )}
+                      style={{ width: `${uploadProgress}%` }} 
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pl-2 border-l border-border h-3">
+                  <button 
+                    onClick={() => setUploadPaused(!uploadPaused)}
+                    className="flex items-center gap-1 text-[11px] font-medium text-primary hover:opacity-80 transition-opacity"
+                    title={uploadPaused ? "继续上传" : "暂停上传"}
+                  >
+                    {uploadPaused ? (
+                      <><Play className="w-3 h-3 fill-current" />续传</>
+                    ) : (
+                      <><Pause className="w-3 h-3 fill-current" />暂停</>
+                    )}
+                  </button>
+                  <button 
+                    onClick={() => setUploadProgress(null)}
+                    className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    取消
+                  </button>
+                </div>
+
+                {uploadPaused && (
+                  <span className="text-[10px] text-amber-600 flex items-center gap-1.5 font-medium select-none ml-1">
+                    <AlertCircle className="w-2.5 h-2.5" /> 已暂停
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

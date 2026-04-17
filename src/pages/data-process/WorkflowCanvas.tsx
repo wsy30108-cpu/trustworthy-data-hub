@@ -474,19 +474,15 @@ const genId = () => `node-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 const getPortPos = (node: CanvasNode, portName: string, isInput: boolean): Position => {
   const ports = isInput ? node.inputs : node.outputs;
   const idx = ports.indexOf(portName);
-  const total = ports.length;
-
-  // Calculate vertical center distribution
+  
   const headerHeight = 44;
-  const bodyPadding = 12;
-  const availableH = node.isCollapsed ? (headerHeight - 2 * bodyPadding) : (NODE_H + (node.inputs.length + node.outputs.length) * 20 - headerHeight);
-
-  // For simplicity, we'll use a fixed vertical spacing on left/right edges
-  const yOffset = headerHeight + (idx + 1) * 24;
-
+  // If we only want one port, we center it. 
+  // For simplicity, we point it to the middle of the first row area or the center of the card.
+  // The user wants "只有一个", so we'll center it vertically on the card.
+  
   return {
     x: isInput ? node.x : node.x + NODE_W,
-    y: node.y + (total === 1 ? (headerHeight + 20) : yOffset),
+    y: node.y + (headerHeight / 2) + 10, // Vertically centered relative to the header area for a clean look
   };
 };
 
@@ -1227,7 +1223,8 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
       const nextConfig = { ...n.config, [key]: value };
       let nextOutputs = n.outputs;
       if (key === "_variables" && n.type === "dataset_input") {
-        nextOutputs = (value || []).map((v: any) => v.name || "unnamed");
+        // Keep only ONE output port even with multiple variables
+        nextOutputs = ["data"];
       }
       return { ...n, config: nextConfig, outputs: nextOutputs };
     }));
@@ -2101,11 +2098,11 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                                  newVars.splice(index, 1);
                                  updateNodeConfig(selectedNodeData.id, "_variables", newVars);
                                }}
-                               className={`absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all flex items-center justify-center ${isReadOnly ? "hidden" : ""}`}
+                               className={`absolute right-1 top-1/2 -translate-y-1/2 p-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all flex items-center justify-center ${isReadOnly ? "hidden" : ""}`}
                              >
                                 <X className="w-3.5 h-3.5" />
                              </button>
-                             <div className="flex items-center gap-2 w-full">
+                             <div className="flex items-center gap-1.5 w-full">
                                <input 
                                  value={v.name} 
                                  onChange={e => {
@@ -2114,7 +2111,7 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                                    updateNodeConfig(selectedNodeData.id, "_variables", newVars);
                                  }}
                                  placeholder="变量名"
-                                 className={`${baseInputClass} !mt-0 py-1 px-1.5 text-[10px] h-7 w-[60px] shrink-0 font-mono text-center ${isReadOnly ? "bg-gray-50/50 cursor-not-allowed" : ""}`}
+                                 className={`${baseInputClass} !mt-0 py-1 px-1 text-[10px] h-7 w-[50px] shrink-0 font-mono text-center ${isReadOnly ? "bg-gray-50/50 cursor-not-allowed" : ""}`}
                                  disabled={isReadOnly}
                                />
                                <Button
@@ -2125,9 +2122,9 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                                     setDatasetModalTarget({ nodeId: selectedNodeData.id, varIndex: index });
                                     setIsDatasetModalOpen(true);
                                   }}
-                                  className="flex-1 justify-between h-7 px-2 text-[10px] bg-white border-dashed border-primary/40 hover:border-primary/60 hover:bg-white transition-all disabled:opacity-70 disabled:cursor-not-allowed min-w-0"
+                                  className="flex-1 justify-between h-7 px-1.5 text-[10px] bg-white border-dashed border-primary/40 hover:border-primary/60 hover:bg-white transition-all disabled:opacity-70 disabled:cursor-not-allowed min-w-0"
                                 >
-                                  <div className="flex items-center gap-1.5 truncate">
+                                  <div className="flex items-center gap-1 min-w-0">
                                     <Database className="w-3 h-3 text-primary/70 shrink-0" />
                                     {v.datasetId ? (
                                       <span className="truncate">
@@ -2135,10 +2132,10 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                                         {v.versionId && ` · ${v.versionName || v.versionId}`}
                                       </span>
                                     ) : (
-                                      <span className="text-muted-foreground/50">点击绑定数据集</span>
+                                      <span className="truncate text-muted-foreground/50">点击绑定数据集</span>
                                     )}
                                   </div>
-                                  <ChevronRight className="w-3 h-3 text-muted-foreground/50 shrink-0 ml-1" />
+                                  <ChevronRight className="w-3 h-3 text-muted-foreground/50 shrink-0 ml-0.5" />
                                 </Button>
                              </div>
                           </div>
@@ -2551,30 +2548,6 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
               </div>
             )}
 
-            {/* Connections */}
-            <div className="border-t pt-3">
-              <label className="text-[10px] text-muted-foreground uppercase tracking-wider">连接</label>
-              <div className="mt-1 space-y-1">
-                {nodeConnections.map(c => {
-                  const other = c.from === selectedNode ? nodes.find(n => n.id === c.to) : nodes.find(n => n.id === c.from);
-                  const direction = c.from === selectedNode ? "→" : "←";
-                  return (
-                    <div key={c.id} className={`flex items-center justify-between text-[10px] px-2 py-1 rounded ${c.compatible === false ? "bg-destructive/10 border border-destructive/30" : "bg-muted/50"}`}>
-                      <span className="flex items-center gap-1">
-                        {c.compatible === false && <AlertTriangle className="w-3 h-3 text-destructive" />}
-                        {direction} {other?.label || "未知"}
-                      </span>
-                      <button onClick={() => setConnections(prev => prev.filter(cc => cc.id !== c.id))} 
-                        disabled={isReadOnly}
-                        className={`text-muted-foreground hover:text-destructive ${isReadOnly ? "hidden" : ""}`}>
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  );
-                })}
-                {nodeConnections.length === 0 && <p className="text-[10px] text-muted-foreground">暂无连接</p>}
-              </div>
-            </div>
 
             {/* Bottom actions */}
             <div className="border-t pt-3 space-y-2">
@@ -3102,8 +3075,8 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                           </div>
                         </foreignObject>
 
-                        {/* Input ports (Left) */}
-                        {node.type !== "dataset_input" && node.inputs.map(port => {
+                        {/* Input ports (Left) - Only render the first one if multiple exist */}
+                        {node.type !== "dataset_input" && node.inputs.slice(0, 1).map(port => {
                           const pos = getPortPos(node, port, true);
                           return (
                             <g key={`in-${port}`} onMouseUp={() => finishConnect(node.id, port)} className="cursor-pointer">
@@ -3113,8 +3086,8 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                           );
                         })}
 
-                        {/* Output ports (Right) */}
-                        {node.outputs.map(port => {
+                        {/* Output ports (Right) - Only render the first one if multiple exist */}
+                        {node.outputs.slice(0, 1).map(port => {
                           const pos = getPortPos(node, port, false);
                           return (
                             <g key={`out-${port}`} onMouseDown={e => startConnect(e, node.id, port)} className="cursor-crosshair">

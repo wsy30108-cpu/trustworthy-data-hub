@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 /* ─── Types ─── */
-interface DatasetInfo { id: string; name: string; modality: string; }
+interface DatasetInfo { id: string; name: string; modality: string; type?: string; }
 interface VersionInfo { version: string; }
 
 type UploadMethod = "本地导入" | "平台已有数据集" | "在线 FTP 导入";
@@ -196,8 +196,12 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
   const [annotationStatus, setAnnotationStatus] = useState<AnnotationStatus>("无标注信息");
   const [uploadMethod, setUploadMethod] = useState<UploadMethod>("本地导入");
 
+  // Large Model Text types that only support JSON
+  const isLargeModelText = dataset.modality === "文本" &&
+    ["文本 SFT", "文本 RLHF", "文本 DPO", "文本 KTO"].includes(dataset.type || "");
+
   // Local import
-  const [fileFormat, setFileFormat] = useState<FileFormat>("文本文档");
+  const [fileFormat, setFileFormat] = useState<FileFormat>(isLargeModelText ? "JSON 文件" : "文本文档");
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; size: string }[]>([]);
 
   // Text format config
@@ -328,19 +332,22 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
         <>
           <Section title="格式选择">
             <div className="grid grid-cols-3 gap-3">
-              {(Object.keys(FORMAT_EXTENSIONS) as FileFormat[]).map(fmt => (
-                <button key={fmt} onClick={() => { setFileFormat(fmt); setUploadedFiles([]); }}
-                  className={cn("flex items-center gap-3 p-3 rounded-lg border text-left transition-all",
-                    fileFormat === fmt ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "hover:border-primary/30")}>
-                  <div className={cn("p-2 rounded-md", fileFormat === fmt ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
-                    {FORMAT_ICONS[fmt]}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{fmt}</p>
-                    <p className="text-[11px] text-muted-foreground">{FORMAT_EXTENSIONS[fmt]}</p>
-                  </div>
-                </button>
-              ))}
+              {(Object.keys(FORMAT_EXTENSIONS) as FileFormat[])
+                .filter(fmt => !isLargeModelText || fmt === "JSON 文件")
+                .map(fmt => (
+                  <button key={fmt} onClick={() => { setFileFormat(fmt); setUploadedFiles([]); }}
+                    className={cn("flex items-center gap-3 p-3 rounded-lg border text-left transition-all",
+                      fileFormat === fmt ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "hover:border-primary/30")}>
+                    <div className={cn("p-2 rounded-md", fileFormat === fmt ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
+                      {FORMAT_ICONS[fmt]}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{fmt}</p>
+                      <p className="text-[11px] text-muted-foreground">{FORMAT_EXTENSIONS[fmt]}</p>
+                    </div>
+                  </button>
+                ))
+              }
             </div>
           </Section>
 

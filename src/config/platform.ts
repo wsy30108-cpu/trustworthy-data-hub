@@ -52,6 +52,7 @@ export const platformMenus: Record<string, MenuItem[]> = {
       route: "#",
       children: [
         { id: "spaces", label: "空间管理", icon: Boxes, route: "/console/spaces" },
+        { id: "annotation-teams", label: "标注团队", icon: Users, route: "/console/annotation-teams" },
       ]
     },
     {
