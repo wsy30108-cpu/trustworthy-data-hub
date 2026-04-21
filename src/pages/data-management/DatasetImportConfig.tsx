@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, Upload, X, FileText, FileSpreadsheet, FileType, Code, Archive, Plus, ChevronDown, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Upload, X, FileText, FileSpreadsheet, FileType, Code, Archive, Plus, ChevronDown, AlertTriangle, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,13 +36,112 @@ const FORMAT_ICONS: Record<FileFormat, React.ReactNode> = {
 
 const ZIP_SUB_FORMATS: ZipSubFormat[] = ["文本文档", "Excel 表格", "Word 文档", "标记语言文件", "JSON 文件"];
 
+/* ─── JSONL sample templates for large-model text types ─── */
+const JSONL_SAMPLES: Record<string, { filename: string; content: string }> = {
+  "文本 SFT": {
+    filename: "sft_example.jsonl",
+    content: [
+      {
+        instruction: "请将下面这句话翻译成英文。",
+        input: "今天天气真好。",
+        output: "The weather is really nice today.",
+      },
+      {
+        instruction: "请用一句话概括下面这段话的主要内容。",
+        input: "人工智能是研究、开发用于模拟、延伸和扩展人类智能的理论、方法、技术及应用系统的一门新的技术科学。",
+        output: "人工智能是一门模拟和扩展人类智能的技术科学。",
+      },
+      {
+        instruction: "写一首关于春天的五言绝句。",
+        input: "",
+        output: "春风拂柳绿，细雨润花红。\n燕语穿帘过，诗心入梦中。",
+      },
+    ]
+      .map((o) => JSON.stringify(o, null, 0))
+      .join("\n"),
+  },
+  "文本 RLHF": {
+    filename: "rlhf_example.jsonl",
+    content: [
+      {
+        prompt: "请解释一下什么是大语言模型。",
+        chosen: "大语言模型是一类基于海量文本训练的深度学习模型，能够理解和生成自然语言，常用于对话、翻译、摘要等任务。",
+        rejected: "就是一种 AI。",
+      },
+      {
+        prompt: "写一段安慰失恋朋友的话。",
+        chosen: "难过的时候可以先好好照顾自己，这段经历会让你更懂得自己真正想要什么，我会一直在你身边。",
+        rejected: "别难过了，下一个更好。",
+      },
+    ]
+      .map((o) => JSON.stringify(o, null, 0))
+      .join("\n"),
+  },
+  "文本 DPO": {
+    filename: "dpo_example.jsonl",
+    content: [
+      {
+        prompt: "请介绍一下北京这座城市。",
+        chosen: "北京是中国的首都，历史文化悠久，既有故宫、长城等古迹，也是政治、文化、国际交往和科技创新中心。",
+        rejected: "北京就是一个很大的城市。",
+      },
+      {
+        prompt: "如何缓解工作压力？",
+        chosen: "可以通过合理规划任务、保持规律作息、适度运动以及与朋友交流等方式缓解压力，必要时也可寻求专业帮助。",
+        rejected: "别想太多就行了。",
+      },
+    ]
+      .map((o) => JSON.stringify(o, null, 0))
+      .join("\n"),
+  },
+  "文本 KTO": {
+    filename: "kto_example.jsonl",
+    content: [
+      {
+        prompt: "给我推荐一本适合入门机器学习的书。",
+        completion: "可以从周志华的《机器学习》（西瓜书）开始，内容系统且通俗易懂，非常适合入门。",
+        label: true,
+      },
+      {
+        prompt: "给我推荐一本适合入门机器学习的书。",
+        completion: "随便找本就行。",
+        label: false,
+      },
+      {
+        prompt: "帮我写一段产品上线的祝贺文案。",
+        completion: "历经数月打磨，新产品今日正式上线，感谢团队的辛勤付出，期待为用户带来全新体验！",
+        label: true,
+      },
+    ]
+      .map((o) => JSON.stringify(o, null, 0))
+      .join("\n"),
+  },
+};
+
+function downloadJsonlSample(datasetType: string) {
+  const sample = JSONL_SAMPLES[datasetType];
+  if (!sample) return;
+  const blob = new Blob([sample.content], { type: "application/jsonl;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = sample.filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 /* ─── Section + Field ─── */
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border bg-card p-5 space-y-4">
-      <div className="flex items-center gap-2 mb-1">
-        <div className="w-1 h-3.5 bg-primary rounded-full" />
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-3.5 bg-primary rounded-full" />
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        </div>
+        {action}
       </div>
       {children}
     </div>
@@ -441,7 +540,22 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
           </Section>
 
           {/* File upload area */}
-          <Section title="文件上传">
+          <Section
+            title="文件上传"
+            action={
+              isLargeModelText && dataset.type && JSONL_SAMPLES[dataset.type] ? (
+                <button
+                  type="button"
+                  onClick={() => downloadJsonlSample(dataset.type!)}
+                  className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                  title={`下载 ${dataset.type} 类型的 JSONL 示例文件`}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  下载 {dataset.type} JSONL 示例文件
+                </button>
+              ) : undefined
+            }
+          >
             <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
               <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-sm text-muted-foreground mb-2">点击或拖拽文件到此区域上传</p>
