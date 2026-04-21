@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, Upload, X, FileText, FileSpreadsheet, FileType, Code, Archive, Plus, ChevronDown, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Upload, X, FileText, FileSpreadsheet, FileType, Code, Archive, Plus, ChevronDown, AlertTriangle, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,6 +36,50 @@ const FORMAT_ICONS: Record<FileFormat, React.ReactNode> = {
 
 const ZIP_SUB_FORMATS: ZipSubFormat[] = ["文本文档", "Excel 表格", "Word 文档", "标记语言文件", "JSON 文件"];
 
+/* ─── JSONL Sample Data Generators ─── */
+function getJsonlSampleContent(textType?: string): string {
+  const samples: Record<string, any[]> = {
+    "通用文本": [
+      { text: "这是一条示例文本数据" },
+      { text: "这是另一条示例文本数据" },
+      { text: "大模型训练需要大量高质量的文本数据" }
+    ],
+    "文本 SFT": [
+      { messages: [{ role: "system", content: "你是一个有用的AI助手。" }, { role: "user", content: "请介绍一下人工智能。" }, { role: "assistant", content: "人工智能是一门研究如何让计算机模拟人类智能的学科。" }] },
+      { messages: [{ role: "user", content: "什么是机器学习?" }, { role: "assistant", content: "机器学习是人工智能的一个分支,它使计算机能够从数据中学习并做出预测。" }] }
+    ],
+    "文本 RLHF": [
+      { prompt: "请解释量子计算的基本原理。", chosen: "量子计算利用量子力学现象如叠加和纠缠来进行计算,具有超越经典计算机的潜力。", rejected: "量子计算是一种使用量子比特进行运算的计算方式。" },
+      { prompt: "如何学习编程?", chosen: "学习编程建议从基础开始,选择一门适合初学者的语言如Python,通过实践项目来巩固知识。", rejected: "你可以随便找本书看看。" }
+    ],
+    "文本 DPO": [
+      { prompt: "写一首关于春天的诗。", chosen: "春风拂面花自开,柳绿桃红映楼台。燕归巢中呢喃语,万物复苏展新颜。", rejected: "春天来了,花开了,树绿了。" },
+      { prompt: "推荐一本好书。", chosen: "我推荐《百年孤独》,这是加西亚·马尔克斯的代表作,以魔幻现实主义手法讲述了布恩迪亚家族七代人的故事。", rejected: "看《百年孤独》吧。" }
+    ],
+    "文本 KTO": [
+      { input: "翻译: Hello, how are you?", output: "你好,你怎么样?", label: true },
+      { input: "翻译: Good morning!", output: "早上好!", label: true },
+      { input: "总结这篇文章。", output: "这篇文章讲了天气。", label: false }
+    ]
+  };
+
+  const data = samples[textType || "通用文本"] || samples["通用文本"];
+  return data.map(item => JSON.stringify(item)).join("\n");
+}
+
+function downloadJsonlSample(textType?: string) {
+  const content = getJsonlSampleContent(textType);
+  const blob = new Blob([content], { type: "application/jsonl" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `sample_${textType?.replace(/\s+/g, "_").toLowerCase() || "general"}_data.jsonl`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 /* ─── Section + Field ─── */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -59,12 +103,13 @@ function Field({ label, required, children, error }: { label: string; required?:
 }
 
 /* ─── Format Adapter Config (reusable for both direct and zip sub-format) ─── */
-function FormatAdapterConfig({ format,
+function FormatAdapterConfig({ format, dataset,
   delimiter, setDelimiter, customDelimiter, setCustomDelimiter, encoding, setEncoding,
   splitMode, setSplitMode, sheetName, setSheetName, headerRow, setHeaderRow, dataStartRow, setDataStartRow,
   headerCol, setHeaderCol, dataStartCol, setDataStartCol,
   extractRange, setExtractRange, tagRule, setTagRule, tagNames, setTagNames }: {
     format: string;
+    dataset?: DatasetInfo;
     delimiter: string; setDelimiter: (v: string) => void;
     customDelimiter: string; setCustomDelimiter: (v: string) => void;
     encoding: string; setEncoding: (v: string) => void;
@@ -164,9 +209,30 @@ function FormatAdapterConfig({ format,
   }
   if (format === "JSON 文件") {
     return (
-      <p className="text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">
-        JSON 格式文件将自动按照单个 JSON 对象（{"{}"}）或 JSON 数组（[{"{}"},]）进行拆分处理
-      </p>
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">
+          JSON 格式文件将自动按照单个 JSON 对象（{"{}"}）或 JSON 数组（[{"{}"},]）进行拆分处理
+        </p>
+        {(dataset?.type && ["通用文本", "文本 SFT", "文本 RLHF", "文本 DPO", "文本 KTO"].includes(dataset.type)) && (
+          <div className="flex items-start gap-2 p-3 rounded-lg border border-primary/20 bg-primary/5">
+            <FileText className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-2">
+              <p className="text-xs font-medium text-foreground">{dataset.type} 格式说明</p>
+              <p className="text-xs text-muted-foreground">
+                {dataset.type === "文本 SFT" && "每条数据包含 messages 数组,包含 system/user/assistant 角色的对话内容"}
+                {dataset.type === "文本 RLHF" && "每条数据包含 prompt、chosen(优选回答)、rejected(拒绝回答) 三个字段"}
+                {dataset.type === "文本 DPO" && "每条数据包含 prompt、chosen(优选回答)、rejected(拒绝回答) 三个字段,用于直接偏好优化"}
+                {dataset.type === "文本 KTO" && "每条数据包含 input、output、label(布尔值,表示是否可接受) 三个字段"}
+                {dataset.type === "通用文本" && "每条数据为简单的 JSON 对象,至少包含 text 字段存储文本内容"}
+              </p>
+              <Button size="sm" variant="outline" onClick={() => downloadJsonlSample(dataset.type)}
+                className="h-7 gap-1.5 text-xs mt-1">
+                <Download className="w-3.5 h-3.5" />下载示例 JSONL 文件
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     );
   }
   return null;
@@ -356,6 +422,7 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
             {fileFormat !== "压缩包" ? (
               <FormatAdapterConfig
                 format={fileFormat}
+                dataset={dataset}
                 delimiter={delimiter} setDelimiter={setDelimiter}
                 customDelimiter={customDelimiter} setCustomDelimiter={setCustomDelimiter}
                 encoding={encoding} setEncoding={setEncoding}
@@ -392,6 +459,7 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
                   <p className="text-xs text-muted-foreground mb-3">「{zipSubFormat}」格式适配配置</p>
                   <FormatAdapterConfig
                     format={zipSubFormat}
+                    dataset={dataset}
                     delimiter={zipDelimiter} setDelimiter={setZipDelimiter}
                     customDelimiter={zipCustomDelimiter} setCustomDelimiter={setZipCustomDelimiter}
                     encoding={zipEncoding} setEncoding={setZipEncoding}

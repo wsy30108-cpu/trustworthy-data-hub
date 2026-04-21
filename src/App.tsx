@@ -42,6 +42,7 @@ const DataAnnotationTaskHall = lazy(() => import("./pages/data-annotation/DataAn
 const DataAnnotationMyTasks = lazy(() => import("./pages/data-annotation/DataAnnotationMyTasks"));
 const DataAnnotationTools = lazy(() => import("./pages/data-annotation/DataAnnotationTools"));
 const DataAnnotationPerformance = lazy(() => import("./pages/data-annotation/DataAnnotationPerformance"));
+const MemberPerformanceDetail = lazy(() => import("./pages/data-annotation/MemberPerformanceDetail"));
 const DataAnnotationStatistics = lazy(() => import("./pages/data-annotation/DataAnnotationStatistics"));
 const AnnotationToolEditor = lazy(() => import("./pages/data-annotation/AnnotationToolEditor"));
 const DataAnnotationToolDetail = lazy(() => import("./pages/data-annotation/DataAnnotationToolDetail"));
@@ -80,6 +81,7 @@ const App = () => (
                   <Route path="/console/dashboard" element={<ConsoleDashboard />} />
                   <Route path="/console/spaces" element={<ConsoleSpaces />} />
                   <Route path="/console/annotation-teams" element={<ConsoleAnnotationTeams />} />
+                  <Route path="/console/annotation-teams/:teamId/member-performance" element={<MemberPerformanceDetail />} />
                   <Route path="/console/organizations" element={<ConsoleOrganizations />} />
                   <Route path="/console/organizations/:orgId/members" element={<ConsoleOrgMembers />} />
                   <Route path="/console/members" element={<ConsoleMembers />} />

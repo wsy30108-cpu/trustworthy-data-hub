@@ -12,6 +12,7 @@ import {
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DatasetSelectionModal } from "./DatasetSelectionModal";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
@@ -664,6 +665,314 @@ const ParamFormField = ({ param, value, onChange, isReadOnly }: { param: ParamDe
   }
 };
 
+/* ─── Node Log Content Component ─── */
+interface NodeLogData {
+  executionLogs: string[];
+  effectExamples?: Array<{ fileName: string; content: string }>;
+  failedFiles?: Array<{ fileName: string; reason: string }>;
+  inputParams?: Record<string, any>;
+  outputParams?: Record<string, any>;
+}
+
+interface NodeLogContentProps {
+  logData: NodeLogData;
+  compact?: boolean;
+}
+
+const NodeLogContent = ({ logData, compact = false }: NodeLogContentProps) => {
+  const [activeTab, setActiveTab] = useState<"effect" | "failed" | "input" | "output" | "logs">("effect");
+  const [showMoreFailed, setShowMoreFailed] = useState(false);
+  const [previewFile, setPreviewFile] = useState<{ fileName: string; content: string } | null>(null);
+
+  const tabs = [
+    { key: "effect" as const, label: "处理效果示例", icon: CheckCircle2 },
+    { key: "failed" as const, label: "失败文件明细", icon: AlertTriangle },
+    { key: "input" as const, label: "输入参数", icon: Database },
+    { key: "output" as const, label: "输出参数", icon: FileOutput },
+    { key: "logs" as const, label: "执行日志", icon: Terminal },
+  ];
+
+  // Compact mode: show all sections vertically
+  if (compact) {
+    return (
+      <div className="space-y-3">
+        {/* Effect Examples */}
+        {logData.effectExamples && logData.effectExamples.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="text-[10px] font-semibold text-foreground flex items-center gap-1.5">
+              <CheckCircle2 className="w-3 h-3 text-green-500" />
+              处理效果示例
+            </div>
+            <div className="space-y-1 pl-4.5">
+              {logData.effectExamples.slice(0, 2).map((example, i) => (
+                <div key={i} className="flex items-center gap-2 text-[10px]">
+                  <span className="text-foreground truncate flex-1">{example.fileName}</span>
+                  <button
+                    onClick={() => setPreviewFile(example)}
+                    className="p-0.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+                    title="预览文件详情"
+                  >
+                    <Eye className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Failed Files */}
+        {logData.failedFiles && logData.failedFiles.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="text-[10px] font-semibold text-foreground flex items-center gap-1.5">
+              <AlertTriangle className="w-3 h-3 text-red-500" />
+              失败文件明细
+            </div>
+            <div className="space-y-1 pl-4.5">
+              {(showMoreFailed ? logData.failedFiles : logData.failedFiles.slice(0, 5)).map((file, i) => (
+                <div key={i} className="text-[10px]">
+                  <span className="text-red-600">{file.fileName}</span>
+                  <span className="text-muted-foreground"> - {file.reason}</span>
+                </div>
+              ))}
+              {logData.failedFiles.length > 5 && !showMoreFailed && (
+                <button
+                  onClick={() => setShowMoreFailed(true)}
+                  className="text-[10px] text-primary hover:underline mt-1"
+                >
+                  更多 ({logData.failedFiles.length - 5} 条)
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Input Params */}
+        {logData.inputParams && Object.keys(logData.inputParams).length > 0 && (
+          <div className="space-y-1.5">
+            <div className="text-[10px] font-semibold text-foreground flex items-center gap-1.5">
+              <Database className="w-3 h-3 text-muted-foreground" />
+              输入参数
+            </div>
+            <div className="font-mono text-[10px] space-y-0.5 pl-4.5 text-muted-foreground">
+              {Object.entries(logData.inputParams).map(([key, value]) => (
+                <div key={key}>
+                  {key}: {JSON.stringify(value)}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Output Params */}
+        {logData.outputParams && Object.keys(logData.outputParams).length > 0 && (
+          <div className="space-y-1.5">
+            <div className="text-[10px] font-semibold text-foreground flex items-center gap-1.5">
+              <FileOutput className="w-3 h-3 text-muted-foreground" />
+              输出参数
+            </div>
+            <div className="font-mono text-[10px] space-y-0.5 pl-4.5 text-muted-foreground">
+              {Object.entries(logData.outputParams).map(([key, value]) => (
+                <div key={key}>
+                  {key}: {JSON.stringify(value)}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Execution Logs */}
+        {logData.executionLogs && logData.executionLogs.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="text-[10px] font-semibold text-foreground flex items-center gap-1.5">
+              <Terminal className="w-3 h-3 text-primary" />
+              执行日志
+            </div>
+            <div className="font-mono text-[10px] space-y-0.5 pl-4.5 text-muted-foreground">
+              {logData.executionLogs.map((line, i) => (
+                <div key={i} className="break-all">{line}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Preview Dialog */}
+        <Dialog open={!!previewFile} onOpenChange={(v) => !v && setPreviewFile(null)}>
+          <DialogContent className="max-w-2xl max-h-[80vh]">
+            <DialogHeader>
+              <DialogTitle>查看数据 {previewFile?.fileName}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2">
+              <pre className="p-4 rounded-lg bg-muted/50 text-sm font-mono overflow-auto max-h-[50vh] whitespace-pre-wrap">
+                {previewFile?.content || "暂无内容"}
+              </pre>
+              <p className="text-[11px] text-muted-foreground">仅支持预览 100KB 的文件内容，若需查看完整内容，可下载后在本地查看详情</p>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  // Expanded mode: show with tabs
+  return (
+    <div className="flex flex-col h-full">
+      {/* Tab Navigation */}
+      <div className="flex gap-1 border-b pb-2 mb-2 shrink-0">
+        {tabs.map(tab => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.key;
+          const hasContent = (
+            (tab.key === "effect" && logData.effectExamples?.length) ||
+            (tab.key === "failed" && logData.failedFiles?.length) ||
+            (tab.key === "input" && logData.inputParams && Object.keys(logData.inputParams).length > 0) ||
+            (tab.key === "output" && logData.outputParams && Object.keys(logData.outputParams).length > 0) ||
+            (tab.key === "logs" && logData.executionLogs?.length)
+          );
+
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              disabled={!hasContent && !isActive}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] transition-colors ${
+                isActive
+                  ? "bg-primary text-primary-foreground"
+                  : hasContent
+                  ? "bg-muted/50 text-foreground hover:bg-muted"
+                  : "text-muted-foreground/50 cursor-not-allowed"
+              }`}
+            >
+              <Icon className="w-3 h-3" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab Content */}
+      <div className="flex-1 overflow-y-auto">
+        {activeTab === "effect" && (
+          <div className="space-y-2 p-1">
+            {!logData.effectExamples || logData.effectExamples.length === 0 ? (
+              <div className="text-muted-foreground/50 text-center py-8 text-xs">暂无处理效果示例</div>
+            ) : (
+              <>
+                <div className="text-[10px] text-muted-foreground mb-2">展示前 2 个成功处理的文件</div>
+                {logData.effectExamples.slice(0, 2).map((example, i) => (
+                  <div key={i} className="p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-foreground">{example.fileName}</span>
+                      <button
+                        onClick={() => setPreviewFile(example)}
+                        className="p-1 hover:bg-green-100 dark:hover:bg-green-900/30 rounded transition-colors"
+                        title="预览文件详情"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-green-600" />
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">{example.content}</div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
+        {activeTab === "failed" && (
+          <div className="space-y-2 p-1">
+            {!logData.failedFiles || logData.failedFiles.length === 0 ? (
+              <div className="text-muted-foreground/50 text-center py-8 text-xs">暂无失败文件</div>
+            ) : (
+              <>
+                <div className="text-[10px] text-muted-foreground mb-2">
+                  展示前 5 条失败记录，共 {logData.failedFiles.length} 条
+                </div>
+                {(showMoreFailed ? logData.failedFiles : logData.failedFiles.slice(0, 5)).map((file, i) => (
+                  <div key={i} className="p-2.5 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs text-red-600 font-mono flex-1 break-all">{file.fileName}</span>
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">{file.reason}</span>
+                    </div>
+                  </div>
+                ))}
+                {logData.failedFiles.length > 5 && !showMoreFailed && (
+                  <button
+                    onClick={() => setShowMoreFailed(true)}
+                    className="w-full py-2 text-[10px] text-primary hover:underline border border-dashed border-primary/30 rounded mt-2"
+                  >
+                    点击展开更多 ({logData.failedFiles.length - 5} 条)
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {activeTab === "input" && (
+          <div className="space-y-1 p-1 font-mono text-[10px]">
+            {!logData.inputParams || Object.keys(logData.inputParams).length === 0 ? (
+              <div className="text-muted-foreground/50 text-center py-8 text-xs">暂无输入参数</div>
+            ) : (
+              <>
+                {Object.entries(logData.inputParams).map(([key, value]) => (
+                  <div key={key} className="break-all hover:bg-muted/30 px-1.5 py-0.5 rounded text-muted-foreground">
+                    {key}: {JSON.stringify(value)}
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
+        {activeTab === "output" && (
+          <div className="space-y-1 p-1 font-mono text-[10px]">
+            {!logData.outputParams || Object.keys(logData.outputParams).length === 0 ? (
+              <div className="text-muted-foreground/50 text-center py-8 text-xs">暂无输出参数</div>
+            ) : (
+              <>
+                {Object.entries(logData.outputParams).map(([key, value]) => (
+                  <div key={key} className="break-all hover:bg-muted/30 px-1.5 py-0.5 rounded text-muted-foreground">
+                    {key}: {JSON.stringify(value)}
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
+        {activeTab === "logs" && (
+          <div className="space-y-1 p-1 font-mono text-[10px]">
+            {!logData.executionLogs || logData.executionLogs.length === 0 ? (
+              <div className="text-muted-foreground/50 text-center py-8 text-xs">暂无执行日志</div>
+            ) : (
+              logData.executionLogs.map((line, i) => (
+                <div key={i} className="break-all hover:bg-muted/30 px-1.5 py-0.5 rounded text-muted-foreground">
+                  {line}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Preview Dialog */}
+      <Dialog open={!!previewFile} onOpenChange={(v) => !v && setPreviewFile(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>查看数据 {previewFile?.fileName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <pre className="p-4 rounded-lg bg-muted/50 text-sm font-mono overflow-auto max-h-[50vh] whitespace-pre-wrap">
+              {previewFile?.content || "暂无内容"}
+            </pre>
+            <p className="text-[11px] text-muted-foreground">仅支持预览 100KB 的文件内容，若需查看完整内容，可下载后在本地查看详情</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
 /* ─── Component ─── */
 const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }) => {
   const navigate = useNavigate();
@@ -822,8 +1131,8 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
   // Debug mode
   const [debugMode, setDebugMode] = useState(false);
   const [debugElapsed, setDebugElapsed] = useState(0);
-  const [debugNodeStates, setDebugNodeStates] = useState<Record<string, { status: "pending" | "running" | "done" | "error"; count: number; duration: number }>>({});
-  const [debugLogs, setDebugLogs] = useState<Record<string, string[]>>({});
+  const [debugNodeStates, setDebugNodeStates] = useState<Record<string, { status: "pending" | "running" | "done" | "error"; count: number; successCount: number; failCount: number; duration: number }>>({});
+  const [debugLogs, setDebugLogs] = useState<Record<string, { executionLogs: string[]; effectExamples?: Array<{ fileName: string; content: string }>; failedFiles?: Array<{ fileName: string; reason: string }>; inputParams?: Record<string, any>; outputParams?: Record<string, any> }>>({});
   const [logNodeId, setLogNodeId] = useState<string | null>(null);
   const [isLogExpanded, setIsLogExpanded] = useState(false);
   const [logHeight, setLogHeight] = useState(300);
@@ -1243,10 +1552,10 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
     setIsLogExpanded(false); // reset expand state when starting
     // Initialize all nodes as pending
     const initStates: typeof debugNodeStates = {};
-    const initLogs: Record<string, string[]> = {};
+    const initLogs: Record<string, { executionLogs: string[]; effectExamples?: Array<{ fileName: string; content: string }>; failedFiles?: Array<{ fileName: string; reason: string }>; inputParams?: Record<string, any>; outputParams?: Record<string, any> }> = {};
     nodes.forEach(n => {
-      initStates[n.id] = { status: "pending", count: 0, duration: 0 };
-      initLogs[n.id] = [];
+      initStates[n.id] = { status: "pending", count: 0, successCount: 0, failCount: 0, duration: 0 };
+      initLogs[n.id] = { executionLogs: [] };
     });
     setDebugNodeStates(initStates);
     setDebugLogs(initLogs);
@@ -1278,35 +1587,61 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
       if (step < order.length) {
         const nodeId = order[step];
         const mockCount = Math.floor(Math.random() * 10000) + 500;
+        const mockSuccessCount = Math.floor(mockCount * (0.9 + Math.random() * 0.08));
+        const mockFailCount = mockCount - mockSuccessCount;
         const mockDuration = Math.floor(Math.random() * 30) + 2;
         // Set current node running
         setDebugNodeStates(prev => ({
           ...prev,
-          [nodeId]: { status: "running", count: 0, duration: 0 },
+          [nodeId]: { status: "running", count: 0, successCount: 0, failCount: 0, duration: 0 },
         }));
         setDebugLogs(prev => ({
           ...prev,
-          [nodeId]: [
-            ...(prev[nodeId] || []),
-            `[${new Date().toLocaleTimeString()}] 开始执行节点...`,
-            `[${new Date().toLocaleTimeString()}] 加载数据中...`,
-          ],
+          [nodeId]: {
+            executionLogs: [
+              `[${new Date().toLocaleTimeString()}] 开始执行节点...`,
+              `[${new Date().toLocaleTimeString()}] 加载数据中...`,
+            ],
+          },
         }));
 
         // Finish after mockDuration seconds (compressed for demo)
         const finishDelay = 1200 + Math.random() * 1000;
         setTimeout(() => {
+          // Generate mock effect examples (first 2 successful files)
+          const mockEffectExamples = [
+            { fileName: `file_${Math.floor(Math.random() * 10000)}.jpg`, content: `分辨率: 1024x768, 大小: 256KB, 格式: JPEG` },
+            { fileName: `file_${Math.floor(Math.random() * 10000)}.png`, content: `分辨率: 800x600, 大小: 189KB, 格式: PNG` },
+          ];
+
+          // Generate mock failed files (up to 8 for demo, show first 5)
+          const mockFailedFiles = Array.from({ length: Math.min(mockFailCount, 8) }, (_, i) => ({
+            fileName: `error_${Math.floor(Math.random() * 10000)}.dat`,
+            reason: ["文件格式不支持", "文件损坏", "大小超出限制", "编码错误", "权限不足"][Math.floor(Math.random() * 5)],
+          }));
+
+          // Mock input/output params
+          const mockInputParams = { dataSource: "dataset_v1", format: "auto", quality: 0.95 };
+          const mockOutputParams = { outputFormat: "standardized", processedCount: mockSuccessCount, failedCount: mockFailCount };
+
           setDebugNodeStates(prev => ({
             ...prev,
-            [nodeId]: { status: "done", count: mockCount, duration: mockDuration },
+            [nodeId]: { status: "done", count: mockCount, successCount: mockSuccessCount, failCount: mockFailCount, duration: mockDuration },
           }));
           setDebugLogs(prev => ({
             ...prev,
-            [nodeId]: [
-              ...(prev[nodeId] || []),
-              `[${new Date().toLocaleTimeString()}] 处理 ${mockCount} 条数据`,
-              `[${new Date().toLocaleTimeString()}] 节点执行完成 (${mockDuration}s)`,
-            ],
+            [nodeId]: {
+              executionLogs: [
+                ...(prev[nodeId]?.executionLogs || []),
+                `[${new Date().toLocaleTimeString()}] 处理完成: 总计 ${mockCount} 条`,
+                `[${new Date().toLocaleTimeString()}] 成功: ${mockSuccessCount}, 失败: ${mockFailCount}`,
+                `[${new Date().toLocaleTimeString()}] 耗时: ${mockDuration}s`,
+              ],
+              effectExamples: mockEffectExamples,
+              failedFiles: mockFailedFiles,
+              inputParams: mockInputParams,
+              outputParams: mockOutputParams,
+            },
           }));
           step++;
           simulate();
@@ -1679,8 +2014,9 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                       </div>
                     </div>
                     {state.status === "done" && (
-                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground pl-3">
-                        <span className="flex items-center gap-1" title="处理数据量"><Activity className="w-2.5 h-2.5" /> {state.count.toLocaleString()}</span>
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground pl-3">
+                        <span className="flex items-center gap-1 text-green-600" title="成功文件数"><CheckCircle2 className="w-2.5 h-2.5" /> {state.successCount.toLocaleString()}</span>
+                        <span className="flex items-center gap-1 text-red-600" title="失败文件数"><AlertTriangle className="w-2.5 h-2.5" /> {state.failCount.toLocaleString()}</span>
                         <span className="flex items-center gap-1" title="耗时"><Clock className="w-2.5 h-2.5" /> {state.duration}s</span>
                       </div>
                     )}
@@ -1716,18 +2052,16 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                     </button>
                   </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-2 font-mono text-[10px] text-muted-foreground bg-muted/5">
+                <div className="flex-1 overflow-y-auto p-2 text-[10px] bg-muted/5">
                   {!logNodeId ? (
                     <div className="flex flex-col items-center justify-center h-full text-[10px] text-muted-foreground/60">
                       <Terminal className="w-4 h-4 mb-2 opacity-50" />
                       点击上方节点查看日志
                     </div>
-                  ) : (debugLogs[logNodeId] || []).length === 0 ? (
+                  ) : !debugLogs[logNodeId] ? (
                     <div className="text-muted-foreground/50">暂无日志输出...</div>
                   ) : (
-                    (debugLogs[logNodeId] || []).map((line, i) => (
-                      <div key={i} className="mb-0.5 whitespace-pre-wrap">{line}</div>
-                    ))
+                    <NodeLogContent logData={debugLogs[logNodeId]} compact={true} />
                   )}
                 </div>
               </div>
@@ -2090,7 +2424,7 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                     <label className="text-[10px] text-muted-foreground/90 font-medium whitespace-nowrap">配置数据集变量</label>
                     <div className="mt-2 space-y-2">
                        { (selectedNodeData.config._variables || []).map((v: any, index: number) => (
-                          <div key={index} className="flex flex-col gap-1.5 border border-primary/20 bg-primary/5 rounded-md p-2 relative group pr-6">
+                          <div key={index} className="flex items-center gap-1.5 border border-primary/20 bg-primary/5 rounded-md p-1.5 relative group pr-6">
                              <button
                                onClick={() => {
                                  if (isReadOnly) return;
@@ -2102,42 +2436,40 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                              >
                                 <X className="w-3.5 h-3.5" />
                              </button>
-                             <div className="flex items-center gap-1.5 w-full">
-                               <input 
-                                 value={v.name} 
-                                 onChange={e => {
-                                   const newVars = [...(selectedNodeData.config._variables || [])];
-                                   newVars[index].name = e.target.value;
-                                   updateNodeConfig(selectedNodeData.id, "_variables", newVars);
-                                 }}
-                                 placeholder="变量名"
-                                 className={`${baseInputClass} !mt-0 py-1 px-1 text-[10px] h-7 w-[50px] shrink-0 font-mono text-center ${isReadOnly ? "bg-gray-50/50 cursor-not-allowed" : ""}`}
-                                 disabled={isReadOnly}
-                               />
-                               <Button
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={isReadOnly}
-                                  onClick={() => {
-                                    setDatasetModalTarget({ nodeId: selectedNodeData.id, varIndex: index });
-                                    setIsDatasetModalOpen(true);
-                                  }}
-                                  className="flex-1 justify-between h-7 px-1.5 text-[10px] bg-white border-dashed border-primary/40 hover:border-primary/60 hover:bg-white transition-all disabled:opacity-70 disabled:cursor-not-allowed min-w-0"
-                                >
-                                  <div className="flex items-center gap-1 min-w-0">
-                                    <Database className="w-3 h-3 text-primary/70 shrink-0" />
-                                    {v.datasetId ? (
-                                      <span className="truncate">
-                                        {v.datasetName || v.datasetId}
-                                        {v.versionId && ` · ${v.versionName || v.versionId}`}
-                                      </span>
-                                    ) : (
-                                      <span className="truncate text-muted-foreground/50">点击绑定数据集</span>
-                                    )}
-                                  </div>
-                                  <ChevronRight className="w-3 h-3 text-muted-foreground/50 shrink-0 ml-0.5" />
-                                </Button>
-                             </div>
+                             <input 
+                               value={v.name} 
+                               onChange={e => {
+                                 const newVars = [...(selectedNodeData.config._variables || [])];
+                                 newVars[index].name = e.target.value;
+                                 updateNodeConfig(selectedNodeData.id, "_variables", newVars);
+                               }}
+                               placeholder="变量名"
+                               className={`${baseInputClass} !mt-0 py-1 px-1.5 text-[10px] h-7 w-[80px] shrink-0 font-mono ${isReadOnly ? "bg-gray-50/50 cursor-not-allowed" : ""}`}
+                               disabled={isReadOnly}
+                             />
+                             <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={isReadOnly}
+                                onClick={() => {
+                                  setDatasetModalTarget({ nodeId: selectedNodeData.id, varIndex: index });
+                                  setIsDatasetModalOpen(true);
+                                }}
+                                className="flex-1 justify-between h-7 px-2 text-[10px] bg-white border-dashed border-primary/40 hover:border-primary/60 hover:bg-white transition-all disabled:opacity-70 disabled:cursor-not-allowed min-w-0"
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <Database className="w-3 h-3 text-primary/70 shrink-0" />
+                                  {v.datasetId ? (
+                                    <span className="truncate">
+                                      {v.datasetName || v.datasetId}
+                                      {v.versionId && ` · ${v.versionName || v.versionId}`}
+                                    </span>
+                                  ) : (
+                                    <span className="truncate text-muted-foreground/50">点击绑定数据集</span>
+                                  )}
+                                </div>
+                                <ChevronRight className="w-3 h-3 text-muted-foreground/50 shrink-0 ml-0.5" />
+                              </Button>
                           </div>
                        ))}
                        <Button
@@ -2335,33 +2667,31 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                     <>
                       <div>
                         <label className="text-[10px] text-muted-foreground/90 font-medium">选择数据集</label>
-                        <select value={selectedNodeData.config.outputDataset || ""} 
-                          onChange={e => { 
-                            const ds = mockDatasets.find(d => d.id === e.target.value);
-                            updateNodeConfig(selectedNodeData.id, "outputDataset", e.target.value); 
-                            updateNodeConfig(selectedNodeData.id, "outputDatasetName", ds?.name || ""); 
-                            updateNodeConfig(selectedNodeData.id, "outputVersion", ""); 
-                          }}
+                        <Button
+                          variant="outline"
+                          size="sm"
                           disabled={isReadOnly}
-                          className={`${baseInputClass} ${isReadOnly ? "bg-gray-50/50 cursor-not-allowed" : ""}`}>
-                          <option value="">请选择数据集</option>
-                          {mockDatasets.map(ds => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
-                        </select>
+                          onClick={() => {
+                            // Use the same modal as input dataset for consistency
+                            setDatasetModalTarget({ nodeId: selectedNodeData.id, varIndex: -1 }); // -1 indicates output dataset
+                            setIsDatasetModalOpen(true);
+                          }}
+                          className="w-full justify-between h-8 px-2 text-[10px] bg-white border-dashed border-primary/40 hover:border-primary/60 hover:bg-white transition-all disabled:opacity-70 disabled:cursor-not-allowed mt-1.5"
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <Database className="w-3 h-3 text-primary/70 shrink-0" />
+                            {selectedNodeData.config.outputDataset ? (
+                              <span className="truncate">
+                                {selectedNodeData.config.outputDatasetName || selectedNodeData.config.outputDataset}
+                                {selectedNodeData.config.outputVersion && ` · ${selectedNodeData.config.outputVersion}`}
+                              </span>
+                            ) : (
+                              <span className="truncate text-muted-foreground/50">点击选择数据集</span>
+                            )}
+                          </div>
+                          <ChevronRight className="w-3 h-3 text-muted-foreground/50 shrink-0 ml-0.5" />
+                        </Button>
                       </div>
-                      {selectedNodeData.config.outputDataset && (
-                        <div>
-                          <label className="text-[10px] text-muted-foreground/90 font-medium">选择版本</label>
-                          <select value={selectedNodeData.config.outputVersion || ""} onChange={e => updateNodeConfig(selectedNodeData.id, "outputVersion", e.target.value)}
-                            disabled={isReadOnly}
-                            className={`${baseInputClass} ${isReadOnly ? "bg-gray-50/50 cursor-not-allowed" : ""}`}>
-                            <option value="">请选择版本</option>
-                            {mockDatasets.find(d => d.id === selectedNodeData.config.outputDataset)?.versions.map(v => (
-                              <option key={v.id} value={v.id}>{v.name}</option>
-                            ))}
-                            <option value="__new__">+ 新建版本</option>
-                          </select>
-                        </div>
-                      )}
 
                       {/* 输出方式 */}
                       <div>
@@ -3249,18 +3579,16 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
                       </button>
                     </div>
                   </div>
-                  <div className="flex-1 overflow-y-auto p-3 font-mono text-[11px] text-foreground/80 bg-muted/5 leading-relaxed cursor-text selection:bg-primary/30">
+                  <div className="flex-1 overflow-y-auto p-3 text-[11px] text-foreground/80 bg-muted/5 leading-relaxed cursor-text selection:bg-primary/30">
                     {!logNodeId ? (
                       <div className="flex flex-col items-center justify-center h-full text-xs text-muted-foreground/60">
                         <Terminal className="w-6 h-6 mb-2 opacity-50" />
                         请在右侧明细中选择节点
                       </div>
-                    ) : (debugLogs[logNodeId] || []).length === 0 ? (
+                    ) : !debugLogs[logNodeId] ? (
                       <div className="text-muted-foreground/50 text-[10px]">暂无日志输出...</div>
                     ) : (
-                      (debugLogs[logNodeId] || []).map((line, i) => (
-                        <div key={i} className="mb-1 whitespace-pre-wrap">{line}</div>
-                      ))
+                      <NodeLogContent logData={debugLogs[logNodeId]} compact={false} />
                     )}
                   </div>
                 </div>
@@ -3279,16 +3607,26 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
             if (datasetModalTarget && selectedNode) {
               const node = nodes.find(n => n.id === datasetModalTarget.nodeId);
               if (node) {
-                const newVars = [...(node.config._variables || [])];
-                if (newVars[datasetModalTarget.varIndex]) {
-                  newVars[datasetModalTarget.varIndex] = {
-                    ...newVars[datasetModalTarget.varIndex],
-                    datasetId: dsId,
-                    versionId: vId,
-                    datasetName: dsName,
-                    versionName: vName
-                  };
-                  updateNodeConfig(datasetModalTarget.nodeId, "_variables", newVars);
+                // Check if this is an output dataset selection (varIndex === -1)
+                if (datasetModalTarget.varIndex === -1) {
+                  // Update output dataset config
+                  updateNodeConfig(datasetModalTarget.nodeId, "outputDataset", dsId);
+                  updateNodeConfig(datasetModalTarget.nodeId, "outputDatasetName", dsName);
+                  updateNodeConfig(datasetModalTarget.nodeId, "outputVersion", vId);
+                  updateNodeConfig(datasetModalTarget.nodeId, "outputVersionName", vName);
+                } else {
+                  // Update input dataset variable config
+                  const newVars = [...(node.config._variables || [])];
+                  if (newVars[datasetModalTarget.varIndex]) {
+                    newVars[datasetModalTarget.varIndex] = {
+                      ...newVars[datasetModalTarget.varIndex],
+                      datasetId: dsId,
+                      versionId: vId,
+                      datasetName: dsName,
+                      versionName: vName
+                    };
+                    updateNodeConfig(datasetModalTarget.nodeId, "_variables", newVars);
+                  }
                 }
               }
             } else {
@@ -3297,8 +3635,16 @@ const WorkflowCanvas = ({ isReadOnly: isReadOnlyProp }: { isReadOnly?: boolean }
               setInputVersion(vId);
             }
           }}
-          currentDatasetId={datasetModalTarget && selectedNode ? nodes.find(n => n.id === datasetModalTarget.nodeId)?.config._variables?.[datasetModalTarget.varIndex]?.datasetId : inputDataset}
-          currentVersionId={datasetModalTarget && selectedNode ? nodes.find(n => n.id === datasetModalTarget.nodeId)?.config._variables?.[datasetModalTarget.varIndex]?.versionId : inputVersion}
+          currentDatasetId={datasetModalTarget && selectedNode ? 
+            (datasetModalTarget.varIndex === -1 
+              ? nodes.find(n => n.id === datasetModalTarget.nodeId)?.config.outputDataset 
+              : nodes.find(n => n.id === datasetModalTarget.nodeId)?.config._variables?.[datasetModalTarget.varIndex]?.datasetId) 
+            : inputDataset}
+          currentVersionId={datasetModalTarget && selectedNode ? 
+            (datasetModalTarget.varIndex === -1 
+              ? nodes.find(n => n.id === datasetModalTarget.nodeId)?.config.outputVersion 
+              : nodes.find(n => n.id === datasetModalTarget.nodeId)?.config._variables?.[datasetModalTarget.varIndex]?.versionId) 
+            : inputVersion}
         />
       )}
       </div>

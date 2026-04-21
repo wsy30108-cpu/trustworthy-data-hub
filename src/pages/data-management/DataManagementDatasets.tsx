@@ -55,6 +55,7 @@ const sharedDatasets: SharedDataset[] = [
 
 /* ─── Constants ─── */
 const MODALITIES = ["文本", "图像", "语音", "视频", "表格", "跨模态"];
+const TEXT_TYPES = ["通用文本", "文本 SFT", "文本 RLHF", "文本 DPO", "文本 KTO"];
 const AUTH_SCOPES_MINE = ["仅数据集所有者", "指定用户", "指定空间角色", "空间内全体成员"];
 const AUTH_SCOPES_SUB = ["只读", "读写"];
 
@@ -96,6 +97,68 @@ function MultiCheckDropdown({ options, selected, onChange, placeholder, classNam
             <label key={o} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm">
               <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} className="rounded accent-primary w-3.5 h-3.5" />{o}
             </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Cascading Multi-check dropdown for modality with text types ─── */
+function ModalityDropdown({ options, textTypes, selected, selectedTextTypes, onChange, onTextTypeChange, placeholder, className }: {
+  options: string[]; textTypes: string[]; selected: string[]; selectedTextTypes: string[]; 
+  onChange: (v: string[]) => void; onTextTypeChange: (v: string[]) => void;
+  placeholder: string; className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", handler); return () => document.removeEventListener("mousedown", handler);
+  }, []);
+  
+  const toggleModality = (v: string) => {
+    const newSelected = selected.includes(v) ? selected.filter(s => s !== v) : [...selected, v];
+    onChange(newSelected);
+    // If "文本" is deselected, also clear text types
+    if (v === "文本" && selected.includes("文本")) {
+      onTextTypeChange([]);
+    }
+  };
+  
+  const toggleTextType = (v: string) => {
+    onTextTypeChange(selectedTextTypes.includes(v) ? selectedTextTypes.filter(s => s !== v) : [...selectedTextTypes, v]);
+  };
+  
+  const hasText = selected.includes("文本");
+
+  return (
+    <div ref={ref} className={cn("relative", className)}>
+      <button type="button" onClick={() => setOpen(!open)}
+        className="w-full h-9 px-3 text-sm border rounded-md bg-muted/30 text-left flex items-center justify-between gap-1 hover:border-primary/50 transition-colors">
+        {selected.length ? (
+          <span className="text-foreground truncate">{selected.length}项已选</span>
+        ) : <span className="text-muted-foreground">{placeholder}</span>}
+        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-full min-w-[160px] bg-popover border rounded-lg shadow-lg max-h-64 overflow-y-auto">
+          {options.map(o => (
+            <div key={o}>
+              <label className="flex items-center gap-2 px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm">
+                <input type="checkbox" checked={selected.includes(o)} onChange={() => toggleModality(o)} className="rounded accent-primary w-3.5 h-3.5" />{o}
+              </label>
+              {/* Show text types as indented sub-options when "文本" is selected */}
+              {o === "文本" && hasText && (
+                <div className="pl-6 pr-2 pb-1 space-y-1 border-t border-muted/30 pt-1 mt-1">
+                  {textTypes.map(tt => (
+                    <label key={tt} className="flex items-center gap-2 py-1.5 hover:bg-muted/30 cursor-pointer text-xs text-muted-foreground">
+                      <input type="checkbox" checked={selectedTextTypes.includes(tt)} onChange={() => toggleTextType(tt)} className="rounded accent-primary w-3 h-3" />{tt}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -472,6 +535,7 @@ function ActiveFilterTags({ filters, onRemove, onClear }: {
 }) {
   const chips: { label: string; key: string; value?: string }[] = [];
   filters.modalities.forEach(m => chips.push({ label: `模态=${m}`, key: "modalities", value: m }));
+  filters.textTypes.forEach(t => chips.push({ label: `文本类型=${t}`, key: "textTypes", value: t }));
   filters.scopes.forEach(s => chips.push({ label: `授权范围=${s}`, key: "scopes", value: s }));
   if (filters.dateFrom) chips.push({ label: `开始时间=${format(filters.dateFrom, "yyyy-MM-dd")}`, key: "dateFrom" });
   if (filters.dateTo) chips.push({ label: `结束时间=${format(filters.dateTo, "yyyy-MM-dd")}`, key: "dateTo" });
@@ -534,9 +598,17 @@ function FilterBar({ tab, filters, setFilters, onReset, onAdd }: {
               className="w-full h-9 pl-9 pr-3 text-sm border rounded-md bg-muted/30 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all" />
           </div>
 
-          {/* Modality */}
-          <MultiCheckDropdown options={MODALITIES} selected={filters.modalities}
-            onChange={v => setFilters({ ...filters, modalities: v })} placeholder="模态 ∨ 全部" className="w-[130px]" />
+          {/* Modality with text type sub-options */}
+          <ModalityDropdown 
+            options={MODALITIES} 
+            textTypes={TEXT_TYPES}
+            selected={filters.modalities}
+            selectedTextTypes={filters.textTypes}
+            onChange={v => setFilters({ ...filters, modalities: v })}
+            onTextTypeChange={v => setFilters({ ...filters, textTypes: v })}
+            placeholder="模态 ∨ 全部" 
+            className="w-[150px]" 
+          />
 
           {/* Auth scope */}
           <MultiCheckDropdown options={scopeOptions} selected={filters.scopes}
@@ -622,7 +694,7 @@ function EmptyState({ message, guide, onReset }: { message: string; guide: strin
 }
 
 /* ═══════════════ Main Component ═══════════════ */
-const defaultFilters = () => ({ name: "", modalities: [] as string[], scopes: [] as string[], dateFrom: undefined as Date | undefined, dateTo: undefined as Date | undefined, selectedTags: [] as string[], creator: "" });
+const defaultFilters = () => ({ name: "", modalities: [] as string[], textTypes: [] as string[], scopes: [] as string[], dateFrom: undefined as Date | undefined, dateTo: undefined as Date | undefined, selectedTags: [] as string[], creator: "" });
 
 const DataManagementDatasets = () => {
   const { toast } = useToast();
@@ -653,10 +725,14 @@ const DataManagementDatasets = () => {
   const resetFilters = () => { setFilters(defaultFilters()); setPage(1); };
 
   // Filter logic
-  const applyFilters = useCallback(<T extends { name: string; modality: string; scope: string; tags: KVTag[]; creator?: string; createdAt?: string; updatedAt?: string }>(data: T[]): T[] => {
+  const applyFilters = useCallback(<T extends { name: string; modality: string; type?: string; scope: string; tags: KVTag[]; creator?: string; createdAt?: string; updatedAt?: string }>(data: T[]): T[] => {
     return data.filter(d => {
       if (filters.name && !d.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
       if (filters.modalities.length && !filters.modalities.includes(d.modality)) return false;
+      // Text type filter: only apply when "文本" modality is selected
+      if (filters.textTypes.length && filters.modalities.includes("文本") && d.modality === "文本") {
+        if (!d.type || !filters.textTypes.includes(d.type)) return false;
+      }
       if (filters.scopes.length && !filters.scopes.includes(d.scope)) return false;
       // Tag tree filter: selectedTags are "key:value" pairs
       if (filters.selectedTags.length > 0) {
@@ -814,7 +890,14 @@ const DataManagementDatasets = () => {
                     <button className="text-primary hover:underline" onClick={() => { setCurrentDataset(ds); setSubPage("versionList"); }}>{ds.name}</button>
                   </td>
                   <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
-                  <td className="py-3 px-3"><span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span></td>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span>
+                      {ds.modality === "文本" && ds.type && ds.type !== "-" && (
+                        <span className="px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-600 border border-blue-200">{ds.type}</span>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-3 px-3">
                     <TagCell tags={ds.tags} onEdit={() => setTagEditTarget({ idx: myDs.indexOf(ds), tab: 0 })} />
                   </td>
@@ -884,7 +967,14 @@ const DataManagementDatasets = () => {
                     <button className="text-primary hover:underline" onClick={() => navigateToVersionList(ds)}>{ds.name}</button>
                   </td>
                   <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
-                  <td className="py-3 px-3"><span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span></td>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span>
+                      {ds.modality === "文本" && ds.type && ds.type !== "-" && (
+                        <span className="px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-600 border border-blue-200">{ds.type}</span>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-3 px-3"><TagCell tags={ds.tags} /></td>
                   <td className="py-3 px-3">
                     <button className="text-xs text-primary hover:underline font-medium" onClick={() => { setCurrentDataset(ds); setCurrentVersion({ version: ds.latestVersion, publishStatus: "未知" }); setSubPage("versionDetail"); }}>
@@ -947,7 +1037,14 @@ const DataManagementDatasets = () => {
                     <button className="text-primary hover:underline" onClick={() => navigateToVersionList(ds)}>{ds.name}</button>
                   </td>
                   <td className="py-3 px-3 text-xs text-muted-foreground font-mono">{ds.id}</td>
-                  <td className="py-3 px-3"><span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span></td>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary">{ds.modality}</span>
+                      {ds.modality === "文本" && ds.type && ds.type !== "-" && (
+                        <span className="px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-600 border border-blue-200">{ds.type}</span>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-3 px-3"><TagCell tags={ds.tags} /></td>
                   <td className="py-3 px-3">
                     <button className="text-xs text-primary hover:underline font-medium" onClick={() => { setCurrentDataset(ds); setCurrentVersion({ version: ds.latestVersion, publishStatus: "未知" }); setSubPage("versionDetail"); }}>
