@@ -1,11 +1,14 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ArrowLeft, Undo2, Redo2, BookOpen, Keyboard, Ban, Send,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Tag, Clock, List, Link2,
   X, AlertTriangle, Plus, Filter, SortAsc, Search, PanelRightClose, PanelRightOpen,
-  Play, Pause, RotateCcw, Maximize, Type, Image as ImageIcon, Video
+  Play, Pause, RotateCcw, Maximize, Type, Image as ImageIcon, Video,
+  Brain, Sparkles, Check, ThumbsUp, ThumbsDown, Loader2, Zap, MousePointer2
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTaskPreannotationStore } from "@/stores/useTaskPreannotationStore";
+import { usePreannotationProgress } from "@/hooks/usePreannotationProgress";
 
 interface Props {
   task: { id: string; taskName: string; total: number; done: number; projectType: string };
@@ -57,7 +60,19 @@ const labels = [
 
 const relationTypes = ["属于", "等同", "并列", "由于", "涉及", "冲突"];
 
+type PreannotationReviewStatus = "pending" | "accepted" | "rejected";
+
+interface PreannotationSuggestion {
+  sampleId: number;
+  label: string;
+  confidence: number;
+  reviewStatus: PreannotationReviewStatus;
+}
+
 const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => {
+  usePreannotationProgress();
+  const preannotationConfig = useTaskPreannotationStore((s) => s.configs[task.id]);
+
   const [samples] = useState<Sample[]>(() =>
     Array.from({ length: task.total }, (_, i) => {
       let content = "";
@@ -323,6 +338,61 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
     new Set(annotations.filter(a => a.sampleId === current.id).map(a => a.label))
   );
 
+  const [preAnnotations, setPreAnnotations] = useState<Map<number, PreannotationSuggestion>>(() => {
+    const m = new Map<number, PreannotationSuggestion>();
+    if (!preannotationConfig?.batchEnabled) return m;
+    const covered = Math.min(preannotationConfig.preannotated, task.total);
+    const threshold = preannotationConfig.confidenceThreshold;
+    for (let i = 0; i < covered; i++) {
+      const sampleId = i + 1;
+      const labelIdx = (sampleId * 7) % labels.length;
+      const baseConf = 0.55 + ((sampleId * 13) % 45) / 100;
+      m.set(sampleId, {
+        sampleId,
+        label: labels[labelIdx].value,
+        confidence: Math.round(baseConf * 100) / 100,
+        reviewStatus: "pending",
+      });
+    }
+    return m;
+  });
+
+  useEffect(() => {
+    if (!preannotationConfig?.batchEnabled) return;
+    setPreAnnotations((prev) => {
+      const covered = Math.min(preannotationConfig.preannotated, task.total);
+      if (prev.size >= covered) return prev;
+      const next = new Map(prev);
+      for (let i = prev.size; i < covered; i++) {
+        const sampleId = i + 1;
+        if (next.has(sampleId)) continue;
+        const labelIdx = (sampleId * 7) % labels.length;
+        const baseConf = 0.55 + ((sampleId * 13) % 45) / 100;
+        next.set(sampleId, {
+          sampleId,
+          label: labels[labelIdx].value,
+          confidence: Math.round(baseConf * 100) / 100,
+          reviewStatus: "pending",
+        });
+      }
+      return next;
+    });
+  }, [preannotationConfig?.preannotated, preannotationConfig?.batchEnabled, task.total]);
+
+  const preAnnotationStats = useMemo(() => {
+    const suggestions = Array.from(preAnnotations.values());
+    const pending = suggestions.filter((p) => p.reviewStatus === "pending").length;
+    const accepted = suggestions.filter((p) => p.reviewStatus === "accepted").length;
+    const rejected = suggestions.filter((p) => p.reviewStatus === "rejected").length;
+    const threshold = preannotationConfig?.confidenceThreshold || 0.6;
+    const highConfidencePending = suggestions.filter(
+      (p) => p.reviewStatus === "pending" && p.confidence >= threshold
+    ).length;
+    return { total: suggestions.length, pending, accepted, rejected, highConfidencePending };
+  }, [preAnnotations, preannotationConfig?.confidenceThreshold]);
+
+  const currentPreAnnotation = preAnnotations.get(current.id);
+
   // Initialize mock logs
   useEffect(() => {
     if (logs.length === 0 && annotations.length > 0) {
@@ -381,6 +451,92 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
       setTimeout(() => setCurrentIndex(i => i + 1), 300);
     }
   }, [current, currentIndex, samples.length, sampleStates]);
+
+  const acceptPreAnnotation = useCallback(
+    (sampleId: number) => {
+      const pre = preAnnotations.get(sampleId);
+      if (!pre) return;
+      const state = sampleStates.get(sampleId);
+      setUndoStack((s) => [...s, { id: sampleId, prev: { ...(state || { status: "未标注", label: null }) } }]);
+      setRedoStack([]);
+      setSampleStates((prev) => {
+        const next = new Map(prev);
+        next.set(sampleId, { status: "已标注", label: pre.label });
+        return next;
+      });
+      setPreAnnotations((prev) => {
+        const next = new Map(prev);
+        next.set(sampleId, { ...pre, reviewStatus: "accepted" });
+        return next;
+      });
+      setAnnotations((prev) => {
+        const existing = prev.findIndex((a) => a.sampleId === sampleId);
+        const sample = samples.find((s) => s.id === sampleId);
+        const payload: Annotation = {
+          id: `ann-${sampleId}`,
+          sampleId,
+          label: pre.label,
+          content: (sample?.content || "").slice(0, 30) + "...",
+          group: "AI 预标注",
+          tool: `模型 · ${preannotationConfig?.modelName || "预标注"}`,
+          createdAt: new Date().toLocaleString(),
+          score: Math.round(pre.confidence * 100),
+        };
+        if (existing !== -1) {
+          const updated = [...prev];
+          updated[existing] = payload;
+          return updated;
+        }
+        return [...prev, payload];
+      });
+      setLogs((l) => [
+        {
+          id: `log-accept-${sampleId}-${Date.now()}`,
+          timestamp: new Date().toLocaleTimeString(),
+          operator: "标注员A",
+          action: `接受预标注:${pre.label} (${Math.round(pre.confidence * 100)}%)`,
+          target: `SAMPLE #${sampleId}`,
+        },
+        ...l,
+      ]);
+    },
+    [preAnnotations, sampleStates, samples, preannotationConfig]
+  );
+
+  const rejectPreAnnotation = useCallback((sampleId: number) => {
+    setPreAnnotations((prev) => {
+      const pre = prev.get(sampleId);
+      if (!pre) return prev;
+      const next = new Map(prev);
+      next.set(sampleId, { ...pre, reviewStatus: "rejected" });
+      return next;
+    });
+    setLogs((l) => [
+      {
+        id: `log-reject-${sampleId}-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString(),
+        operator: "标注员A",
+        action: `拒绝预标注`,
+        target: `SAMPLE #${sampleId}`,
+      },
+      ...l,
+    ]);
+    toast.info(`已拒绝样本 #${sampleId} 的预标注`, { duration: 1200 });
+  }, []);
+
+  const acceptAllHighConfidence = useCallback(() => {
+    if (!preannotationConfig) return;
+    const threshold = preannotationConfig.confidenceThreshold;
+    const toAccept = Array.from(preAnnotations.values()).filter(
+      (p) => p.reviewStatus === "pending" && p.confidence >= threshold
+    );
+    if (toAccept.length === 0) {
+      toast.info("没有待接受的高置信度预标注");
+      return;
+    }
+    toAccept.forEach((p) => acceptPreAnnotation(p.sampleId));
+    toast.success(`已一键接受 ${toAccept.length} 条高置信度预标注`);
+  }, [preAnnotations, preannotationConfig, acceptPreAnnotation]);
 
   const markInvalid = useCallback(() => {
     const prev = sampleStates.get(current.id)!;
@@ -515,11 +671,21 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
       if (e.key === "z" && (e.ctrlKey || e.metaKey) && e.shiftKey) { e.preventDefault(); redo(); }
       if (e.key === "ArrowLeft") setCurrentIndex(i => Math.max(0, i - 1));
       if (e.key === "ArrowRight") setCurrentIndex(i => Math.min(samples.length - 1, i + 1));
+      if ((e.key === "y" || e.key === "Y") && currentPreAnnotation && currentPreAnnotation.reviewStatus === "pending") {
+        e.preventDefault();
+        acceptPreAnnotation(current.id);
+        return;
+      }
+      if ((e.key === "n" || e.key === "N") && currentPreAnnotation && currentPreAnnotation.reviewStatus === "pending") {
+        e.preventDefault();
+        rejectPreAnnotation(current.id);
+        return;
+      }
       labels.forEach(l => { if (e.key === l.shortcut) setLabel(l.value); });
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [undo, redo, setLabel, samples.length]);
+  }, [undo, redo, setLabel, samples.length, currentPreAnnotation, current.id, acceptPreAnnotation, rejectPreAnnotation]);
 
   // Handle active sample scroll centering
   useEffect(() => {
@@ -542,6 +708,14 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
         <button onClick={onBack} className="p-1.5 rounded hover:bg-muted/50"><ArrowLeft className="w-4 h-4" /></button>
         <span className="text-sm font-medium truncate">{task.taskName}</span>
         <span className="text-xs text-muted-foreground">批次 {task.id}</span>
+        {preannotationConfig?.batchEnabled && (
+          <span
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold"
+            title={preannotationConfig.modelName}
+          >
+            <Brain className="w-3 h-3" /> AI 预标注 · {preannotationConfig.modelName}
+          </span>
+        )}
         <div className="flex-1" />
         <button onClick={undo} disabled={undoStack.length === 0} className="p-1.5 rounded hover:bg-muted/50 disabled:opacity-30" title="撤销 (Ctrl+Z)"><Undo2 className="w-4 h-4" /></button>
         <button onClick={redo} disabled={redoStack.length === 0} className="p-1.5 rounded hover:bg-muted/50 disabled:opacity-30" title="恢复 (Ctrl+Shift+Z)"><Redo2 className="w-4 h-4" /></button>
@@ -560,6 +734,85 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
           {rightSidebarVisible ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
         </button>
       </div>
+
+      {/* Preannotation banner */}
+      {preannotationConfig?.batchEnabled && (
+        <div className="px-4 py-2.5 border-b bg-gradient-to-r from-primary/5 via-primary/[0.02] to-transparent flex items-center gap-4 shrink-0">
+          <div className="flex items-center gap-2">
+            {preannotationConfig.status === "执行中" || preannotationConfig.status === "排队中" ? (
+              <Loader2 className="w-4 h-4 text-primary animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4 text-amber-500" />
+            )}
+            <span className="text-xs font-semibold text-foreground">智能预标注</span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-1 max-w-md">
+            <div className="flex-1 h-1.5 bg-white rounded-full overflow-hidden border border-primary/10">
+              <div
+                className="h-full bg-primary rounded-full transition-all"
+                style={{
+                  width: `${Math.round((preannotationConfig.preannotated / preannotationConfig.total) * 100)}%`,
+                }}
+              />
+            </div>
+            <span className="text-[11px] font-mono">
+              <span className="font-bold text-primary">
+                {preannotationConfig.preannotated.toLocaleString()}
+              </span>
+              <span className="text-muted-foreground">/{preannotationConfig.total.toLocaleString()}</span>
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              {preannotationConfig.status === "执行中"
+                ? "预标注进行中"
+                : preannotationConfig.status === "排队中"
+                  ? "排队中"
+                  : preannotationConfig.status === "已完成"
+                    ? "预标注已完成"
+                    : preannotationConfig.status === "部分失败"
+                      ? "部分失败"
+                      : "未开启"}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              待审 <span className="font-bold text-foreground">{preAnnotationStats.pending}</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              已接受 <span className="font-bold text-foreground">{preAnnotationStats.accepted}</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+              已拒绝 <span className="font-bold text-foreground">{preAnnotationStats.rejected}</span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {preannotationConfig.interactiveEnabled && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-purple-700 bg-purple-50 border border-purple-200 rounded px-1.5 py-0.5 font-bold">
+                <MousePointer2 className="w-3 h-3" /> 交互式
+              </span>
+            )}
+            <button
+              onClick={acceptAllHighConfidence}
+              disabled={preAnnotationStats.highConfidencePending === 0}
+              className="inline-flex items-center gap-1 px-3 py-1 text-[11px] font-bold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title={`置信度 ≥ ${preannotationConfig.confidenceThreshold.toFixed(2)} 的预测一键接受`}
+            >
+              <ThumbsUp className="w-3 h-3" />
+              一键接受高置信度
+              {preAnnotationStats.highConfidencePending > 0 && (
+                <span className="ml-1 px-1 bg-white/20 rounded">
+                  {preAnnotationStats.highConfidencePending}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main area */}
       <div className="flex-1 flex min-h-0">
@@ -602,6 +855,116 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
           <div className="flex-1 p-12 overflow-y-auto flex items-start justify-center bg-[#f8fafc] dark:bg-slate-900/10">
             <div className="max-w-4xl w-full space-y-8">
               {renderContent()}
+
+              {currentPreAnnotation && currentState.status === "未标注" && (
+                <section className="rounded-2xl border-2 border-dashed border-primary/30 bg-primary/[0.03] p-5 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <Brain className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold text-primary uppercase tracking-wider">
+                          AI 模型预标注建议
+                        </span>
+                        {currentPreAnnotation.reviewStatus === "rejected" && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold">
+                            已拒绝
+                          </span>
+                        )}
+                        <span className="ml-auto text-[10px] text-muted-foreground">
+                          来源：{preannotationConfig?.modelName}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-2">
+                        <div className="flex items-center rounded-sm overflow-hidden border border-primary/30 bg-white h-8">
+                          <div
+                            className="w-1 h-full"
+                            style={{
+                              backgroundColor:
+                                labels.find((l) => l.value === currentPreAnnotation.label)?.color ||
+                                "currentColor",
+                            }}
+                          />
+                          <div className="px-3 flex items-center gap-2">
+                            <span className="text-sm font-semibold text-slate-700">
+                              {currentPreAnnotation.label}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-muted-foreground">置信度</span>
+                          <span
+                            className={`text-sm font-mono font-bold ${
+                              currentPreAnnotation.confidence >= (preannotationConfig?.confidenceThreshold || 0.6)
+                                ? "text-emerald-600"
+                                : "text-amber-600"
+                            }`}
+                          >
+                            {(currentPreAnnotation.confidence * 100).toFixed(1)}%
+                          </span>
+                          {currentPreAnnotation.confidence < (preannotationConfig?.confidenceThreshold || 0.6) && (
+                            <AlertTriangle
+                              className="w-3 h-3 text-amber-500"
+                              aria-label="低于阈值，建议人工复核"
+                            />
+                          )}
+                        </div>
+                        <div className="flex-1" />
+                        {currentPreAnnotation.reviewStatus === "pending" && (
+                          <>
+                            <button
+                              onClick={() => acceptPreAnnotation(current.id)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors shadow-sm"
+                            >
+                              <Check className="w-3.5 h-3.5" /> 接受 (Y)
+                            </button>
+                            <button
+                              onClick={() => rejectPreAnnotation(current.id)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+                            >
+                              <X className="w-3.5 h-3.5" /> 拒绝 (N)
+                            </button>
+                          </>
+                        )}
+                        {currentPreAnnotation.reviewStatus === "rejected" && (
+                          <button
+                            onClick={() => acceptPreAnnotation(current.id)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm"
+                          >
+                            <ThumbsUp className="w-3.5 h-3.5" /> 改为接受
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">
+                        模型基于历史样本给出的初步建议，您可以接受、拒绝，或直接在下方手动选择新的标签覆盖。
+                        {preannotationConfig?.interactiveEnabled && (
+                          <span className="ml-1 text-purple-700 font-medium">
+                            · 已开启交互式预标注，操作样本时模型可实时辅助。
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {currentPreAnnotation && currentState.status === "已标注" && currentPreAnnotation.reviewStatus === "accepted" && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 px-4 py-2 flex items-center gap-2 text-xs">
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-emerald-700 font-medium">已接受 AI 预标注</span>
+                  <span className="text-muted-foreground">
+                    （置信度 {(currentPreAnnotation.confidence * 100).toFixed(0)}%，来自 {preannotationConfig?.modelName}）
+                  </span>
+                </div>
+              )}
+
+              {!currentPreAnnotation && preannotationConfig?.batchEnabled && currentState.status === "未标注" && (
+                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-3 flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
+                  <span>当前样本尚未生成预标注（队列处理中），可手动标注或稍后查看</span>
+                </div>
+              )}
 
               <section>
                 <h2 className="text-xl font-bold text-slate-800 mb-4">选择对应标注片段的答案：</h2>
@@ -1030,15 +1393,30 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
           {samples.map((s, i) => {
             const state = sampleStates.get(s.id);
             const isActive = i === currentIndex;
+            const pre = preAnnotations.get(s.id);
             return (
               <button
                 key={s.id}
                 data-sample-index={i}
                 onClick={() => setCurrentIndex(i)}
-                className={`w-7 h-7 rounded text-[10px] font-bold flex items-center justify-center shrink-0 transition-all duration-200 ${isActive ? "ring-2 ring-primary ring-offset-2 scale-110 shadow-md" : "hover:scale-105 opacity-80 hover:opacity-100"
+                className={`relative w-7 h-7 rounded text-[10px] font-bold flex items-center justify-center shrink-0 transition-all duration-200 ${isActive ? "ring-2 ring-primary ring-offset-2 scale-110 shadow-md" : "hover:scale-105 opacity-80 hover:opacity-100"
                   } ${getStatusColor(state?.status || "未标注")} text-white`}
+                title={pre ? `预标注: ${pre.label} (${(pre.confidence * 100).toFixed(0)}%) ${pre.reviewStatus === "pending" ? "待审" : pre.reviewStatus === "accepted" ? "已接受" : "已拒绝"}` : `样本 #${s.id}`}
               >
                 {s.id}
+                {pre && pre.reviewStatus === "pending" && (
+                  <span
+                    className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-white shadow-sm"
+                    aria-label="待审预标注"
+                  />
+                )}
+                {pre && pre.reviewStatus === "accepted" && (
+                  <span
+                    className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white shadow-sm flex items-center justify-center"
+                  >
+                    <Check className="w-1.5 h-1.5 text-white" strokeWidth={4} />
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1061,6 +1439,9 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
             <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> 已标注 <span className="font-bold text-foreground">{annotatedCount}</span></span>
             <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-destructive" /> 无效 <span className="font-bold text-foreground">{invalidCount}</span></span>
             <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30" /> 未标注 <span className="font-bold text-foreground">{unannotatedCount}</span></span>
+            {preannotationConfig?.batchEnabled && (
+              <span className="flex items-center gap-1.5"><Brain className="w-2.5 h-2.5 text-primary" /> 预标注 <span className="font-bold text-foreground">{preAnnotationStats.total}</span></span>
+            )}
             <span className="ml-2 font-mono text-[11px] bg-muted px-2 py-0.5 rounded">共 {samples.length}</span>
           </div>
         </div>
@@ -1104,6 +1485,11 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                 <div className="flex justify-between"><span>下一题</span><kbd className="px-2 py-0.5 bg-muted rounded text-xs">→</kbd></div>
                 <div className="flex justify-between"><span>撤销</span><kbd className="px-2 py-0.5 bg-muted rounded text-xs">Ctrl+Z</kbd></div>
                 <div className="flex justify-between"><span>恢复</span><kbd className="px-2 py-0.5 bg-muted rounded text-xs">Ctrl+Shift+Z</kbd></div>
+              </div>
+              <div className="border-t pt-2 mt-2 space-y-2">
+                <p className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1">智能预标注</p>
+                <div className="flex justify-between"><span>接受预标注</span><kbd className="px-2 py-0.5 bg-muted rounded text-xs">Y</kbd></div>
+                <div className="flex justify-between"><span>拒绝预标注</span><kbd className="px-2 py-0.5 bg-muted rounded text-xs">N</kbd></div>
               </div>
             </div>
           </div>

@@ -2,11 +2,14 @@ import { useState } from "react";
 import {
   Search, Play, Eye, ArrowRightLeft, Unlock,
   ClipboardList, CheckCircle, Clock, X, Send, AlertTriangle,
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown,
+  Brain, Loader2, Sparkles, Zap, MousePointer2
 } from "lucide-react";
 import { toast } from "sonner";
 import DataAnnotationWorkbench from "./DataAnnotationWorkbench";
 import BatchExecutionDetail from "./BatchExecutionDetail";
+import { useTaskPreannotationStore } from "@/stores/useTaskPreannotationStore";
+import { usePreannotationProgress } from "@/hooks/usePreannotationProgress";
 
 interface MyTask {
   id: string;
@@ -190,6 +193,9 @@ const sourceColors: Record<string, string> = {
 };
 
 const DataAnnotationMyTasks = () => {
+  usePreannotationProgress();
+  const preannotationConfigs = useTaskPreannotationStore((s) => s.configs);
+
   const [tab, setTab] = useState<"active" | "done">("active");
   const [searchText, setSearchText] = useState("");
   const [typeFilter, setTypeFilter] = useState("全部类型");
@@ -308,6 +314,11 @@ const DataAnnotationMyTasks = () => {
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">任务名称</th>
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">授权对象</th>
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground min-w-[120px]">进度</th>
+              <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground min-w-[140px]">
+                <div className="flex items-center gap-1">
+                  <Brain className="w-3.5 h-3.5 text-primary" /> 预标注
+                </div>
+              </th>
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">任务类型</th>
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">任务流程</th>
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">任务来源</th>
@@ -328,6 +339,58 @@ const DataAnnotationMyTasks = () => {
                     <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden"><div className="h-full bg-primary rounded-full" style={{ width: `${t.progress}%` }} /></div>
                     <span className="text-xs text-muted-foreground">{t.done}/{t.total}</span>
                   </div>
+                </td>
+                <td className="py-3 px-4">
+                  {(() => {
+                    const pc = preannotationConfigs[t.id];
+                    if (!pc || !pc.batchEnabled) {
+                      return <span className="text-[10px] text-muted-foreground/60">未开启</span>;
+                    }
+                    const percent = Math.round((pc.preannotated / pc.total) * 100);
+                    const isDone = pc.status === "已完成" || pc.status === "部分失败";
+                    return (
+                      <div className="flex flex-col gap-1 min-w-[120px]">
+                        <div className="flex items-center gap-1.5">
+                          {isDone ? (
+                            <CheckCircle className="w-3 h-3 text-emerald-600 shrink-0" />
+                          ) : (
+                            <Loader2 className="w-3 h-3 text-primary animate-spin shrink-0" />
+                          )}
+                          <span className="text-[11px] font-mono">
+                            <span className={isDone ? "text-emerald-700 font-semibold" : "text-primary font-semibold"}>
+                              {pc.preannotated.toLocaleString()}
+                            </span>
+                            <span className="text-muted-foreground">/{pc.total.toLocaleString()}</span>
+                          </span>
+                          <span className="text-[9px] text-muted-foreground">{percent}%</span>
+                        </div>
+                        <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              isDone ? "bg-emerald-500" : "bg-primary"
+                            }`}
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span
+                            className="text-[9px] text-muted-foreground truncate max-w-[90px]"
+                            title={pc.modelName}
+                          >
+                            {pc.modelName}
+                          </span>
+                          {pc.interactiveEnabled && (
+                            <span
+                              className="text-[8px] px-1 rounded bg-purple-50 text-purple-700 font-bold"
+                              title="支持交互式预标注"
+                            >
+                              交互
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColors[t.projectType] || "bg-muted text-muted-foreground"}`}>{t.projectType}</span></td>
                 <td className="py-3 px-4 text-sm text-foreground">{t.taskType}</td>
