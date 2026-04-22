@@ -599,17 +599,15 @@ function PermissionsTab({ space }: { space: SpaceData }) {
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-1">
                       <button
-                        className={cn("p-1 rounded", isTeamMember ? "text-muted-foreground/30 cursor-not-allowed" : "hover:bg-muted/50")}
-                        title={isTeamMember ? "标注团队成员角色不可编辑" : "编辑角色"}
-                        onClick={() => { if (!isTeamMember) { setRoleTarget(m); setEditRoles([...m.roles]); } }}
-                        disabled={isTeamMember}>
+                        className="p-1 rounded hover:bg-muted/50"
+                        title="编辑角色"
+                        onClick={() => { setRoleTarget(m); setEditRoles([...m.roles]); }}>
                         <ShieldCheck className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        className={cn("p-1 rounded", isTeamMember ? "text-muted-foreground/30 cursor-not-allowed" : "hover:bg-muted/50 text-muted-foreground")}
-                        title={isTeamMember ? "来自标注团队，不可单独移除" : "移除"}
-                        onClick={() => !isTeamMember && handleRemove(m)}
-                        disabled={isTeamMember}>
+                        className="p-1 rounded hover:bg-muted/50 text-muted-foreground"
+                        title="移除"
+                        onClick={() => handleRemove(m)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>

@@ -261,22 +261,32 @@ const DataAnnotationPerformance = () => {
       </div>
 
       {/* User Info Header */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-        <div className="flex flex-col gap-3 flex-1">
-          <span className="text-xs text-slate-400">姓名</span>
-          <span className="text-sm font-bold text-slate-900">{userInfo.name}</span>
-        </div>
-        <div className="flex flex-col gap-3 flex-1 px-8 border-x border-slate-100">
-          <span className="text-xs text-slate-400">用户名</span>
-          <span className="text-sm font-bold text-slate-900">{userInfo.username}</span>
-        </div>
-        <div className="flex flex-col gap-3 flex-1 px-8">
-          <span className="text-xs text-slate-400">所属团队</span>
-          <span className="text-sm font-bold text-slate-900">{userInfo.team}</span>
-        </div>
-        <div className="flex flex-col gap-3 flex-1 px-8 border-l border-slate-100">
-          <span className="text-xs text-slate-400">所属机构</span>
-          <span className="text-sm font-bold text-slate-900">{userInfo.org}</span>
+      <div className="bg-white px-8 py-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center">
+          <div className="flex flex-col gap-1.5 flex-1 items-center">
+            <span className="text-xs text-slate-400">姓名</span>
+            <span className="text-sm font-bold text-slate-900">{userInfo.name}</span>
+          </div>
+          <div className="w-px h-8 bg-slate-200"></div>
+          <div className="flex flex-col gap-1.5 flex-1 items-center">
+            <span className="text-xs text-slate-400">用户名</span>
+            <span className="text-sm font-bold text-slate-900">{userInfo.username}</span>
+          </div>
+          <div className="w-px h-8 bg-slate-200"></div>
+          <div className="flex flex-col gap-1.5 flex-1 items-center">
+            <span className="text-xs text-slate-400">所属团队</span>
+            <span className="text-sm font-bold text-slate-900">{userInfo.team}</span>
+          </div>
+          <div className="w-px h-8 bg-slate-200"></div>
+          <div className="flex flex-col gap-1.5 flex-1 items-center">
+            <span className="text-xs text-slate-400">所属机构</span>
+            <span className="text-sm font-bold text-slate-900">{userInfo.org}</span>
+          </div>
+          <div className="w-px h-8 bg-slate-200"></div>
+          <div className="flex flex-col gap-1.5 flex-1 items-center">
+            <span className="text-xs text-slate-400">参与空间数量</span>
+            <span className="text-sm font-bold text-slate-900">4</span>
+          </div>
         </div>
       </div>
 
