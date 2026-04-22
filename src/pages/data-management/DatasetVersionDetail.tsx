@@ -219,6 +219,12 @@ export default function DatasetVersionDetail({ dataset, version, onBack, onUploa
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(71); // Mock initial progress
   const [uploadPaused, setUploadPaused] = useState(false);
+  const [importBatchTime] = useState<Date>(() => new Date());
+
+  const formatTimestamp = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
 
   // Simulation of upload progress
   useEffect(() => {
@@ -343,6 +349,7 @@ export default function DatasetVersionDetail({ dataset, version, onBack, onUploa
         {(failedFiles > 0 || completedFiles < totalFiles) && (
           <div className="mt-3 pt-3 border-t flex items-center gap-x-5 flex-wrap text-xs">
             <div className="text-muted-foreground whitespace-nowrap">
+              <span className="text-muted-foreground/70 mr-2">[{formatTimestamp(importBatchTime)}]</span>
               共计 <span className="font-medium text-foreground">{totalFiles}</span> 个文件需要导入，
               已完成 <span className="font-medium text-green-600">{completedFiles}</span> 个导入，
               失败 <span className="font-medium text-destructive">{failedFiles}</span> 个
