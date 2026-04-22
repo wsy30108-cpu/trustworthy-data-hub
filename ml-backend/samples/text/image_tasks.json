@@ -1,0 +1,20 @@
+[
+  {
+    "data": {
+      "image": "https://data.heartex.net/open-images/train_0/mini/00155094b7acc8c4.jpg",
+      "caption": "street"
+    }
+  },
+  {
+    "data": {
+      "image": "https://data.heartex.net/open-images/train_0/mini/000a1249af2bc5f0.jpg",
+      "caption": "people"
+    }
+  },
+  {
+    "data": {
+      "image": "https://data.heartex.net/open-images/train_0/mini/00057e70f4d6700f.jpg",
+      "caption": "animal"
+    }
+  }
+]
