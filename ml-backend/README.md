@@ -130,13 +130,35 @@ A successful `/health` response looks like:
 
 ### A · Automated (recommended for a first try)
 
-`scripts/connect.py` logs into a running Label Studio with the default
-admin credentials, creates a demo project with a text-classification +
+Two helper scripts are provided:
+
+#### `scripts/create_projects.py` (one project per modality) 🆕
+
+Logs in, provisions **four projects** that cover every Label-Studio-supported
+modality, imports the matching sample files, registers this ML backend in each
+project, and pre-labels every task:
+
+| Project | Label config | Tasks | Source |
+| --- | --- | --- | --- |
+| `Sample · Text (Sentiment + NER)` | `Choices` + `Labels` | 6 | `samples/text/tasks.json` |
+| `Sample · Image (Bounding Boxes)` | `RectangleLabels` + `Choices` | 5 | `samples/images/*.png,*.jpg` |
+| `Sample · Audio (Segmentation + ASR)` | `Labels` + `TextArea` on `Audio` | 4 | `samples/audio/*.wav,*.mp3,*.ogg` |
+| `Sample · Video (Object Tagging)` | `Labels` + `Choices` on `Video` | 2 | `samples/video/*.mp4,*.webm` |
+
+```bash
+# after both services are up (scripts/start-all.sh --bg)
+python3 scripts/create_projects.py                    # idempotent
+python3 scripts/create_projects.py --reset            # wipe and re-create
+python3 scripts/create_projects.py --reset --ml-all   # also register ML in image/audio/video projects
+```
+
+#### `scripts/connect.py` (single-project smoke test)
+
+Logs into Label Studio, creates a single demo project with a text-classification +
 NER label config, imports 5 sample tasks, registers this ML backend, and
 asks Label Studio to pre-label every task.
 
 ```bash
-# after both services are up (scripts/start-all.sh --bg)
 python3 scripts/connect.py
 # or against a remote Label Studio:
 python3 scripts/connect.py --ls http://my-ls:8080 --ml http://my-ml:9090
