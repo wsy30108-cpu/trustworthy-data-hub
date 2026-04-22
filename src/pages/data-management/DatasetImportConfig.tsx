@@ -108,13 +108,12 @@ function Field({ label, required, children, error }: { label: string; required?:
 }
 
 /* ─── Format Adapter Config (reusable for both direct and zip sub-format) ─── */
-function FormatAdapterConfig({ format, dataset,
+function FormatAdapterConfig({ format,
   delimiter, setDelimiter, customDelimiter, setCustomDelimiter, encoding, setEncoding,
   splitMode, setSplitMode, sheetName, setSheetName, headerRow, setHeaderRow, dataStartRow, setDataStartRow,
   headerCol, setHeaderCol, dataStartCol, setDataStartCol,
   extractRange, setExtractRange, tagRule, setTagRule, tagNames, setTagNames }: {
     format: string;
-    dataset?: DatasetInfo;
     delimiter: string; setDelimiter: (v: string) => void;
     customDelimiter: string; setCustomDelimiter: (v: string) => void;
     encoding: string; setEncoding: (v: string) => void;
@@ -214,30 +213,9 @@ function FormatAdapterConfig({ format, dataset,
   }
   if (format === "JSON 文件") {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">
-          JSON 格式文件将自动按照单个 JSON 对象（{"{}"}）或 JSON 数组（[{"{}"},]）进行拆分处理
-        </p>
-        {(dataset?.type && ["通用文本", "文本 SFT", "文本 RLHF", "文本 DPO", "文本 KTO"].includes(dataset.type)) && (
-          <div className="flex items-start gap-2 p-3 rounded-lg border border-primary/20 bg-primary/5">
-            <FileText className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-            <div className="flex-1 space-y-2">
-              <p className="text-xs font-medium text-foreground">{dataset.type} 格式说明</p>
-              <p className="text-xs text-muted-foreground">
-                {dataset.type === "文本 SFT" && "每条数据包含 messages 数组,包含 system/user/assistant 角色的对话内容"}
-                {dataset.type === "文本 RLHF" && "每条数据包含 prompt、chosen(优选回答)、rejected(拒绝回答) 三个字段"}
-                {dataset.type === "文本 DPO" && "每条数据包含 prompt、chosen(优选回答)、rejected(拒绝回答) 三个字段,用于直接偏好优化"}
-                {dataset.type === "文本 KTO" && "每条数据包含 input、output、label(布尔值,表示是否可接受) 三个字段"}
-                {dataset.type === "通用文本" && "每条数据为简单的 JSON 对象,至少包含 text 字段存储文本内容"}
-              </p>
-              <Button size="sm" variant="outline" onClick={() => downloadJsonlSample(dataset.type)}
-                className="h-7 gap-1.5 text-xs mt-1">
-                <Download className="w-3.5 h-3.5" />下载示例 JSONL 文件
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
+      <p className="text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">
+        JSON 格式文件将自动按照单个 JSON 对象（{"{}"}）或 JSON 数组（[{"{}"},]）进行拆分处理
+      </p>
     );
   }
   return null;
@@ -427,7 +405,6 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
             {fileFormat !== "压缩包" ? (
               <FormatAdapterConfig
                 format={fileFormat}
-                dataset={dataset}
                 delimiter={delimiter} setDelimiter={setDelimiter}
                 customDelimiter={customDelimiter} setCustomDelimiter={setCustomDelimiter}
                 encoding={encoding} setEncoding={setEncoding}
@@ -464,7 +441,6 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
                   <p className="text-xs text-muted-foreground mb-3">「{zipSubFormat}」格式适配配置</p>
                   <FormatAdapterConfig
                     format={zipSubFormat}
-                    dataset={dataset}
                     delimiter={zipDelimiter} setDelimiter={setZipDelimiter}
                     customDelimiter={zipCustomDelimiter} setCustomDelimiter={setZipCustomDelimiter}
                     encoding={zipEncoding} setEncoding={setZipEncoding}
