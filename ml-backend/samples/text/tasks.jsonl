@@ -1,0 +1,6 @@
+{"id": 1, "data": {"text": "This is a great and wonderful product, I love it!", "language": "en", "topic": "review"}}
+{"id": 2, "data": {"text": "This was a terrible experience, absolutely awful and broken.", "language": "en", "topic": "review"}}
+{"id": 3, "data": {"text": "It was ok, just average, nothing special.", "language": "en", "topic": "review"}}
+{"id": 4, "data": {"text": "Contact alice@example.com or call +1 415 555 1234 to request a refund.", "language": "en", "topic": "support"}}
+{"id": 5, "data": {"text": "请帮我处理一下这个非常棒的产品，谢谢！", "language": "zh", "topic": "support"}}
+{"id": 6, "data": {"text": "太糟糕了，我对这次购物非常失望。", "language": "zh", "topic": "review"}}

@@ -278,6 +278,51 @@ Expected (truncated):
 
 ---
 
+## Sample data files
+
+A ready-made set of Label-Studio-compatible sample files lives under
+[`samples/`](samples/). The layout matches LS's supported import types (see
+<https://labelstud.io/guide/tasks>):
+
+```
+samples/
+├── text/
+│   ├── sample.txt            single plain-text doc
+│   ├── articles.txt          one text per line
+│   ├── tasks.json            LS native JSON array
+│   ├── tasks.jsonl           LS JSON Lines
+│   ├── tasks.csv / tasks.tsv LS CSV/TSV
+│   └── image_tasks.json      JSON referencing public image URLs
+├── images/                   red/green/blue PNG + gradient PNG/JPG
+├── audio/                    WAV (sine 440 Hz & 220-880 Hz sweep) + MP3/OGG
+└── video/                    video_3s.mp4 and video_3s.webm (test pattern + 440 Hz tone)
+```
+
+Each subfolder + the sample `README.md` inside include the exact LS label
+config to copy/paste.
+
+### Drop these onto your Desktop
+
+Run the launcher on **your own machine**; it writes to
+`~/Desktop/label-studio-samples/` (or `%USERPROFILE%\Desktop\…` on
+Windows-Git-Bash). Only Python 3 is required; `ffmpeg` is optional and only
+needed for the `.jpg / .mp3 / .ogg / .mp4 / .webm` files.
+
+```bash
+cd ml-backend
+./scripts/create-desktop-samples.sh
+# or, to write somewhere else:
+./scripts/create-desktop-samples.sh /tmp/ls-samples
+# or call the Python generator directly:
+python3 scripts/create_samples.py "$HOME/Desktop/label-studio-samples"
+```
+
+Then in Label Studio: create a project, paste the matching label config
+from `samples/README.md`, go to **Project → Import**, and drag in the files
+from the matching subfolder.
+
+---
+
 ## Environment variables
 
 | Var | Default | Meaning |

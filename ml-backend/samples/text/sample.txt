@@ -1,0 +1,4 @@
+Label Studio sample text.
+This file is a single document; import it from the 'Upload files' tab with 'Treat each file as one task' = ON.
+
+Contact alice@example.com or visit https://labelstud.io for docs.
