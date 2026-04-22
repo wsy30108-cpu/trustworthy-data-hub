@@ -54,6 +54,50 @@ docker compose up -d
   (default login: `admin@example.com` / `admin12345`)
 - ML backend → <http://localhost:9090>
 
+### Option C · One-shot script (no Docker needed)
+
+If you don't have Docker, use the bundled launcher. It `pip install`s
+Label Studio + this backend's deps, then starts both processes.
+
+```bash
+cd ml-backend
+./scripts/start-all.sh --bg       # background; logs under ./.run/
+# or
+./scripts/start-all.sh            # foreground (Ctrl-C stops)
+```
+
+Stop the background services again with:
+
+```bash
+./scripts/start-all.sh --stop
+```
+
+---
+
+## Label Studio login address
+
+Once Label Studio is running, open the login page in your browser:
+
+| What | URL |
+| --- | --- |
+| **Login page** | <http://localhost:8080/user/login/> |
+| Home (redirects to login) | <http://localhost:8080/> |
+| Sign-up page | <http://localhost:8080/user/signup/> |
+| Swagger API docs | <http://localhost:8080/docs/api> |
+
+Default credentials (from `docker-compose.yml` and `scripts/start-all.sh`):
+
+| Field | Value |
+| --- | --- |
+| Email | `admin@example.com` |
+| Password | `admin12345` |
+| API token | `0123456789abcdef0123456789abcdef01234567` |
+
+> On first login Label Studio will ask you to confirm the workspace.
+> You can override the defaults with env vars `LS_USER`, `LS_PASSWORD`,
+> `LS_TOKEN` when calling `scripts/start-all.sh`, or via
+> `LABEL_STUDIO_USERNAME` / `LABEL_STUDIO_PASSWORD` in `docker-compose.yml`.
+
 ---
 
 ## Verification address
