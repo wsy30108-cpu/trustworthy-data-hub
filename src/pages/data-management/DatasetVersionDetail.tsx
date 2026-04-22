@@ -349,10 +349,10 @@ export default function DatasetVersionDetail({ dataset, version, onBack, onUploa
         {(failedFiles > 0 || completedFiles < totalFiles) && (
           <div className="mt-3 pt-3 border-t flex items-center gap-x-5 flex-wrap text-xs">
             <div className="text-muted-foreground whitespace-nowrap">
-              <span className="text-muted-foreground/70 mr-2">[{formatTimestamp(importBatchTime)}]</span>
               共计 <span className="font-medium text-foreground">{totalFiles}</span> 个文件需要导入，
               已完成 <span className="font-medium text-green-600">{completedFiles}</span> 个导入，
               失败 <span className="font-medium text-destructive">{failedFiles}</span> 个
+              <span className="text-muted-foreground/70 ml-2">[{formatTimestamp(importBatchTime)}]</span>
             </div>
 
             {/* Inline Progress & Breakpoint Resumption - Harmonized */}
