@@ -1,0 +1,31 @@
+services:
+  ml-backend:
+    build: .
+    image: ls-ml-backend:latest
+    container_name: ls-ml-backend
+    ports:
+      - "9090:9090"
+    environment:
+      ML_HOST: 0.0.0.0
+      ML_PORT: 9090
+      MODEL_VERSION: pre-label-v1
+      LABEL_STUDIO_URL: ${LABEL_STUDIO_URL:-http://label-studio:8080}
+      LABEL_STUDIO_API_KEY: ${LABEL_STUDIO_API_KEY:-}
+      ML_SHARED_SECRET: ${ML_SHARED_SECRET:-}
+    restart: unless-stopped
+
+  label-studio:
+    image: heartexlabs/label-studio:latest
+    container_name: label-studio
+    ports:
+      - "8080:8080"
+    environment:
+      LABEL_STUDIO_USERNAME: admin@example.com
+      LABEL_STUDIO_PASSWORD: admin12345
+      LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED: "true"
+    volumes:
+      - label-studio-data:/label-studio/data
+    restart: unless-stopped
+
+volumes:
+  label-studio-data:
