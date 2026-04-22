@@ -128,6 +128,46 @@ A successful `/health` response looks like:
 
 ## Connect to Label Studio
 
+### A · Automated (recommended for a first try)
+
+`scripts/connect.py` logs into a running Label Studio with the default
+admin credentials, creates a demo project with a text-classification +
+NER label config, imports 5 sample tasks, registers this ML backend, and
+asks Label Studio to pre-label every task.
+
+```bash
+# after both services are up (scripts/start-all.sh --bg)
+python3 scripts/connect.py
+# or against a remote Label Studio:
+python3 scripts/connect.py --ls http://my-ls:8080 --ml http://my-ml:9090
+```
+
+Expected output:
+
+```
+[1/6] logging in to http://localhost:8080 as admin@example.com
+[2/6] ensuring project exists
+      created project id=1
+[3/6] importing sample tasks
+      imported task_count=5
+[4/6] ensuring ML backend is registered
+      registered ML backend id=1 state=Connected model_version=pre-label-v1
+[5/6] asking Label Studio to retrieve predictions for all tasks
+      Retrieved 5 predictions
+[6/6] summary
+      predictions: 5
+      task=1 model=pre-label-v1 score=0.8 -> Positive
+      task=2 model=pre-label-v1 score=0.8 -> Negative
+      ...
+Done. Open http://localhost:8080/projects/1/data to view predictions.
+```
+
+The script is **idempotent** — re-running it will reuse the project and the
+ML backend registration; it just adds new sample tasks and triggers a
+new prediction pass.
+
+### B · Manual (UI flow)
+
 1. Open your Label Studio project.
 2. Go to **Settings → Model → Connect Model**.
 3. Fill in the form:
@@ -141,6 +181,31 @@ A successful `/health` response looks like:
    - ✅ *Use predictions to pre-label tasks*
    - ✅ (optional) *Retrieve predictions when loading a task automatically*
 6. Open any task — predictions from this backend will appear as suggestions.
+
+### C · Manual (REST API, no browser)
+
+```bash
+# 1. login → cookie jar (LS uses Django session auth)
+curl -s -c /tmp/ls.cookies http://localhost:8080/user/login/ -o /tmp/login.html
+CSRF=$(grep csrfmiddlewaretoken /tmp/login.html | head -1 | sed -E 's/.*value="([^"]+)".*/\1/')
+curl -s -b /tmp/ls.cookies -c /tmp/ls.cookies -X POST http://localhost:8080/user/login/ \
+  -H "Referer: http://localhost:8080/user/login/" \
+  -d "csrfmiddlewaretoken=$CSRF&email=admin@example.com&password=admin12345" -o /dev/null
+CSRF=$(awk '/csrftoken/{print $7}' /tmp/ls.cookies)
+
+# 2. register the ML backend under project <ID>
+curl -s -b /tmp/ls.cookies -X POST http://localhost:8080/api/ml/ \
+  -H "Content-Type: application/json" -H "X-CSRFToken: $CSRF" \
+  -H "Referer: http://localhost:8080/" \
+  -d '{"project": 1, "url": "http://localhost:9090", "title": "pre-label-v1"}'
+
+# 3. ask LS to fetch predictions from it
+curl -s -b /tmp/ls.cookies -X POST \
+  "http://localhost:8080/api/dm/actions?id=retrieve_tasks_predictions&project=1" \
+  -H "Content-Type: application/json" -H "X-CSRFToken: $CSRF" \
+  -H "Referer: http://localhost:8080/" \
+  -d '{"selectedItems":{"all":true,"excluded":[]},"project":1}'
+```
 
 ### Supported labeling configs (examples)
 
