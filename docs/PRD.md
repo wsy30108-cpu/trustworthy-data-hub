@@ -358,7 +358,9 @@ const isLargeModelText = dataset.modality === "文本" &&
    - 文字：`下载 <类型> JSONL 示例文件`（如"下载 文本 SFT JSONL 示例文件"）
    - 图标：`lucide-react` 的 `Download`（`w-3.5 h-3.5`）
    - 样式：`text-blue-600 hover:text-blue-700 hover:underline`
-   - 行为：点击后通过 `Blob + URL.createObjectURL` 在浏览器端下载一份 `.jsonl` 文件，文件内容见 3.4。
+   - 行为：点击后通过 `Blob + URL.createObjectURL` 在浏览器端下载一份 `.jsonl` 文件；文件命名为 `sample_<类型英文化>_data.jsonl`（如 `sample_文本_sft_data.jsonl`），内容见 3.4。
+
+> **注**：示例 JSONL 的生成逻辑 `getJsonlSampleContent(textType)` 同时支持「通用文本」类型的样本内容，当用户通过其他入口（例如后续扩展）选择通用文本时可以直接复用同一套生成器。本期 UI 仅在"文件上传"Section 右上角对 SFT/RLHF/DPO/KTO 四种类型暴露下载入口。
 
 ##### 3.3.5.2 其他上传方式
 
@@ -383,67 +385,100 @@ const isLargeModelText = dataset.modality === "文本" &&
 
 ### 3.4 JSONL 字段结构规范与示例
 
-四种类型的示例文件由前端内置（`JSONL_SAMPLES` 常量），下载命名为 `{sft|rlhf|dpo|kto}_example.jsonl`。示例内容节选：
+示例文件由前端的 `getJsonlSampleContent(textType)` 生成，`downloadJsonlSample` 调用后在浏览器端触发下载，文件命名为 `sample_<类型英文化>_data.jsonl`（例如 `sample_文本_sft_data.jsonl`、`sample_general_data.jsonl`）。生成器支持以下 **5 种** 类型：`通用文本 / 文本 SFT / 文本 RLHF / 文本 DPO / 文本 KTO`，每种每行一个 JSON 对象（JSONL 规范）。
+
+> **范围说明**：本期 UI 仅对后 4 种（SFT/RLHF/DPO/KTO）在"文件上传"右上角暴露蓝色下载链接；「通用文本」的下载入口目前不在 UI 上直接暴露，仅作为生成器的兜底 default 以及为后续扩展保留。
 
 #### 3.4.1 文本 SFT
 
-```json
-{"instruction": "请将下面这句话翻译成英文。", "input": "今天天气真好。", "output": "The weather is really nice today."}
+采用 OpenAI 风格的 chat messages 结构：
+
+```jsonl
+{"messages":[{"role":"system","content":"你是一个有用的AI助手。"},{"role":"user","content":"请介绍一下人工智能。"},{"role":"assistant","content":"人工智能是一门研究如何让计算机模拟人类智能的学科。"}]}
+{"messages":[{"role":"user","content":"什么是机器学习?"},{"role":"assistant","content":"机器学习是人工智能的一个分支,它使计算机能够从数据中学习并做出预测。"}]}
 ```
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `instruction` | string | 指令 |
-| `input` | string | 用户输入（可为空字符串） |
-| `output` | string | 期望模型输出 |
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | :-: | --- |
+| `messages` | Array\<Message\> | ✅ | 多轮对话消息列表，顺序表示交互顺序 |
+| `messages[i].role` | `"system"` \| `"user"` \| `"assistant"` | ✅ | 消息角色 |
+| `messages[i].content` | string | ✅ | 消息内容文本 |
+
+约束：
+- 数组长度 ≥ 1；首条允许是 `system`，但单条只出现一次。
+- 最后一条建议为 `assistant` 作为期望输出；`user` 与 `assistant` 交替出现。
 
 #### 3.4.2 文本 RLHF
 
-```json
-{"prompt": "请解释一下什么是大语言模型。", "chosen": "……优质回答……", "rejected": "就是一种 AI。"}
+```jsonl
+{"prompt":"请解释量子计算的基本原理。","chosen":"量子计算利用量子力学现象如叠加和纠缠来进行计算,具有超越经典计算机的潜力。","rejected":"量子计算是一种使用量子比特进行运算的计算方式。"}
+{"prompt":"如何学习编程?","chosen":"学习编程建议从基础开始,选择一门适合初学者的语言如Python,通过实践项目来巩固知识。","rejected":"你可以随便找本书看看。"}
 ```
 
-| 字段 | 类型 |
-| --- | --- |
-| `prompt` | string |
-| `chosen` | string |
-| `rejected` | string |
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | :-: | --- |
+| `prompt` | string | ✅ | 提示 |
+| `chosen` | string | ✅ | 人类偏好的优选回答 |
+| `rejected` | string | ✅ | 人类偏好的拒绝回答 |
 
 #### 3.4.3 文本 DPO
 
-字段结构与 RLHF 相同（`prompt / chosen / rejected`），**语义上** `chosen/rejected` 是人类偏好对，用于 DPO 损失。
+字段结构与 RLHF **完全相同**（`prompt / chosen / rejected`）。语义上 `chosen/rejected` 构成偏好对，用于直接偏好优化（DPO）损失。
+
+```jsonl
+{"prompt":"写一首关于春天的诗。","chosen":"春风拂面花自开,柳绿桃红映楼台。燕归巢中呢喃语,万物复苏展新颜。","rejected":"春天来了,花开了,树绿了。"}
+{"prompt":"推荐一本好书。","chosen":"我推荐《百年孤独》,这是加西亚·马尔克斯的代表作,以魔幻现实主义手法讲述了布恩迪亚家族七代人的故事。","rejected":"看《百年孤独》吧。"}
+```
 
 #### 3.4.4 文本 KTO
 
-```json
-{"prompt": "给我推荐一本适合入门机器学习的书。", "completion": "可以从周志华的《机器学习》（西瓜书）开始……", "label": true}
+```jsonl
+{"input":"翻译: Hello, how are you?","output":"你好,你怎么样?","label":true}
+{"input":"翻译: Good morning!","output":"早上好!","label":true}
+{"input":"总结这篇文章。","output":"这篇文章讲了天气。","label":false}
 ```
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `prompt` | string | 提示 |
-| `completion` | string | 模型回复 |
-| `label` | boolean | `true` = 期望（desirable），`false` = 不期望（undesirable） |
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | :-: | --- |
+| `input` | string | ✅ | 模型输入 |
+| `output` | string | ✅ | 模型输出 |
+| `label` | boolean | ✅ | `true` = 期望（desirable），`false` = 不期望（undesirable） |
+
+#### 3.4.5 通用文本（generator 兜底，UI 暂未暴露）
+
+```jsonl
+{"text":"这是一条示例文本数据"}
+{"text":"这是另一条示例文本数据"}
+{"text":"大模型训练需要大量高质量的文本数据"}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | :-: | --- |
+| `text` | string | ✅ | 文本内容 |
 
 ### 3.5 校验与异常处理
 
 | 场景 | 行为 |
 | --- | --- |
 | 创建时模态=文本但未选大模型数据集类型 | "请选择大模型数据集类型"（红字），阻止提交 |
-| 导入 JSONL 时行解析失败 | 文件状态 = `解析失败`，`statusMessage` 提示具体行号与原因 |
-| JSONL 字段缺失关键字段 | 文件状态 = `导入失败`，提示"第 N 行缺失字段 `chosen`" |
-| `label` 字段非布尔 | 同上，提示"第 N 行 `label` 必须为 boolean" |
+| 导入 JSONL 时行解析失败（非法 JSON） | 文件状态 = `解析失败`，`statusMessage` 提示具体行号与原因 |
+| SFT：缺失 `messages` 数组或数组元素字段不全 | 文件状态 = `导入失败`，提示"第 N 行缺失字段 `messages` / `role` / `content`" |
+| SFT：`messages[i].role` 不属于 `system/user/assistant` | 同上，提示"第 N 行 `role` 取值非法" |
+| RLHF / DPO：缺失 `prompt` / `chosen` / `rejected` 任一 | 文件状态 = `导入失败`，提示"第 N 行缺失字段 `chosen`" 等 |
+| KTO：缺失 `input` / `output` / `label` 任一 | 文件状态 = `导入失败`，提示"第 N 行缺失字段 `label`" 等 |
+| KTO：`label` 字段非 boolean | 同上，提示"第 N 行 `label` 必须为 boolean" |
 | 非 UTF-8 编码 | 文件状态 = `导入失败`，提示"编码不支持，请转换为 UTF-8" |
 | 单文件超出大小阈值（建议 10GB） | 上传前拦截 |
 
 ### 3.6 验收标准
 
-- [ ] 创建页中 `模态=文本` 时出现 `大模型数据集类型` 下拉，四种类型可选。
+- [ ] 创建页中 `模态=文本` 时出现 `大模型数据集类型` 下拉，5 种类型（含通用文本）可选。
 - [ ] 创建后版本 V1.0 自动生成并进入"导入数据"流程。
 - [ ] 导入配置页当类型∈{SFT,RLHF,DPO,KTO} 时，`格式选择` 仅展示 `JSON 文件`。
-- [ ] "文件上传" Section 标题右上角出现蓝色下载链接，点击可下载对应类型命名的示例 `.jsonl`。
+- [ ] "文件上传" Section 标题右上角出现蓝色下载链接，点击可下载对应类型命名的示例 `.jsonl`（`sample_<类型>_data.jsonl`）。
+- [ ] 「格式适配配置」卡片内**不再**渲染旧版本的 "XX 格式说明 + 下载示例 JSONL 文件" 辅助卡片（已废弃）。
 - [ ] 版本详情页的进度文案末尾含时间戳；文件级失败展示原因。
-- [ ] 四种类型的示例 JSONL 文件字段严格符合 3.4 定义。
+- [ ] SFT 示例使用 `messages[]` 结构；KTO 示例使用 `input/output/label` 结构；RLHF/DPO 使用 `prompt/chosen/rejected` 结构；均与 3.4 定义严格一致。
 
 ---
 
@@ -633,3 +668,4 @@ const isLargeModelText = dataset.modality === "文本" &&
 | 版本 | 日期 | 变更说明 |
 | --- | --- | --- |
 | v1.0 | 2026-04-21 | 首次发布，覆盖标注团队、空间权限、四类文本大模型数据集、工作流调试 |
+| v1.1 | 2026-04-22 | 同步代码实际实现：§ 3.4 重写 JSONL 字段结构规范（SFT 改为 `messages[]`；KTO 改为 `input/output/label`）；新增 § 3.4.5「通用文本」作为生成器兜底；§ 3.5 校验矩阵按新字段结构细化；§ 3.6 验收标准更新（5 种类型、新下载文件命名）；明确「格式适配配置」卡片内已移除旧版本的类型说明辅助卡片（仅保留右上角蓝色下载链接作为唯一一级入口） |
