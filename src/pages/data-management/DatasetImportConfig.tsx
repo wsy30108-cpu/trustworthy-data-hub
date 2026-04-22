@@ -37,6 +37,8 @@ const FORMAT_ICONS: Record<FileFormat, React.ReactNode> = {
 const ZIP_SUB_FORMATS: ZipSubFormat[] = ["文本文档", "Excel 表格", "Word 文档", "标记语言文件", "JSON 文件"];
 
 /* ─── JSONL Sample Data Generators ─── */
+const LARGE_MODEL_TEXT_TYPES = ["通用文本", "文本 SFT", "文本 RLHF", "文本 DPO", "文本 KTO"] as const;
+
 function getJsonlSampleContent(textType?: string): string {
   const samples: Record<string, any[]> = {
     "通用文本": [
@@ -81,12 +83,15 @@ function downloadJsonlSample(textType?: string) {
 }
 
 /* ─── Section + Field ─── */
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border bg-card p-5 space-y-4">
-      <div className="flex items-center gap-2 mb-1">
-        <div className="w-1 h-3.5 bg-primary rounded-full" />
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-3.5 bg-primary rounded-full" />
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        </div>
+        {action}
       </div>
       {children}
     </div>
@@ -509,7 +514,22 @@ export default function DatasetImportConfig({ dataset, version, onBack, onComple
           </Section>
 
           {/* File upload area */}
-          <Section title="文件上传">
+          <Section
+            title="文件上传"
+            action={
+              isLargeModelText && dataset.type ? (
+                <button
+                  type="button"
+                  onClick={() => downloadJsonlSample(dataset.type)}
+                  className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                  title={`下载 ${dataset.type} 类型的 JSONL 示例文件`}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  下载 {dataset.type} JSONL 示例文件
+                </button>
+              ) : undefined
+            }
+          >
             <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
               <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-sm text-muted-foreground mb-2">点击或拖拽文件到此区域上传</p>
