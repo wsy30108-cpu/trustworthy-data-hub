@@ -3,10 +3,17 @@ import { marked } from "marked";
 import {
   ArrowLeft, Check, ChevronRight, Plus, X, Trash2, Upload, Eye, Info, Search,
   AlertTriangle, FileText, Settings, Users, Shield, BookOpen, Zap, ChevronDown, ChevronUp,
-  Database, Type, Image, Mic, Video, Table2, Layers, Loader2, Save
+  Database, Type, Image, Mic, Video, Table2, Layers, Loader2, Save,
+  Brain, MousePointer2, Sparkles
 } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
+import {
+  useMLModelStore,
+  type MLModel,
+  type ModelModality,
+} from "@/stores/useMLModelStore";
+import { useTaskPreannotationStore } from "@/stores/useTaskPreannotationStore";
 
 /* ─── Project types ─── */
 const projectTypes = [
@@ -121,6 +128,76 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   }[]>([{ persons: ["李芳"], method: "batch", batchRatio: 100, dataRatio: 20 }]);
   const [managers, setManagers] = useState<string[]>([]);
   const [maxSkip, setMaxSkip] = useState(20);
+
+  const allModels = useMLModelStore((s) => s.models);
+  const dispatchPreannotation = useTaskPreannotationStore((s) => s.dispatch);
+
+  const categoryModality: ModelModality | undefined = selectedCategory as ModelModality | undefined;
+  const availableModels = useMemo<MLModel[]>(() => {
+    if (!categoryModality) return [];
+    return allModels.filter(
+      (m) => m.modality === categoryModality || m.modality === "跨模态类"
+    );
+  }, [allModels, categoryModality]);
+
+  const defaultModelForCategory = useMemo<MLModel | undefined>(() => {
+    return (
+      availableModels.find((m) => m.isDefault) ||
+      availableModels[0]
+    );
+  }, [availableModels]);
+
+  const [preannotationEnabled, setPreannotationEnabled] = useState(true);
+  const [interactiveEnabled, setInteractiveEnabled] = useState(false);
+  const [selectedModelId, setSelectedModelId] = useState<string>("");
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0.6);
+  const [autoAccept, setAutoAccept] = useState(false);
+
+  useEffect(() => {
+    if (!selectedCategory) return;
+    if (!availableModels.length) {
+      setSelectedModelId("");
+      setPreannotationEnabled(false);
+      setInteractiveEnabled(false);
+      return;
+    }
+    const current = availableModels.find((m) => m.id === selectedModelId);
+    if (!current && defaultModelForCategory) {
+      setSelectedModelId(defaultModelForCategory.id);
+      setConfidenceThreshold(defaultModelForCategory.defaultConfidence);
+      if (!defaultModelForCategory.supportsBatch) setPreannotationEnabled(false);
+      if (!defaultModelForCategory.supportsInteractive) setInteractiveEnabled(false);
+    }
+  }, [selectedCategory, availableModels, defaultModelForCategory, selectedModelId]);
+
+  const selectedModel = useMemo<MLModel | undefined>(
+    () => availableModels.find((m) => m.id === selectedModelId),
+    [availableModels, selectedModelId]
+  );
+
+  const handleModelChange = (id: string) => {
+    setSelectedModelId(id);
+    const m = availableModels.find((x) => x.id === id);
+    if (m) {
+      setConfidenceThreshold(m.defaultConfidence);
+      if (!m.supportsBatch && preannotationEnabled) setPreannotationEnabled(false);
+      if (!m.supportsInteractive && interactiveEnabled) setInteractiveEnabled(false);
+    }
+  };
+
+  const preAnnotationTotal = useMemo(() => {
+    const allMockDatasets = [...myMockDatasets, ...subscribedMockDatasets, ...sharedMockDatasets];
+    return selectedDatasets.reduce((s, d) => {
+      const ds = allMockDatasets.find((dd) => dd.id === d.id);
+      return s + (ds?.files || 0);
+    }, 0);
+  }, [selectedDatasets]);
+
+  const estimatedMinutes = useMemo(() => {
+    if (!selectedModel || preAnnotationTotal === 0) return 0;
+    return Math.max(1, Math.round((preAnnotationTotal * selectedModel.avgInferenceMs) / 1000 / 60));
+  }, [selectedModel, preAnnotationTotal]);
+
   const [timeoutEnabled, setTimeoutEnabled] = useState(false);
   const [timeoutHours, setTimeoutHours] = useState(48);
   const [allowRelease, setAllowRelease] = useState(true);
@@ -253,7 +330,26 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   };
 
   const handlePublish = () => {
-    toast.success("任务发布成功！系统已自动拆分标注批次并放置在任务池中");
+    if ((preannotationEnabled || interactiveEnabled) && selectedModel && generatedBatches.length > 0) {
+      generatedBatches.forEach((batch) => {
+        dispatchPreannotation({
+          taskId: batch.id,
+          batchEnabled: preannotationEnabled && selectedModel.supportsBatch,
+          interactiveEnabled: interactiveEnabled && selectedModel.supportsInteractive,
+          modelId: selectedModel.id,
+          modelName: selectedModel.name,
+          modality: selectedModel.modality,
+          confidenceThreshold,
+          autoAccept,
+          total: batch.size,
+        });
+      });
+      toast.success(
+        `任务发布成功！${generatedBatches.length} 个批次已进入${preannotationEnabled ? "批量预标注" : "交互式预标注"}队列`
+      );
+    } else {
+      toast.success("任务发布成功！系统已自动拆分标注批次并放置在任务池中");
+    }
     onBack();
   };
 
@@ -859,6 +955,212 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                             ))}
                           </div>
                         </div>
+                      )}
+                    </div>
+
+                    {/* Smart preannotation config */}
+                    <div className="rounded-lg border bg-card p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-medium flex items-center gap-2">
+                          <Brain className="w-4 h-4 text-primary" /> 智能预标注
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold">NEW</span>
+                        </h3>
+                        {selectedModel && (
+                          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-amber-500" />
+                            已选模型：<span className="font-medium text-foreground">{selectedModel.name}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {availableModels.length === 0 ? (
+                        <div className="p-4 rounded-lg border border-dashed bg-amber-50/30 flex items-start gap-3">
+                          <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-xs font-medium text-amber-800">
+                              当前任务类型（{selectedCategory || "未选择"}）暂未接入任何模型
+                            </p>
+                            <p className="text-[11px] text-amber-700/80 mt-1 leading-relaxed">
+                              请先前往 <span className="font-bold">数据标注 / 管理中心 / 模型管理</span> 连接对应模态的模型。跳过此步骤将关闭本任务的预标注能力。
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <label
+                              className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all ${
+                                preannotationEnabled
+                                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                                  : "border-slate-200 hover:border-slate-300"
+                              } ${!selectedModel?.supportsBatch ? "opacity-50 cursor-not-allowed" : ""}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={preannotationEnabled}
+                                disabled={!selectedModel?.supportsBatch}
+                                onChange={(e) => setPreannotationEnabled(e.target.checked)}
+                                className="mt-0.5"
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <Zap className="w-4 h-4 text-primary" />
+                                  <span className="text-sm font-semibold text-slate-800">批量预标注</span>
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold">
+                                    默认开启
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                                  任务下发后，后端自动对全量样本执行模型推理，人工打开工作台时直接审校预标注结果。
+                                </p>
+                                {!selectedModel?.supportsBatch && (
+                                  <p className="text-[10px] text-rose-500 mt-1">当前模型不支持批量预标注</p>
+                                )}
+                              </div>
+                            </label>
+
+                            <label
+                              className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all ${
+                                interactiveEnabled
+                                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                                  : "border-slate-200 hover:border-slate-300"
+                              } ${!selectedModel?.supportsInteractive ? "opacity-50 cursor-not-allowed" : ""}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={interactiveEnabled}
+                                disabled={!selectedModel?.supportsInteractive}
+                                onChange={(e) => setInteractiveEnabled(e.target.checked)}
+                                className="mt-0.5"
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <MousePointer2 className="w-4 h-4 text-primary" />
+                                  <span className="text-sm font-semibold text-slate-800">交互式预标注</span>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                                  标注员操作（点击、框选、输入提示词）时实时请求模型，辅助生成局部标注建议。
+                                </p>
+                                {!selectedModel?.supportsInteractive && (
+                                  <p className="text-[10px] text-rose-500 mt-1">当前模型不支持交互式预标注</p>
+                                )}
+                              </div>
+                            </label>
+                          </div>
+
+                          <div className="space-y-3 pt-2 border-t">
+                            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                              <Brain className="w-3.5 h-3.5" /> 选择预标注模型
+                              <span className="text-[10px] text-muted-foreground/60">
+                                （仅展示与「{selectedCategory || "任务类型"}」兼容的模型）
+                              </span>
+                            </label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {availableModels.map((m) => {
+                                const active = selectedModelId === m.id;
+                                return (
+                                  <button
+                                    key={m.id}
+                                    type="button"
+                                    onClick={() => handleModelChange(m.id)}
+                                    className={`text-left p-3 rounded-lg border transition-all ${
+                                      active
+                                        ? "border-primary bg-primary/5 ring-1 ring-primary/20 shadow-sm"
+                                        : "border-slate-200 hover:border-primary/40 hover:bg-muted/30"
+                                    }`}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-sm font-semibold text-foreground truncate">
+                                            {m.name}
+                                          </span>
+                                          {m.isDefault && (
+                                            <span className="text-[9px] px-1 py-0.5 rounded bg-amber-50 text-amber-700 font-bold shrink-0">
+                                              默认
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">
+                                          {m.description}
+                                        </p>
+                                        <div className="flex flex-wrap gap-1 mt-1.5">
+                                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                                            {m.modality}
+                                          </span>
+                                          {m.supportsBatch && (
+                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">
+                                              批量
+                                            </span>
+                                          )}
+                                          {m.supportsInteractive && (
+                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">
+                                              交互
+                                            </span>
+                                          )}
+                                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-50 text-slate-500 font-mono">
+                                            {m.avgInferenceMs}ms
+                                          </span>
+                                        </div>
+                                      </div>
+                                      {active && (
+                                        <Check className="w-4 h-4 text-primary shrink-0 mt-1" />
+                                      )}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {selectedModel && (preannotationEnabled || interactiveEnabled) && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 rounded-lg bg-slate-50/50 border border-slate-100">
+                              <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                  置信度阈值
+                                </label>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <input
+                                    type="number"
+                                    value={confidenceThreshold}
+                                    onChange={(e) => setConfidenceThreshold(Number(e.target.value))}
+                                    min={0}
+                                    max={1}
+                                    step={0.05}
+                                    className="w-20 px-2 py-1 text-sm border rounded bg-white font-mono"
+                                  />
+                                  <span className="text-[10px] text-muted-foreground">低于阈值需人工审校</span>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                  自动接受
+                                </label>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Switch checked={autoAccept} onCheckedChange={setAutoAccept} />
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {autoAccept ? "预测直接落为标注" : "需人工确认"}
+                                  </span>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                  预估耗时
+                                </label>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-sm font-bold text-foreground">
+                                    {estimatedMinutes > 0 ? `≈ ${estimatedMinutes} 分钟` : "—"}
+                                  </span>
+                                  {preAnnotationTotal > 0 && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      （{preAnnotationTotal.toLocaleString()} 条）
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
 
@@ -1810,6 +2112,40 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                           <div className="p-3 rounded bg-muted/30">
                             <p className="text-xs text-muted-foreground">验收</p>
                             <p className="text-sm font-medium">{acceptEnabled ? `${acceptNodes.length} 个验收节点` : "未开启"}</p>
+                          </div>
+                          <div className="p-3 rounded bg-muted/30 col-span-2">
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Brain className="w-3 h-3" /> 智能预标注
+                            </p>
+                            {selectedModel && (preannotationEnabled || interactiveEnabled) ? (
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-medium">{selectedModel.name}</span>
+                                <span className="text-[10px] text-muted-foreground font-mono">{selectedModel.version}</span>
+                                {preannotationEnabled && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">
+                                    批量
+                                  </span>
+                                )}
+                                {interactiveEnabled && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-bold">
+                                    交互
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-muted-foreground">
+                                  · 阈值 {confidenceThreshold.toFixed(2)}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  · {autoAccept ? "自动接受" : "人工确认"}
+                                </span>
+                                {preannotationEnabled && estimatedMinutes > 0 && (
+                                  <span className="text-[10px] text-amber-700 font-bold">
+                                    预计 ≈ {estimatedMinutes} 分钟完成预标注
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm font-medium text-muted-foreground">未开启</p>
+                            )}
                           </div>
                         </div>
                       </div>
