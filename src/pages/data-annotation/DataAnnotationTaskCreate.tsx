@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import {
   useMLModelStore,
+  type LowConfidencePolicy,
   type MLModel,
   type ModelModality,
 } from "@/stores/useMLModelStore";
@@ -152,6 +153,7 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   const [selectedModelId, setSelectedModelId] = useState<string>("");
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.6);
   const [autoAccept, setAutoAccept] = useState(false);
+  const [lowConfidencePolicy, setLowConfidencePolicy] = useState<LowConfidencePolicy>("人工复核");
 
   useEffect(() => {
     if (!selectedCategory) return;
@@ -165,6 +167,7 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
     if (!current && defaultModelForCategory) {
       setSelectedModelId(defaultModelForCategory.id);
       setConfidenceThreshold(defaultModelForCategory.defaultConfidence);
+      setLowConfidencePolicy(defaultModelForCategory.lowConfidencePolicy);
       if (!defaultModelForCategory.supportsBatch) setPreannotationEnabled(false);
       if (!defaultModelForCategory.supportsInteractive) setInteractiveEnabled(false);
     }
@@ -180,6 +183,7 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
     const m = availableModels.find((x) => x.id === id);
     if (m) {
       setConfidenceThreshold(m.defaultConfidence);
+      setLowConfidencePolicy(m.lowConfidencePolicy);
       if (!m.supportsBatch && preannotationEnabled) setPreannotationEnabled(false);
       if (!m.supportsInteractive && interactiveEnabled) setInteractiveEnabled(false);
     }
@@ -341,6 +345,7 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
           modality: selectedModel.modality,
           confidenceThreshold,
           autoAccept,
+          lowConfidencePolicy,
           total: batch.size,
         });
       });
@@ -1134,13 +1139,18 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                               </div>
                               <div>
                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                  自动接受
+                                  低置信度策略
                                 </label>
                                 <div className="flex items-center gap-2 mt-1">
-                                  <Switch checked={autoAccept} onCheckedChange={setAutoAccept} />
-                                  <span className="text-[11px] text-muted-foreground">
-                                    {autoAccept ? "预测直接落为标注" : "需人工确认"}
-                                  </span>
+                                  <select
+                                    value={lowConfidencePolicy}
+                                    onChange={(e) => setLowConfidencePolicy(e.target.value as LowConfidencePolicy)}
+                                    className="w-full max-w-[180px] px-2 py-1 text-xs border rounded bg-white"
+                                  >
+                                    <option value="人工复核">人工复核</option>
+                                    <option value="自动驳回">自动驳回</option>
+                                    <option value="进入质检池">进入质检池</option>
+                                  </select>
                                 </div>
                               </div>
                               <div>
@@ -1156,6 +1166,12 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                                       （{preAnnotationTotal.toLocaleString()} 条）
                                     </span>
                                   )}
+                                </div>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Switch checked={autoAccept} onCheckedChange={setAutoAccept} />
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {autoAccept ? "高置信度自动接受" : "全部需人工确认"}
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -2136,6 +2152,12 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                                 </span>
                                 <span className="text-[10px] text-muted-foreground">
                                   · {autoAccept ? "自动接受" : "人工确认"}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  · 低置信度 {lowConfidencePolicy}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  · 标签范围 {selectedModel.labelScope}
                                 </span>
                                 {preannotationEnabled && estimatedMinutes > 0 && (
                                   <span className="text-[10px] text-amber-700 font-bold">

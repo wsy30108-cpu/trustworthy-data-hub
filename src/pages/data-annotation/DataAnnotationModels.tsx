@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import {
   useMLModelStore,
   type MLModel,
+  type LabelScope,
+  type LowConfidencePolicy,
   type ModelModality,
   type ModelSource,
   type ModelHealth,
@@ -61,6 +63,9 @@ interface ConnectFormState {
   supportsTraining: boolean;
   avgInferenceMs: number;
   defaultConfidence: number;
+  lowConfidencePolicy: LowConfidencePolicy;
+  labelScope: LabelScope;
+  capabilityBoundary: string;
   source: ModelSource;
   version: string;
 }
@@ -78,6 +83,9 @@ const emptyForm: ConnectFormState = {
   supportsTraining: false,
   avgInferenceMs: 200,
   defaultConfidence: 0.6,
+  lowConfidencePolicy: "人工复核",
+  labelScope: "固定标签集",
+  capabilityBoundary: "",
   source: "自建",
   version: "v1.0.0",
 };
@@ -136,6 +144,9 @@ const DataAnnotationModels = () => {
       supportsTraining: m.supportsTraining,
       avgInferenceMs: m.avgInferenceMs,
       defaultConfidence: m.defaultConfidence,
+      lowConfidencePolicy: m.lowConfidencePolicy,
+      labelScope: m.labelScope,
+      capabilityBoundary: m.capabilityBoundary,
       source: m.source,
       version: m.version,
     });
@@ -163,6 +174,9 @@ const DataAnnotationModels = () => {
       supportsTraining: form.supportsTraining,
       avgInferenceMs: form.avgInferenceMs,
       defaultConfidence: form.defaultConfidence,
+      lowConfidencePolicy: form.lowConfidencePolicy,
+      labelScope: form.labelScope,
+      capabilityBoundary: form.capabilityBoundary.trim(),
       source: form.source,
       version: form.version,
       creator: "当前用户",
@@ -342,6 +356,17 @@ const DataAnnotationModels = () => {
                   <span className="block text-[9px] uppercase tracking-wider opacity-60">置信度阈值</span>
                   <span className="font-mono text-foreground">{m.defaultConfidence.toFixed(2)}</span>
                 </div>
+              </div>
+              <div className="text-[10px] text-muted-foreground bg-muted/30 rounded-md p-2">
+                <p>
+                  标签范围：<span className="text-foreground">{m.labelScope}</span>
+                </p>
+                <p>
+                  低置信度：<span className="text-foreground">{m.lowConfidencePolicy}</span>
+                </p>
+                <p className="mt-1 line-clamp-2">
+                  能力边界：<span className="text-foreground">{m.capabilityBoundary || "未填写"}</span>
+                </p>
               </div>
 
               <div className="flex items-center gap-1.5 pt-2 border-t">
@@ -582,6 +607,42 @@ const DataAnnotationModels = () => {
                     className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
                   />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">低置信度策略</label>
+                  <select
+                    value={form.lowConfidencePolicy}
+                    onChange={(e) => setForm({ ...form, lowConfidencePolicy: e.target.value as LowConfidencePolicy })}
+                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                  >
+                    <option value="人工复核">人工复核</option>
+                    <option value="自动驳回">自动驳回</option>
+                    <option value="进入质检池">进入质检池</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">标签范围能力</label>
+                  <select
+                    value={form.labelScope}
+                    onChange={(e) => setForm({ ...form, labelScope: e.target.value as LabelScope })}
+                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                  >
+                    <option value="固定标签集">固定标签集</option>
+                    <option value="开放标签集">开放标签集</option>
+                    <option value="候选集约束">候选集约束</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">能力边界说明</label>
+                <textarea
+                  value={form.capabilityBoundary}
+                  onChange={(e) => setForm({ ...form, capabilityBoundary: e.target.value })}
+                  placeholder="说明该模型不擅长或不支持的场景，避免误用"
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm border rounded-lg bg-background resize-none"
+                />
               </div>
             </div>
 

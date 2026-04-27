@@ -6,6 +6,8 @@ export type ModelModality = "文本类" | "图像类" | "音频类" | "视频类
 export type ModelSource = "内置" | "自建" | "市场";
 
 export type ModelHealth = "健康" | "异常" | "未检测";
+export type LowConfidencePolicy = "人工复核" | "自动驳回" | "进入质检池";
+export type LabelScope = "固定标签集" | "开放标签集" | "候选集约束";
 
 export interface MLModel {
   id: string;
@@ -26,6 +28,12 @@ export interface MLModel {
   avgInferenceMs: number;
   /** 默认置信度阈值；低于此值会标红提示 */
   defaultConfidence: number;
+  /** 低置信度样本处理策略 */
+  lowConfidencePolicy: LowConfidencePolicy;
+  /** 模型标签范围能力 */
+  labelScope: LabelScope;
+  /** 模型能力边界说明 */
+  capabilityBoundary: string;
   health: ModelHealth;
   isDefault: boolean;
   creator: string;
@@ -61,6 +69,9 @@ const initialModels: MLModel[] = [
     source: "内置",
     avgInferenceMs: 120,
     defaultConfidence: 0.6,
+    lowConfidencePolicy: "人工复核",
+    labelScope: "固定标签集",
+    capabilityBoundary: "仅支持训练时定义的三分类标签，不支持开放标签。",
     health: "健康",
     isDefault: true,
     creator: "系统",
@@ -81,6 +92,9 @@ const initialModels: MLModel[] = [
     source: "内置",
     avgInferenceMs: 180,
     defaultConfidence: 0.7,
+    lowConfidencePolicy: "进入质检池",
+    labelScope: "固定标签集",
+    capabilityBoundary: "实体类别需在 schema 中预定义，开放标签效果不稳定。",
     health: "健康",
     isDefault: false,
     creator: "系统",
@@ -101,6 +115,9 @@ const initialModels: MLModel[] = [
     source: "内置",
     avgInferenceMs: 250,
     defaultConfidence: 0.5,
+    lowConfidencePolicy: "人工复核",
+    labelScope: "候选集约束",
+    capabilityBoundary: "建议传入候选标签词表；超出词表的类别召回有限。",
     health: "健康",
     isDefault: true,
     creator: "系统",
@@ -121,6 +138,9 @@ const initialModels: MLModel[] = [
     source: "市场",
     avgInferenceMs: 350,
     defaultConfidence: 0.7,
+    lowConfidencePolicy: "人工复核",
+    labelScope: "开放标签集",
+    capabilityBoundary: "擅长交互分割，不适合作为纯批量分类模型使用。",
     health: "健康",
     isDefault: false,
     creator: "市场",
@@ -141,6 +161,9 @@ const initialModels: MLModel[] = [
     source: "内置",
     avgInferenceMs: 400,
     defaultConfidence: 0.75,
+    lowConfidencePolicy: "进入质检池",
+    labelScope: "固定标签集",
+    capabilityBoundary: "口音重或强噪声场景下准确率下降，需要人工抽检。",
     health: "健康",
     isDefault: true,
     creator: "系统",
@@ -161,6 +184,9 @@ const initialModels: MLModel[] = [
     source: "内置",
     avgInferenceMs: 800,
     defaultConfidence: 0.65,
+    lowConfidencePolicy: "人工复核",
+    labelScope: "固定标签集",
+    capabilityBoundary: "主要输出轨迹与 ID，语义标签需结合下游分类器。",
     health: "健康",
     isDefault: true,
     creator: "系统",
@@ -181,6 +207,9 @@ const initialModels: MLModel[] = [
     source: "自建",
     avgInferenceMs: 150,
     defaultConfidence: 0.6,
+    lowConfidencePolicy: "自动驳回",
+    labelScope: "固定标签集",
+    capabilityBoundary: "适用于结构化指标异常，不适用于非结构化文本与图像。",
     health: "未检测",
     isDefault: true,
     creator: "李芳",
@@ -201,6 +230,9 @@ const initialModels: MLModel[] = [
     source: "市场",
     avgInferenceMs: 300,
     defaultConfidence: 0.55,
+    lowConfidencePolicy: "人工复核",
+    labelScope: "开放标签集",
+    capabilityBoundary: "偏检索打分能力，需配合业务规则映射到最终标签。",
     health: "健康",
     isDefault: true,
     creator: "市场",
