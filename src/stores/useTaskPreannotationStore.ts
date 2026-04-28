@@ -20,10 +20,6 @@ export interface TaskPreannotationConfig {
   confidenceThreshold: number;
   /** 是否自动接受（auto-accept），为 false 时标注员需要手动点接受 */
   autoAccept: boolean;
-  /** 低置信度样本处理策略 */
-  lowConfidencePolicy: "人工复核" | "自动驳回" | "进入质检池";
-  /** 标签范围能力快照 */
-  labelScope: "固定标签集" | "开放标签集" | "候选集约束";
   /** 该任务/批次总样本数 */
   total: number;
   /** 已完成预标注的样本数 */
@@ -67,8 +63,6 @@ const initialConfigs: Record<string, TaskPreannotationConfig> = {
     modality: "文本类",
     confidenceThreshold: 0.6,
     autoAccept: false,
-    lowConfidencePolicy: "人工复核",
-    labelScope: "固定标签集",
     total: 200,
     preannotated: 200,
     failed: 0,
@@ -86,8 +80,6 @@ const initialConfigs: Record<string, TaskPreannotationConfig> = {
     modality: "图像类",
     confidenceThreshold: 0.7,
     autoAccept: false,
-    lowConfidencePolicy: "人工复核",
-    labelScope: "开放标签集",
     total: 1000,
     preannotated: 640,
     failed: 2,
@@ -104,8 +96,6 @@ const initialConfigs: Record<string, TaskPreannotationConfig> = {
     modality: "音频类",
     confidenceThreshold: 0.75,
     autoAccept: true,
-    lowConfidencePolicy: "进入质检池",
-    labelScope: "固定标签集",
     total: 300,
     preannotated: 300,
     failed: 0,
@@ -123,8 +113,6 @@ const initialConfigs: Record<string, TaskPreannotationConfig> = {
     modality: "文本类",
     confidenceThreshold: 0.7,
     autoAccept: false,
-    lowConfidencePolicy: "进入质检池",
-    labelScope: "固定标签集",
     total: 200,
     preannotated: 45,
     failed: 0,
@@ -141,8 +129,6 @@ const initialConfigs: Record<string, TaskPreannotationConfig> = {
     modality: "视频类",
     confidenceThreshold: 0.65,
     autoAccept: false,
-    lowConfidencePolicy: "人工复核",
-    labelScope: "固定标签集",
     total: 600,
     preannotated: 600,
     failed: 0,
@@ -160,8 +146,6 @@ const initialConfigs: Record<string, TaskPreannotationConfig> = {
     modality: "文本类",
     confidenceThreshold: 0.6,
     autoAccept: false,
-    lowConfidencePolicy: "人工复核",
-    labelScope: "固定标签集",
     total: 100,
     preannotated: 100,
     failed: 0,

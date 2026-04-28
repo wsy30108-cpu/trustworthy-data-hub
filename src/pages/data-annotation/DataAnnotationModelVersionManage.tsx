@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ArrowUpDown, Brain, Edit3, Plus, Star, Trash2, Upload } from "lucide-react";
+import { ArrowUpDown, Brain, Edit3, Plus, Trash2, Upload } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   useMLModelStore,
@@ -11,7 +12,7 @@ import {
 interface VersionFormState {
   version: string;
   endpointUrl: string;
-  authType: "none" | "basic" | "token";
+  authType: "none" | "apikey";
   authValue: string;
   prompts: TaskPromptBinding[];
   vocabularyMappings: VocabularyMappingItem[];
@@ -23,19 +24,21 @@ const emptyVersionForm: VersionFormState = {
   authType: "none",
   authValue: "",
   prompts: [{ taskType: "", prompt: "" }],
-  vocabularyMappings: [{ sourceLabel: "", targetLabel: "", notes: "" }],
+  vocabularyMappings: [{ sourceLabel: "", commonMappedLabel: "" }],
 };
 
 const DataAnnotationModelVersionManage = () => {
-  const { models, addVersion, updateVersion, removeVersion, setDefaultVersion } = useMLModelStore();
-  const [selectedModelId, setSelectedModelId] = useState<string>("");
+  const { models, addVersion, updateVersion, removeVersion } = useMLModelStore();
+  const [searchParams] = useSearchParams();
+  const queryModelId = searchParams.get("modelId") || "";
+  const [selectedModelId, setSelectedModelId] = useState<string>(queryModelId);
   const [editingVersionId, setEditingVersionId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<VersionFormState>(emptyVersionForm);
 
   const selectedModel: MLModel | undefined = useMemo(() => {
-    return models.find((m) => m.id === selectedModelId) || models[0];
-  }, [models, selectedModelId]);
+    return models.find((m) => m.id === (selectedModelId || queryModelId)) || models[0];
+  }, [models, selectedModelId, queryModelId]);
 
   const openCreate = () => {
     if (!selectedModel) return;
@@ -44,7 +47,7 @@ const DataAnnotationModelVersionManage = () => {
       ...emptyVersionForm,
       endpointUrl: selectedModel.backendUrl,
       prompts: [{ taskType: selectedModel.taskTypes[0] || "", prompt: "" }],
-      vocabularyMappings: [{ sourceLabel: "", targetLabel: "", notes: "" }],
+      vocabularyMappings: [{ sourceLabel: "", commonMappedLabel: "" }],
     });
     setShowForm(true);
   };
@@ -62,7 +65,7 @@ const DataAnnotationModelVersionManage = () => {
       prompts: version.prompts.length ? version.prompts : [{ taskType: "", prompt: "" }],
       vocabularyMappings: version.vocabularyMappings.length
         ? version.vocabularyMappings
-        : [{ sourceLabel: "", targetLabel: "", notes: "" }],
+        : [{ sourceLabel: "", commonMappedLabel: "" }],
     });
     setShowForm(true);
   };
@@ -80,18 +83,17 @@ const DataAnnotationModelVersionManage = () => {
   };
 
   const importVocabularyByText = () => {
-    const text = window.prompt("按每行 source=>target|notes 导入：");
+    const text = window.prompt("按每行 source=>common 导入：");
     if (!text) return;
     const rows = text
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => {
-        const [pair, notes] = line.split("|");
-        const [sourceLabel, targetLabel] = pair.split("=>").map((x) => x.trim());
-        return { sourceLabel, targetLabel, notes: notes?.trim() };
+        const [sourceLabel, commonMappedLabel] = line.split("=>").map((x) => x.trim());
+        return { sourceLabel, commonMappedLabel };
       })
-      .filter((x) => x.sourceLabel && x.targetLabel);
+      .filter((x) => x.sourceLabel && x.commonMappedLabel);
     if (rows.length === 0) return toast.error("未解析到有效词汇映射");
     setForm((prev) => ({ ...prev, vocabularyMappings: rows }));
     toast.success(`导入成功：${rows.length} 条`);
@@ -101,7 +103,7 @@ const DataAnnotationModelVersionManage = () => {
     if (!selectedModel) return;
     if (!form.version.trim()) return toast.error("请填写版本号");
     if (!/^https?:\/\//.test(form.endpointUrl)) return toast.error("模型链接需以 http:// 或 https:// 开头");
-    if (form.authType !== "none" && !form.authValue.trim()) return toast.error("请填写认证凭据");
+    if (form.authType !== "none" && !form.authValue.trim()) return toast.error("请填写 API KEY");
 
     const prompts = form.prompts
       .map((x) => ({ taskType: x.taskType.trim(), prompt: x.prompt.trim() }))
@@ -109,12 +111,11 @@ const DataAnnotationModelVersionManage = () => {
     const vocabularyMappings = form.vocabularyMappings
       .map((x) => ({
         sourceLabel: x.sourceLabel.trim(),
-        targetLabel: x.targetLabel.trim(),
-        notes: x.notes?.trim(),
+        commonMappedLabel: x.commonMappedLabel?.trim() || "",
       }))
-      .filter((x) => x.sourceLabel && x.targetLabel);
+      .filter((x) => x.sourceLabel && x.commonMappedLabel);
 
-    if (selectedModel.isOpenVocabulary) {
+    if (selectedModel.labelScope === "开放词汇") {
       if (prompts.length === 0) return toast.error("开放词汇模型需至少维护一条 Prompt 绑定");
     } else if (vocabularyMappings.length === 0) {
       return toast.error("非开放词汇模型需至少维护一条词汇映射");
@@ -125,8 +126,8 @@ const DataAnnotationModelVersionManage = () => {
       endpointUrl: form.endpointUrl.trim(),
       authType: form.authType,
       authValue: form.authValue.trim() || undefined,
-      prompts: selectedModel.isOpenVocabulary ? prompts : [],
-      vocabularyMappings: selectedModel.isOpenVocabulary ? [] : vocabularyMappings,
+      prompts: selectedModel.labelScope === "开放词汇" ? prompts : [],
+      vocabularyMappings: selectedModel.labelScope === "开放词汇" ? [] : vocabularyMappings,
     };
 
     if (editingVersionId) {
@@ -144,7 +145,7 @@ const DataAnnotationModelVersionManage = () => {
       <div className="page-header">
         <div>
           <h1 className="page-title">模型版本管理</h1>
-          <p className="page-description">维护模型版本的链接配置、认证方式、词汇映射或 Prompt 绑定</p>
+          <p className="page-description">上方展示模型基本信息，下方仅维护当前模型版本</p>
         </div>
         <button
           onClick={openCreate}
@@ -170,7 +171,7 @@ const DataAnnotationModelVersionManage = () => {
               >
                 <p className="text-sm font-semibold">{m.name}</p>
                 <p className="text-[10px] text-muted-foreground">
-                  {m.id} · {m.isOpenVocabulary ? "开放词汇" : "非开放词汇"} · {m.versions.length} 个版本
+                  {m.id} · {m.labelScope} · {m.versions.length} 个版本
                 </p>
               </button>
             ))}
@@ -185,44 +186,26 @@ const DataAnnotationModelVersionManage = () => {
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold">{selectedModel.name}</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedModel.isOpenVocabulary
-                      ? "开放词汇模型：维护多条 Prompt（需绑定任务类型）"
-                      : "非开放词汇模型：维护词汇表映射（支持导入/从上一版本引入）"}
-                  </p>
-                </div>
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <p className="text-sm font-semibold">{selectedModel.name}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  模态：{selectedModel.modality} · 标签范围：{selectedModel.labelScope} · 任务类型：{selectedModel.taskTypes.join("、")}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">{selectedModel.description}</p>
               </div>
+
               <div className="space-y-2">
                 {selectedModel.versions.map((v) => (
                   <div key={v.id} className="rounded-lg border p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="text-sm font-semibold flex items-center gap-2">
-                          {v.version}
-                          {v.isDefault && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
-                              默认版本
-                            </span>
-                          )}
-                        </p>
+                        <p className="text-sm font-semibold">{v.version}</p>
                         <p className="text-[10px] text-muted-foreground font-mono">{v.endpointUrl}</p>
                         <p className="text-[10px] text-muted-foreground">
-                          认证：{v.authType} · {v.createdAt}
+                          认证：{v.authType === "none" ? "无认证" : "API KEY认证"} · {v.createdAt}
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
-                        {!v.isDefault && (
-                          <button
-                            onClick={() => setDefaultVersion(selectedModel.id, v.id)}
-                            className="px-2 py-1 text-xs border rounded hover:bg-muted/50"
-                            title="设为默认版本"
-                          >
-                            <Star className="w-3.5 h-3.5" />
-                          </button>
-                        )}
                         <button
                           onClick={() => openEdit(v.id)}
                           className="px-2 py-1 text-xs border rounded hover:bg-muted/50"
@@ -247,7 +230,7 @@ const DataAnnotationModelVersionManage = () => {
                       </div>
                     </div>
                     <p className="mt-2 text-[11px] text-muted-foreground">
-                      {selectedModel.isOpenVocabulary
+                      {selectedModel.labelScope === "开放词汇"
                         ? `Prompt 数：${v.prompts.length}`
                         : `词汇映射数：${v.vocabularyMappings.length}`}
                     </p>
@@ -293,17 +276,16 @@ const DataAnnotationModelVersionManage = () => {
                   <label className="text-xs text-muted-foreground mb-1 block">认证方式</label>
                   <select
                     value={form.authType}
-                    onChange={(e) => setForm({ ...form, authType: e.target.value as "none" | "basic" | "token" })}
+                    onChange={(e) => setForm({ ...form, authType: e.target.value as "none" | "apikey" })}
                     className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
                   >
                     <option value="none">无认证</option>
-                    <option value="basic">Basic Auth</option>
-                    <option value="token">Token</option>
+                    <option value="apikey">API KEY认证</option>
                   </select>
                 </div>
                 {form.authType !== "none" && (
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">认证凭据</label>
+                    <label className="text-xs text-muted-foreground mb-1 block">API KEY</label>
                     <input
                       type="password"
                       value={form.authValue}
@@ -314,7 +296,7 @@ const DataAnnotationModelVersionManage = () => {
                 )}
               </div>
 
-              {selectedModel.isOpenVocabulary ? (
+              {selectedModel.labelScope === "开放词汇" ? (
                 <div className="rounded-lg border p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold">Prompt 绑定（任务类型）</p>
@@ -404,7 +386,7 @@ const DataAnnotationModelVersionManage = () => {
                         onClick={() =>
                           setForm((prev) => ({
                             ...prev,
-                            vocabularyMappings: [...prev.vocabularyMappings, { sourceLabel: "", targetLabel: "", notes: "" }],
+                            vocabularyMappings: [...prev.vocabularyMappings, { sourceLabel: "", commonMappedLabel: "" }],
                           }))
                         }
                         className="px-2 py-1 text-xs border rounded hover:bg-muted/50"
@@ -419,8 +401,7 @@ const DataAnnotationModelVersionManage = () => {
                       <thead>
                         <tr className="text-left border-b">
                           <th className="py-2 pr-2 text-xs text-muted-foreground">源标签</th>
-                          <th className="py-2 pr-2 text-xs text-muted-foreground">目标标签</th>
-                          <th className="py-2 pr-2 text-xs text-muted-foreground">备注</th>
+                          <th className="py-2 pr-2 text-xs text-muted-foreground">常见映射标签</th>
                           <th className="py-2 text-xs text-muted-foreground">操作</th>
                         </tr>
                       </thead>
@@ -443,26 +424,12 @@ const DataAnnotationModelVersionManage = () => {
                             </td>
                             <td className="py-1 pr-2">
                               <input
-                                value={row.targetLabel}
+                                value={row.commonMappedLabel || ""}
                                 onChange={(e) =>
                                   setForm((prev) => ({
                                     ...prev,
                                     vocabularyMappings: prev.vocabularyMappings.map((x, i) =>
-                                      i === idx ? { ...x, targetLabel: e.target.value } : x
-                                    ),
-                                  }))
-                                }
-                                className="w-full px-2 py-1 border rounded bg-background"
-                              />
-                            </td>
-                            <td className="py-1 pr-2">
-                              <input
-                                value={row.notes || ""}
-                                onChange={(e) =>
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    vocabularyMappings: prev.vocabularyMappings.map((x, i) =>
-                                      i === idx ? { ...x, notes: e.target.value } : x
+                                      i === idx ? { ...x, commonMappedLabel: e.target.value } : x
                                     ),
                                   }))
                                 }
@@ -490,15 +457,6 @@ const DataAnnotationModelVersionManage = () => {
                   </div>
                 </div>
               )}
-
-              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 flex items-start gap-2">
-                <Brain className="w-4 h-4 mt-0.5" />
-                <span>
-                  {selectedModel.isOpenVocabulary
-                    ? "开放词汇模型需维护 Prompt 且必须与任务类型绑定。"
-                    : "非开放词汇模型需维护词汇映射表，支持导入与从上一版本引入。"}
-                </span>
-              </div>
             </div>
             <div className="p-5 border-t flex items-center justify-end gap-2 bg-muted/20">
               <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-muted/50">

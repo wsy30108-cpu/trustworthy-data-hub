@@ -1,21 +1,33 @@
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
-  Plus, Search, Brain, Zap, MousePointer2, RefreshCw, Star, StarOff,
-  CheckCircle2, AlertTriangle, Clock, X, Trash2, Edit3,
-  Cpu, Type, Image as ImageIcon, Mic, Video, Table2, Layers,
-  Activity, PlayCircle, Globe, ArrowRight
+  Activity,
+  AlertTriangle,
+  Brain,
+  CheckCircle2,
+  Clock,
+  Cpu,
+  Edit3,
+  Image as ImageIcon,
+  Mic,
+  MousePointer2,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  Type,
+  Video,
+  Table2,
+  Layers,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import {
   useMLModelStore,
-  type MLModel,
   type ActiveLearningStrategy,
-  type LabelScope,
-  type LowConfidencePolicy,
-  type ModelModality,
-  type ModelSource,
+  type MLModel,
   type ModelHealth,
+  type ModelModality,
 } from "@/stores/useMLModelStore";
 
 const modalityIcons: Record<ModelModality, any> = {
@@ -36,21 +48,13 @@ const modalityColors: Record<ModelModality, string> = {
   跨模态类: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
-const sourceColors: Record<ModelSource, string> = {
-  内置: "bg-slate-100 text-slate-700 border-slate-200",
-  自建: "bg-sky-50 text-sky-700 border-sky-200",
-  市场: "bg-violet-50 text-violet-700 border-violet-200",
-};
-
 const healthColors: Record<ModelHealth, string> = {
   健康: "bg-emerald-50 text-emerald-700 border-emerald-200",
   异常: "bg-rose-50 text-rose-700 border-rose-200",
   未检测: "bg-slate-50 text-slate-500 border-slate-200",
 };
 
-const modalityOptions: ModelModality[] = [
-  "文本类", "图像类", "音频类", "视频类", "表格类", "跨模态类",
-];
+const modalityOptions: ModelModality[] = ["文本类", "图像类", "音频类", "视频类", "表格类", "跨模态类"];
 
 interface ConnectFormState {
   name: string;
@@ -61,15 +65,9 @@ interface ConnectFormState {
   supportsInteractive: boolean;
   supportsTraining: boolean;
   avgInferenceMs: number;
-  defaultConfidence: number;
-  lowConfidencePolicy: LowConfidencePolicy;
-  labelScope: LabelScope;
-  capabilityBoundary: string;
-  isOpenVocabulary: boolean;
+  labelScope: "开放词汇" | "非开放词汇";
   supportsActiveLearning: boolean;
   activeLearningStrategy: ActiveLearningStrategy;
-  taskTypeDescriptions: string;
-  source: ModelSource;
 }
 
 const emptyForm: ConnectFormState = {
@@ -81,25 +79,16 @@ const emptyForm: ConnectFormState = {
   supportsInteractive: false,
   supportsTraining: false,
   avgInferenceMs: 200,
-  defaultConfidence: 0.6,
-  lowConfidencePolicy: "人工复核",
-  labelScope: "固定标签集",
-  capabilityBoundary: "",
-  isOpenVocabulary: false,
+  labelScope: "非开放词汇",
   supportsActiveLearning: false,
   activeLearningStrategy: "不启用",
-  taskTypeDescriptions: "",
-  source: "自建",
 };
 
 const DataAnnotationModels = () => {
   const navigate = useNavigate();
-  const { models, addModel, updateModel, removeModel, testConnection, setDefault } = useMLModelStore();
-
+  const { models, addModel, updateModel, removeModel, testConnection } = useMLModelStore();
   const [search, setSearch] = useState("");
   const [modalityFilter, setModalityFilter] = useState<"全部" | ModelModality>("全部");
-  const [sourceFilter, setSourceFilter] = useState<"全部" | ModelSource>("全部");
-
   const [showConnect, setShowConnect] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ConnectFormState>(emptyForm);
@@ -108,21 +97,23 @@ const DataAnnotationModels = () => {
   const filtered = useMemo(() => {
     return models.filter((m) => {
       if (modalityFilter !== "全部" && m.modality !== modalityFilter) return false;
-      if (sourceFilter !== "全部" && m.source !== sourceFilter) return false;
       if (search && !m.name.includes(search) && !m.id.includes(search)) return false;
       return true;
     });
-  }, [models, modalityFilter, sourceFilter, search]);
+  }, [models, modalityFilter, search]);
 
   const stats = useMemo(() => {
-    const healthy = models.filter((m) => m.health === "健康").length;
-    const batchReady = models.filter((m) => m.supportsBatch).length;
-    const interactive = models.filter((m) => m.supportsInteractive).length;
+    const healthyModelCount = models.filter((m) => m.health === "健康").length;
+    const totalVersions = models.reduce((sum, m) => sum + m.versions.length, 0);
+    const healthyVersions = models.reduce(
+      (sum, m) => sum + m.versions.filter((v) => v.health === "健康").length,
+      0
+    );
     return [
-      { label: "已接入模型", value: models.length, icon: Brain, color: "text-blue-600" },
-      { label: "健康在线", value: healthy, icon: Activity, color: "text-emerald-600" },
-      { label: "支持批量", value: batchReady, icon: Zap, color: "text-amber-600" },
-      { label: "支持交互", value: interactive, icon: MousePointer2, color: "text-purple-600" },
+      { label: "模型总数", value: models.length, icon: Brain, color: "text-blue-600" },
+      { label: "模型健康数", value: healthyModelCount, icon: Activity, color: "text-emerald-600" },
+      { label: "版本总数", value: totalVersions, icon: RefreshCw, color: "text-amber-600" },
+      { label: "版本健康数", value: healthyVersions, icon: CheckCircle2, color: "text-purple-600" },
     ];
   }, [models]);
 
@@ -143,66 +134,34 @@ const DataAnnotationModels = () => {
       supportsInteractive: m.supportsInteractive,
       supportsTraining: m.supportsTraining,
       avgInferenceMs: m.avgInferenceMs,
-      defaultConfidence: m.defaultConfidence,
-      lowConfidencePolicy: m.lowConfidencePolicy,
       labelScope: m.labelScope,
-      capabilityBoundary: m.capabilityBoundary,
-      isOpenVocabulary: m.isOpenVocabulary,
       supportsActiveLearning: m.supportsActiveLearning,
-      activeLearningStrategy: m.activeLearningStrategy,
-      taskTypeDescriptions: Object.entries(m.taskTypeDescriptions || {})
-        .map(([task, desc]) => `${task}::${desc}`)
-        .join("\n"),
-      source: m.source,
+      activeLearningStrategy: m.supportsActiveLearning ? m.activeLearningStrategy : "不启用",
     });
     setShowConnect(true);
   };
 
   const handleSubmit = () => {
     if (!form.name.trim()) return toast.error("请填写模型名称");
-    const taskTypes = form.taskTypes
-      .split(/[,，、\s]+/)
-      .map((t) => t.trim())
-      .filter(Boolean);
-    if (taskTypes.length === 0) return toast.error("请至少填写一个任务类型");
     if (form.supportsActiveLearning && form.activeLearningStrategy === "不启用") {
-      return toast.error("开启主动学习后请配置主动学习策略");
+      return toast.error("支持主动学习时请设置主动学习策略");
     }
-
-    const taskTypeDescriptions = form.taskTypeDescriptions
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .reduce<Record<string, string>>((acc, line) => {
-        const [task, ...rest] = line.split("::");
-        if (!task) return acc;
-        acc[task.trim()] = rest.join("::").trim() || "待补充";
-        return acc;
-      }, {});
 
     const payload = {
       name: form.name.trim(),
       description: form.description.trim(),
       modality: form.modality,
-      taskTypes,
-      backendUrl: editingId ? models.find((m) => m.id === editingId)?.backendUrl || "http://ml-backend.internal:9000/default" : "http://ml-backend.internal:9000/default",
-      authType: editingId ? models.find((m) => m.id === editingId)?.authType || "none" : "none",
-      authValue: editingId ? models.find((m) => m.id === editingId)?.authValue || "" : "",
+      taskTypes: form.taskTypes
+        .split(/[,，、\s]+/)
+        .map((t) => t.trim())
+        .filter(Boolean),
       supportsBatch: form.supportsBatch,
       supportsInteractive: form.supportsInteractive,
       supportsTraining: form.supportsTraining,
       avgInferenceMs: form.avgInferenceMs,
-      defaultConfidence: form.defaultConfidence,
-      lowConfidencePolicy: form.lowConfidencePolicy,
       labelScope: form.labelScope,
-      capabilityBoundary: form.capabilityBoundary.trim(),
-      isOpenVocabulary: form.isOpenVocabulary,
       supportsActiveLearning: form.supportsActiveLearning,
       activeLearningStrategy: form.supportsActiveLearning ? form.activeLearningStrategy : "不启用",
-      taskTypeDescriptions,
-      source: form.source,
-      versions: editingId ? models.find((m) => m.id === editingId)?.versions || [] : [],
-      version: editingId ? models.find((m) => m.id === editingId)?.version || "v1.0.0" : "v1.0.0",
       creator: "当前用户",
     };
 
@@ -211,7 +170,7 @@ const DataAnnotationModels = () => {
       toast.success(`模型「${payload.name}」已更新`);
     } else {
       const id = addModel(payload);
-      toast.success(`模型「${payload.name}」已接入（${id}）`);
+      toast.success(`模型「${payload.name}」已创建（${id}）`);
     }
     setShowConnect(false);
   };
@@ -222,41 +181,27 @@ const DataAnnotationModels = () => {
     else toast.error(result.message);
   };
 
-  const handleToggleDefault = (m: MLModel) => {
-    if (m.isDefault) {
-      toast.info(`${m.modality}至少保留一个默认模型`);
-      return;
-    }
-    setDefault(m.modality, m.id);
-    toast.success(`已将「${m.name}」设为${m.modality}默认模型`);
-  };
-
-  const handleDelete = () => {
-    if (!deleteTarget) return;
-    removeModel(deleteTarget.id);
-    toast.success(`模型「${deleteTarget.name}」已删除`);
-    setDeleteTarget(null);
-  };
-
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="page-header">
         <div>
           <h1 className="page-title">模型管理</h1>
-          <p className="page-description">接入并管理用于数据预标注的 AI 模型服务</p>
+          <p className="page-description">维护模型基本信息，点击模型卡片进入版本管理</p>
         </div>
         <button
           onClick={openCreate}
           className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-primary/90"
         >
-          <Plus className="w-4 h-4" /> 连接模型
+          <Plus className="w-4 h-4" /> 新增模型
         </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((s, i) => (
           <div key={i} className="stat-card flex items-center gap-4">
-            <div className={s.color}><s.icon className="w-8 h-8" /></div>
+            <div className={s.color}>
+              <s.icon className="w-8 h-8" />
+            </div>
             <div>
               <p className="text-xs text-muted-foreground">{s.label}</p>
               <p className="text-xl font-bold text-foreground">{s.value}</p>
@@ -272,28 +217,20 @@ const DataAnnotationModels = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="搜索模型名称或 ID..."
-            className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary/20"
+            className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg bg-card"
           />
         </div>
         <select
           value={modalityFilter}
-          onChange={(e) => setModalityFilter(e.target.value as any)}
+          onChange={(e) => setModalityFilter(e.target.value as "全部" | ModelModality)}
           className="px-3 py-2 text-sm border rounded-lg bg-card"
         >
           <option value="全部">全部模态</option>
           {modalityOptions.map((m) => (
-            <option key={m} value={m}>{m}</option>
+            <option key={m} value={m}>
+              {m}
+            </option>
           ))}
-        </select>
-        <select
-          value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value as any)}
-          className="px-3 py-2 text-sm border rounded-lg bg-card"
-        >
-          <option value="全部">全部来源</option>
-          <option value="内置">内置</option>
-          <option value="自建">自建</option>
-          <option value="市场">市场</option>
         </select>
       </div>
 
@@ -303,13 +240,12 @@ const DataAnnotationModels = () => {
           return (
             <div
               key={m.id}
-              className="rounded-xl border bg-card p-5 shadow-sm hover:shadow-md transition-all flex flex-col gap-3 relative"
+              className="rounded-xl border bg-card p-5 shadow-sm hover:shadow-md transition-all flex flex-col gap-3 relative cursor-pointer"
+              onClick={() => navigate(`/data-annotation/models/versions?modelId=${m.id}`)}
             >
-              {m.isDefault && (
-                <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold">
-                  <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> 默认
-                </div>
-              )}
+              <div className="absolute top-3 right-3 text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                {m.versions.length} 版本
+              </div>
               <div className="flex items-start gap-3">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${modalityColors[m.modality]}`}>
                   <Icon className="w-5 h-5" />
@@ -317,22 +253,14 @@ const DataAnnotationModels = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-foreground truncate">{m.name}</h3>
-                    <span className="text-[10px] text-muted-foreground font-mono">{m.version}</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 font-mono">{m.id}</p>
                 </div>
               </div>
-
-              <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 min-h-[32px]">
-                {m.description}
-              </p>
-
+              <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 min-h-[32px]">{m.description}</p>
               <div className="flex flex-wrap gap-1.5">
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${modalityColors[m.modality]}`}>
                   {m.modality}
-                </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${sourceColors[m.source]}`}>
-                  {m.source}
                 </span>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${healthColors[m.health]}`}>
                   {m.health === "健康" && <CheckCircle2 className="w-3 h-3 inline mr-0.5" />}
@@ -341,120 +269,41 @@ const DataAnnotationModels = () => {
                   {m.health}
                 </span>
               </div>
-
-              <div className="flex flex-wrap gap-1.5">
-                {m.taskTypes.map((t) => (
-                  <span key={t} className="px-2 py-0.5 rounded-md text-[10px] bg-muted text-muted-foreground">
-                    {t}
-                  </span>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 pt-2 border-t">
-                <div className="flex items-center gap-1 text-[10px]">
-                  <Zap className={`w-3 h-3 ${m.supportsBatch ? "text-primary" : "text-muted-foreground/40"}`} />
-                  <span className={m.supportsBatch ? "text-foreground" : "text-muted-foreground/60"}>
-                    批量
-                  </span>
-                </div>
-                <div className="flex items-center gap-1 text-[10px]">
-                  <MousePointer2 className={`w-3 h-3 ${m.supportsInteractive ? "text-primary" : "text-muted-foreground/40"}`} />
-                  <span className={m.supportsInteractive ? "text-foreground" : "text-muted-foreground/60"}>
-                    交互
-                  </span>
-                </div>
-                <div className="flex items-center gap-1 text-[10px]">
-                  <RefreshCw className={`w-3 h-3 ${m.supportsTraining ? "text-primary" : "text-muted-foreground/40"}`} />
-                  <span className={m.supportsTraining ? "text-foreground" : "text-muted-foreground/60"}>
-                    训练
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
-                <div>
-                  <span className="block text-[9px] uppercase tracking-wider opacity-60">平均推理</span>
-                  <span className="font-mono text-foreground">{m.avgInferenceMs}ms/条</span>
-                </div>
-                <div>
-                  <span className="block text-[9px] uppercase tracking-wider opacity-60">置信度阈值</span>
-                  <span className="font-mono text-foreground">{m.defaultConfidence.toFixed(2)}</span>
-                </div>
-              </div>
               <div className="text-[10px] text-muted-foreground bg-muted/30 rounded-md p-2">
                 <p>
                   标签范围：<span className="text-foreground">{m.labelScope}</span>
                 </p>
                 <p>
-                  词汇类型：<span className="text-foreground">{m.isOpenVocabulary ? "开放词汇" : "非开放词汇"}</span>
-                </p>
-                <p>
-                  主动学习：<span className="text-foreground">{m.supportsActiveLearning ? m.activeLearningStrategy : "不支持"}</span>
-                </p>
-                <p>
-                  低置信度：<span className="text-foreground">{m.lowConfidencePolicy}</span>
-                </p>
-                <p className="mt-1 line-clamp-2">
-                  能力边界：<span className="text-foreground">{m.capabilityBoundary || "未填写"}</span>
+                  主动学习：
+                  <span className="text-foreground">
+                    {m.supportsActiveLearning ? m.activeLearningStrategy : "不支持"}
+                  </span>
                 </p>
               </div>
-
-              <div className="flex items-center gap-1.5 pt-2 border-t">
+              <div className="flex items-center gap-1.5 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => handleTest(m)}
-                  className="flex-1 px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50 flex items-center justify-center gap-1 transition-colors"
-                  title="测试连接"
+                  className="flex-1 px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50 flex items-center justify-center gap-1"
                 >
-                  <PlayCircle className="w-3.5 h-3.5" /> 测试
+                  <Brain className="w-3.5 h-3.5" /> 模型版本功能
                 </button>
-                <button
-                  onClick={() => handleToggleDefault(m)}
-                  className={`flex-1 px-2 py-1.5 text-xs border rounded-lg flex items-center justify-center gap-1 transition-colors ${
-                    m.isDefault ? "bg-amber-50 border-amber-200 text-amber-700" : "hover:bg-muted/50"
-                  }`}
-                  title={m.isDefault ? "当前默认" : "设为默认"}
-                >
-                  {m.isDefault ? <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /> : <StarOff className="w-3.5 h-3.5" />}
-                  默认
-                </button>
-                <button
-                  onClick={() => navigate(`/data-annotation/models/versions?modelId=${m.id}`)}
-                  className="px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50 transition-colors flex items-center gap-1"
-                  title="版本管理"
-                >
-                  版本 <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => openEdit(m)}
-                  className="px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50 transition-colors"
-                  title="编辑"
-                >
+                <button onClick={() => openEdit(m)} className="px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50">
                   <Edit3 className="w-3.5 h-3.5" />
                 </button>
-                {m.source !== "内置" && (
-                  <button
-                    onClick={() => setDeleteTarget(m)}
-                    className="px-2 py-1.5 text-xs border rounded-lg hover:bg-destructive/10 text-destructive transition-colors"
-                    title="删除"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
+                <button
+                  onClick={() => setDeleteTarget(m)}
+                  className="px-2 py-1.5 text-xs border rounded-lg hover:bg-destructive/10 text-destructive"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           );
         })}
-
         {filtered.length === 0 && (
           <div className="col-span-full text-center py-16 text-muted-foreground">
             <Cpu className="w-12 h-12 mx-auto mb-3 opacity-20" />
             <p className="text-sm">暂无符合条件的模型</p>
-            <button
-              onClick={openCreate}
-              className="mt-3 text-xs text-primary hover:underline"
-            >
-              立即连接第一个模型
-            </button>
           </div>
         )}
       </div>
@@ -465,27 +314,36 @@ const DataAnnotationModels = () => {
             <div className="p-5 border-b flex items-center justify-between">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <Brain className="w-5 h-5 text-primary" />
-                {editingId ? "编辑模型" : "连接模型"}
+                {editingId ? "编辑模型" : "新增模型"}
               </h3>
               <button onClick={() => setShowConnect(false)} className="p-1 rounded hover:bg-muted/50">
-                <X className="w-4 h-4" />
+                <AlertTriangle className="w-4 h-4 opacity-0" />
               </button>
             </div>
-
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">
-                    模型名称 <span className="text-destructive">*</span>
-                  </label>
+                  <label className="text-xs text-muted-foreground mb-1 block">模型名称 *</label>
                   <input
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="如：通用文本情感分类"
                     className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
                   />
                 </div>
-                <div />
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">模型模态 *</label>
+                  <select
+                    value={form.modality}
+                    onChange={(e) => setForm({ ...form, modality: e.target.value as ModelModality })}
+                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                  >
+                    {modalityOptions.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -493,63 +351,46 @@ const DataAnnotationModels = () => {
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  placeholder="简要描述模型能力、适用场景..."
                   rows={2}
                   className="w-full px-3 py-2 text-sm border rounded-lg bg-background resize-none"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">
-                    模型模态 <span className="text-destructive">*</span>
-                  </label>
-                  <select
-                    value={form.modality}
-                    onChange={(e) => setForm({ ...form, modality: e.target.value as ModelModality })}
-                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                  >
-                    {modalityOptions.map((m) => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">模型来源</label>
-                  <select
-                    value={form.source}
-                    onChange={(e) => setForm({ ...form, source: e.target.value as ModelSource })}
-                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                  >
-                    <option value="自建">自建</option>
-                    <option value="市场">市场</option>
-                    <option value="内置">内置</option>
-                  </select>
-                </div>
-              </div>
-
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  任务类型标签 <span className="text-muted-foreground/60">（逗号分隔）</span>
-                </label>
+                <label className="text-xs text-muted-foreground mb-1 block">可处理任务类型（逗号分隔）</label>
                 <input
                   value={form.taskTypes}
                   onChange={(e) => setForm({ ...form, taskTypes: e.target.value })}
-                  placeholder="如：文本分类，情感分析，NER"
                   className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <label className="flex items-center gap-2 text-xs">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">标签范围</label>
+                  <select
+                    value={form.labelScope}
+                    onChange={(e) => setForm({ ...form, labelScope: e.target.value as "开放词汇" | "非开放词汇" })}
+                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                  >
+                    <option value="开放词汇">开放词汇</option>
+                    <option value="非开放词汇">非开放词汇</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">平均推理耗时 (ms/条)</label>
                   <input
-                    type="checkbox"
-                    checked={form.isOpenVocabulary}
-                    onChange={(e) => setForm({ ...form, isOpenVocabulary: e.target.checked })}
+                    type="number"
+                    value={form.avgInferenceMs}
+                    onChange={(e) => setForm({ ...form, avgInferenceMs: Number(e.target.value) })}
+                    min={10}
+                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
                   />
-                  开放词汇模型
-                </label>
-                <label className="flex items-center gap-2 text-xs">
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-3 bg-muted/20">
+                <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
                     checked={form.supportsActiveLearning}
@@ -561,142 +402,33 @@ const DataAnnotationModels = () => {
                       })
                     }
                   />
-                  支持主动学习
+                  是否支持主动学习
                 </label>
-              </div>
-              {form.supportsActiveLearning && (
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">主动学习策略</label>
+                {form.supportsActiveLearning && (
                   <select
                     value={form.activeLearningStrategy}
                     onChange={(e) =>
                       setForm({ ...form, activeLearningStrategy: e.target.value as ActiveLearningStrategy })
                     }
-                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                    className="w-full mt-2 px-3 py-2 text-sm border rounded-lg bg-background"
                   >
                     <option value="不确定性采样">不确定性采样</option>
                     <option value="多样性采样">多样性采样</option>
                     <option value="不确定性+多样性">不确定性+多样性</option>
                   </select>
-                </div>
-              )}
-
-              <div className="p-4 rounded-lg border bg-muted/20 space-y-3">
-                <p className="text-xs font-semibold text-foreground">能力声明</p>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { key: "supportsBatch", label: "批量预标注", icon: Zap },
-                    { key: "supportsInteractive", label: "交互式预标注", icon: MousePointer2 },
-                    { key: "supportsTraining", label: "模型训练", icon: RefreshCw },
-                  ].map(({ key, label, icon: I }) => (
-                    <label
-                      key={key}
-                      className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
-                        (form as any)[key] ? "border-primary bg-primary/5" : "bg-card"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={(form as any)[key]}
-                        onChange={(e) => setForm({ ...form, [key]: e.target.checked })}
-                      />
-                      <I className="w-3.5 h-3.5 text-primary" />
-                      <span className="text-xs">{label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">平均推理耗时 (ms/条)</label>
-                  <input
-                    type="number"
-                    value={form.avgInferenceMs}
-                    onChange={(e) => setForm({ ...form, avgInferenceMs: Number(e.target.value) })}
-                    min={10}
-                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">默认置信度阈值 (0-1)</label>
-                  <input
-                    type="number"
-                    value={form.defaultConfidence}
-                    onChange={(e) => setForm({ ...form, defaultConfidence: Number(e.target.value) })}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">低置信度策略</label>
-                  <select
-                    value={form.lowConfidencePolicy}
-                    onChange={(e) => setForm({ ...form, lowConfidencePolicy: e.target.value as LowConfidencePolicy })}
-                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                  >
-                    <option value="人工复核">人工复核</option>
-                    <option value="自动驳回">自动驳回</option>
-                    <option value="进入质检池">进入质检池</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">标签范围能力</label>
-                  <select
-                    value={form.labelScope}
-                    onChange={(e) => setForm({ ...form, labelScope: e.target.value as LabelScope })}
-                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                  >
-                    <option value="固定标签集">固定标签集</option>
-                    <option value="开放标签集">开放标签集</option>
-                    <option value="候选集约束">候选集约束</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">能力边界说明</label>
-                <textarea
-                  value={form.capabilityBoundary}
-                  onChange={(e) => setForm({ ...form, capabilityBoundary: e.target.value })}
-                  placeholder="说明该模型不擅长或不支持的场景，避免误用"
-                  rows={2}
-                  className="w-full px-3 py-2 text-sm border rounded-lg bg-background resize-none"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">任务能力说明（每行：任务类型::说明）</label>
-                <textarea
-                  value={form.taskTypeDescriptions}
-                  onChange={(e) => setForm({ ...form, taskTypeDescriptions: e.target.value })}
-                  placeholder={"文本分类::支持三分类\n情感分析::金融场景优化"}
-                  rows={3}
-                  className="w-full px-3 py-2 text-sm border rounded-lg bg-background resize-none"
-                />
+                )}
               </div>
             </div>
-
-            <div className="p-5 border-t flex items-center justify-between gap-2 bg-muted/20">
-              <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                <Globe className="w-3 h-3" /> 连接后可在任务创建时选用
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowConnect(false)}
-                  className="px-4 py-2 text-sm border rounded-lg hover:bg-muted/50"
-                >
-                  取消
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-                >
-                  {editingId ? "保存修改" : "连接并保存"}
-                </button>
-              </div>
+            <div className="p-5 border-t flex items-center justify-end gap-2 bg-muted/20">
+              <button onClick={() => setShowConnect(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-muted/50">
+                取消
+              </button>
+              <button
+                onClick={handleSubmit}
+                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+              >
+                保存
+              </button>
             </div>
           </div>
         </div>
@@ -711,14 +443,19 @@ const DataAnnotationModels = () => {
             </div>
             <p className="text-sm text-muted-foreground mb-4">
               确定要删除模型 <span className="font-medium text-foreground">{deleteTarget.name}</span> 吗？
-              <br />
-              使用该模型的任务将无法继续执行预标注。
             </p>
             <div className="flex justify-end gap-2 text-sm">
               <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 border rounded-lg hover:bg-muted/50">
                 取消
               </button>
-              <button onClick={handleDelete} className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg">
+              <button
+                onClick={() => {
+                  removeModel(deleteTarget.id);
+                  setDeleteTarget(null);
+                  toast.success("模型已删除");
+                }}
+                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg"
+              >
                 确认删除
               </button>
             </div>
