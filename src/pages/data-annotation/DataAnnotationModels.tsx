@@ -3,12 +3,14 @@ import {
   Plus, Search, Brain, Zap, MousePointer2, RefreshCw, Star, StarOff,
   CheckCircle2, AlertTriangle, Clock, X, Trash2, Edit3,
   Cpu, Type, Image as ImageIcon, Mic, Video, Table2, Layers,
-  Activity, PlayCircle, Globe, KeyRound, Link2
+  Activity, PlayCircle, Globe, ArrowRight
 } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import {
   useMLModelStore,
   type MLModel,
+  type ActiveLearningStrategy,
   type LabelScope,
   type LowConfidencePolicy,
   type ModelModality,
@@ -55,9 +57,6 @@ interface ConnectFormState {
   description: string;
   modality: ModelModality;
   taskTypes: string;
-  backendUrl: string;
-  authType: "none" | "basic" | "token";
-  authValue: string;
   supportsBatch: boolean;
   supportsInteractive: boolean;
   supportsTraining: boolean;
@@ -66,8 +65,11 @@ interface ConnectFormState {
   lowConfidencePolicy: LowConfidencePolicy;
   labelScope: LabelScope;
   capabilityBoundary: string;
+  isOpenVocabulary: boolean;
+  supportsActiveLearning: boolean;
+  activeLearningStrategy: ActiveLearningStrategy;
+  taskTypeDescriptions: string;
   source: ModelSource;
-  version: string;
 }
 
 const emptyForm: ConnectFormState = {
@@ -75,9 +77,6 @@ const emptyForm: ConnectFormState = {
   description: "",
   modality: "文本类",
   taskTypes: "",
-  backendUrl: "",
-  authType: "none",
-  authValue: "",
   supportsBatch: true,
   supportsInteractive: false,
   supportsTraining: false,
@@ -86,11 +85,15 @@ const emptyForm: ConnectFormState = {
   lowConfidencePolicy: "人工复核",
   labelScope: "固定标签集",
   capabilityBoundary: "",
+  isOpenVocabulary: false,
+  supportsActiveLearning: false,
+  activeLearningStrategy: "不启用",
+  taskTypeDescriptions: "",
   source: "自建",
-  version: "v1.0.0",
 };
 
 const DataAnnotationModels = () => {
+  const navigate = useNavigate();
   const { models, addModel, updateModel, removeModel, testConnection, setDefault } = useMLModelStore();
 
   const [search, setSearch] = useState("");
@@ -136,9 +139,6 @@ const DataAnnotationModels = () => {
       description: m.description,
       modality: m.modality,
       taskTypes: m.taskTypes.join("，"),
-      backendUrl: m.backendUrl,
-      authType: m.authType,
-      authValue: m.authValue || "",
       supportsBatch: m.supportsBatch,
       supportsInteractive: m.supportsInteractive,
       supportsTraining: m.supportsTraining,
@@ -147,28 +147,47 @@ const DataAnnotationModels = () => {
       lowConfidencePolicy: m.lowConfidencePolicy,
       labelScope: m.labelScope,
       capabilityBoundary: m.capabilityBoundary,
+      isOpenVocabulary: m.isOpenVocabulary,
+      supportsActiveLearning: m.supportsActiveLearning,
+      activeLearningStrategy: m.activeLearningStrategy,
+      taskTypeDescriptions: Object.entries(m.taskTypeDescriptions || {})
+        .map(([task, desc]) => `${task}::${desc}`)
+        .join("\n"),
       source: m.source,
-      version: m.version,
     });
     setShowConnect(true);
   };
 
   const handleSubmit = () => {
     if (!form.name.trim()) return toast.error("请填写模型名称");
-    if (!form.backendUrl.trim()) return toast.error("请填写模型 Backend URL");
-    if (!/^https?:\/\//.test(form.backendUrl)) return toast.error("Backend URL 必须以 http:// 或 https:// 开头");
+    const taskTypes = form.taskTypes
+      .split(/[,，、\s]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (taskTypes.length === 0) return toast.error("请至少填写一个任务类型");
+    if (form.supportsActiveLearning && form.activeLearningStrategy === "不启用") {
+      return toast.error("开启主动学习后请配置主动学习策略");
+    }
+
+    const taskTypeDescriptions = form.taskTypeDescriptions
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .reduce<Record<string, string>>((acc, line) => {
+        const [task, ...rest] = line.split("::");
+        if (!task) return acc;
+        acc[task.trim()] = rest.join("::").trim() || "待补充";
+        return acc;
+      }, {});
 
     const payload = {
       name: form.name.trim(),
       description: form.description.trim(),
       modality: form.modality,
-      taskTypes: form.taskTypes
-        .split(/[,，、\s]+/)
-        .map((t) => t.trim())
-        .filter(Boolean),
-      backendUrl: form.backendUrl.trim(),
-      authType: form.authType,
-      authValue: form.authValue,
+      taskTypes,
+      backendUrl: editingId ? models.find((m) => m.id === editingId)?.backendUrl || "http://ml-backend.internal:9000/default" : "http://ml-backend.internal:9000/default",
+      authType: editingId ? models.find((m) => m.id === editingId)?.authType || "none" : "none",
+      authValue: editingId ? models.find((m) => m.id === editingId)?.authValue || "" : "",
       supportsBatch: form.supportsBatch,
       supportsInteractive: form.supportsInteractive,
       supportsTraining: form.supportsTraining,
@@ -177,8 +196,13 @@ const DataAnnotationModels = () => {
       lowConfidencePolicy: form.lowConfidencePolicy,
       labelScope: form.labelScope,
       capabilityBoundary: form.capabilityBoundary.trim(),
+      isOpenVocabulary: form.isOpenVocabulary,
+      supportsActiveLearning: form.supportsActiveLearning,
+      activeLearningStrategy: form.supportsActiveLearning ? form.activeLearningStrategy : "不启用",
+      taskTypeDescriptions,
       source: form.source,
-      version: form.version,
+      versions: editingId ? models.find((m) => m.id === editingId)?.versions || [] : [],
+      version: editingId ? models.find((m) => m.id === editingId)?.version || "v1.0.0" : "v1.0.0",
       creator: "当前用户",
     };
 
@@ -362,6 +386,12 @@ const DataAnnotationModels = () => {
                   标签范围：<span className="text-foreground">{m.labelScope}</span>
                 </p>
                 <p>
+                  词汇类型：<span className="text-foreground">{m.isOpenVocabulary ? "开放词汇" : "非开放词汇"}</span>
+                </p>
+                <p>
+                  主动学习：<span className="text-foreground">{m.supportsActiveLearning ? m.activeLearningStrategy : "不支持"}</span>
+                </p>
+                <p>
                   低置信度：<span className="text-foreground">{m.lowConfidencePolicy}</span>
                 </p>
                 <p className="mt-1 line-clamp-2">
@@ -386,6 +416,13 @@ const DataAnnotationModels = () => {
                 >
                   {m.isDefault ? <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /> : <StarOff className="w-3.5 h-3.5" />}
                   默认
+                </button>
+                <button
+                  onClick={() => navigate(`/data-annotation/models/versions?modelId=${m.id}`)}
+                  className="px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50 transition-colors flex items-center gap-1"
+                  title="版本管理"
+                >
+                  版本 <ArrowRight className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => openEdit(m)}
@@ -448,15 +485,7 @@ const DataAnnotationModels = () => {
                     className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
                   />
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">版本</label>
-                  <input
-                    value={form.version}
-                    onChange={(e) => setForm({ ...form, version: e.target.value })}
-                    placeholder="v1.0.0"
-                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                  />
-                </div>
+                <div />
               </div>
 
               <div>
@@ -511,52 +540,46 @@ const DataAnnotationModels = () => {
                 />
               </div>
 
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  Backend URL <span className="text-destructive">*</span>
-                </label>
-                <div className="flex items-center gap-2">
-                  <Link2 className="w-4 h-4 text-muted-foreground" />
-                  <input
-                    value={form.backendUrl}
-                    onChange={(e) => setForm({ ...form, backendUrl: e.target.value })}
-                    placeholder="http://ml-backend.internal:9090"
-                    className="flex-1 px-3 py-2 text-sm border rounded-lg bg-background font-mono"
-                  />
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  遵循 Label Studio ML Backend 协议，需实现 /predict、/setup 等端点
-                </p>
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={form.isOpenVocabulary}
+                    onChange={(e) => setForm({ ...form, isOpenVocabulary: e.target.checked })}
+                  />
+                  开放词汇模型
+                </label>
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={form.supportsActiveLearning}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        supportsActiveLearning: e.target.checked,
+                        activeLearningStrategy: e.target.checked ? form.activeLearningStrategy : "不启用",
+                      })
+                    }
+                  />
+                  支持主动学习
+                </label>
+              </div>
+              {form.supportsActiveLearning && (
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">认证方式</label>
+                  <label className="text-xs text-muted-foreground mb-1 block">主动学习策略</label>
                   <select
-                    value={form.authType}
-                    onChange={(e) => setForm({ ...form, authType: e.target.value as any })}
+                    value={form.activeLearningStrategy}
+                    onChange={(e) =>
+                      setForm({ ...form, activeLearningStrategy: e.target.value as ActiveLearningStrategy })
+                    }
                     className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
                   >
-                    <option value="none">无认证</option>
-                    <option value="basic">Basic Auth</option>
-                    <option value="token">Token</option>
+                    <option value="不确定性采样">不确定性采样</option>
+                    <option value="多样性采样">多样性采样</option>
+                    <option value="不确定性+多样性">不确定性+多样性</option>
                   </select>
                 </div>
-                {form.authType !== "none" && (
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
-                      <KeyRound className="w-3 h-3" /> 认证凭据
-                    </label>
-                    <input
-                      value={form.authValue}
-                      onChange={(e) => setForm({ ...form, authValue: e.target.value })}
-                      type="password"
-                      placeholder="Token 或 user:password"
-                      className="w-full px-3 py-2 text-sm border rounded-lg bg-background font-mono"
-                    />
-                  </div>
-                )}
-              </div>
+              )}
 
               <div className="p-4 rounded-lg border bg-muted/20 space-y-3">
                 <p className="text-xs font-semibold text-foreground">能力声明</p>
@@ -641,6 +664,16 @@ const DataAnnotationModels = () => {
                   onChange={(e) => setForm({ ...form, capabilityBoundary: e.target.value })}
                   placeholder="说明该模型不擅长或不支持的场景，避免误用"
                   rows={2}
+                  className="w-full px-3 py-2 text-sm border rounded-lg bg-background resize-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">任务能力说明（每行：任务类型::说明）</label>
+                <textarea
+                  value={form.taskTypeDescriptions}
+                  onChange={(e) => setForm({ ...form, taskTypeDescriptions: e.target.value })}
+                  placeholder={"文本分类::支持三分类\n情感分析::金融场景优化"}
+                  rows={3}
                   className="w-full px-3 py-2 text-sm border rounded-lg bg-background resize-none"
                 />
               </div>
