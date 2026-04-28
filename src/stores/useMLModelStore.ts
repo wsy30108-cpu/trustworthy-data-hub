@@ -8,38 +8,6 @@ export type ModelSource = "内置" | "自建" | "市场";
 export type ModelHealth = "健康" | "异常" | "未检测";
 export type LowConfidencePolicy = "人工复核" | "自动驳回" | "进入质检池";
 export type LabelScope = "固定标签集" | "开放标签集" | "候选集约束";
-export type ActiveLearningStrategy =
-  | "不启用"
-  | "不确定性采样"
-  | "多样性采样"
-  | "不确定性+多样性";
-export type ModelVersionHealth = "健康" | "异常" | "未检测";
-
-export interface ModelPromptBinding {
-  taskType: string;
-  prompt: string;
-}
-
-export interface VocabularyMapping {
-  source: string;
-  target: string;
-  notes?: string;
-}
-
-export interface MLModelVersion {
-  id: string;
-  modelId: string;
-  version: string;
-  endpointUrl: string;
-  authType: "none" | "basic" | "token";
-  authValue?: string;
-  isDefault: boolean;
-  health: ModelVersionHealth;
-  createdAt: string;
-  creator: string;
-  promptBindings: ModelPromptBinding[];
-  vocabularyMappings: VocabularyMapping[];
-}
 
 export interface MLModel {
   id: string;
@@ -66,16 +34,6 @@ export interface MLModel {
   labelScope: LabelScope;
   /** 模型能力边界说明 */
   capabilityBoundary: string;
-  /** 是否开放词汇模型 */
-  isOpenVocabulary: boolean;
-  /** 是否支持主动学习 */
-  supportsActiveLearning: boolean;
-  /** 主动学习策略 */
-  activeLearningStrategy: ActiveLearningStrategy;
-  /** 任务能力说明，key 为 taskType */
-  taskTypeDescriptions: Record<string, string>;
-  /** 模型版本列表 */
-  versions: MLModelVersion[];
   health: ModelHealth;
   isDefault: boolean;
   creator: string;
@@ -92,44 +50,9 @@ interface MLModelState {
   setDefault: (modality: ModelModality, id: string) => void;
   getModelsByModality: (modality: ModelModality) => MLModel[];
   getDefaultModel: (modality: ModelModality) => MLModel | undefined;
-  addVersion: (
-    modelId: string,
-    version: Omit<MLModelVersion, "id" | "modelId" | "createdAt" | "health" | "isDefault">
-  ) => string;
-  updateVersion: (
-    modelId: string,
-    versionId: string,
-    updates: Partial<MLModelVersion>
-  ) => void;
-  removeVersion: (modelId: string, versionId: string) => void;
-  setDefaultVersion: (modelId: string, versionId: string) => void;
 }
 
 const now = () => new Date().toISOString().slice(0, 16).replace("T", " ");
-const createVersion = (
-  modelId: string,
-  version: string,
-  endpointUrl: string,
-  authType: "none" | "basic" | "token",
-  authValue: string | undefined,
-  creator: string,
-  isDefault: boolean,
-  promptBindings: ModelPromptBinding[] = [],
-  vocabularyMappings: VocabularyMapping[] = []
-): MLModelVersion => ({
-  id: `VER-${modelId.slice(-3)}-${version.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8)}`,
-  modelId,
-  version,
-  endpointUrl,
-  authType,
-  authValue,
-  isDefault,
-  health: "未检测",
-  createdAt: now(),
-  creator,
-  promptBindings,
-  vocabularyMappings,
-});
 
 const initialModels: MLModel[] = [
   {
@@ -149,25 +72,6 @@ const initialModels: MLModel[] = [
     lowConfidencePolicy: "人工复核",
     labelScope: "固定标签集",
     capabilityBoundary: "仅支持训练时定义的三分类标签，不支持开放标签。",
-    isOpenVocabulary: false,
-    supportsActiveLearning: true,
-    activeLearningStrategy: "不确定性采样",
-    taskTypeDescriptions: {
-      文本分类: "支持长文本和短文本情感分类",
-      情感分析: "三分类，支持金融领域",
-    },
-    versions: [
-      createVersion(
-        "MDL-001",
-        "v2.1.0",
-        "http://ml-backend.internal:9090/text-sentiment",
-        "none",
-        undefined,
-        "系统",
-        true,
-        [{ taskType: "情感分析", prompt: "请输出 正面/负面/中性，并返回 score。" }]
-      ),
-    ],
     health: "健康",
     isDefault: true,
     creator: "系统",
@@ -191,25 +95,6 @@ const initialModels: MLModel[] = [
     lowConfidencePolicy: "进入质检池",
     labelScope: "固定标签集",
     capabilityBoundary: "实体类别需在 schema 中预定义，开放标签效果不稳定。",
-    isOpenVocabulary: false,
-    supportsActiveLearning: true,
-    activeLearningStrategy: "不确定性+多样性",
-    taskTypeDescriptions: {
-      命名实体识别: "支持 8 类实体识别",
-      信息抽取: "支持结构化字段抽取",
-    },
-    versions: [
-      createVersion(
-        "MDL-002",
-        "v1.3.0",
-        "http://ml-backend.internal:9091/ner",
-        "none",
-        undefined,
-        "系统",
-        true,
-        [{ taskType: "命名实体识别", prompt: "识别人名、地名、机构名并返回 span。" }]
-      ),
-    ],
     health: "健康",
     isDefault: false,
     creator: "系统",
@@ -233,29 +118,6 @@ const initialModels: MLModel[] = [
     lowConfidencePolicy: "人工复核",
     labelScope: "候选集约束",
     capabilityBoundary: "建议传入候选标签词表；超出词表的类别召回有限。",
-    isOpenVocabulary: true,
-    supportsActiveLearning: true,
-    activeLearningStrategy: "多样性采样",
-    taskTypeDescriptions: {
-      目标检测: "支持矩形框检测",
-      图像分类: "可输出候选类别置信度",
-    },
-    versions: [
-      createVersion(
-        "MDL-003",
-        "v8.0.1",
-        "http://ml-backend.internal:9092/yolo",
-        "none",
-        undefined,
-        "系统",
-        true,
-        [],
-        [
-          { source: "car", target: "汽车" },
-          { source: "person", target: "行人" },
-        ]
-      ),
-    ],
     health: "健康",
     isDefault: true,
     creator: "系统",
@@ -279,24 +141,6 @@ const initialModels: MLModel[] = [
     lowConfidencePolicy: "人工复核",
     labelScope: "开放标签集",
     capabilityBoundary: "擅长交互分割，不适合作为纯批量分类模型使用。",
-    isOpenVocabulary: true,
-    supportsActiveLearning: false,
-    activeLearningStrategy: "不启用",
-    taskTypeDescriptions: {
-      图像分割: "支持点选和框选触发掩码生成",
-      交互式标注: "支持用户上下文输入",
-    },
-    versions: [
-      createVersion(
-        "MDL-004",
-        "v1.0.0",
-        "http://ml-backend.internal:9093/sam",
-        "token",
-        "",
-        "市场",
-        true
-      ),
-    ],
     health: "健康",
     isDefault: false,
     creator: "市场",
@@ -320,25 +164,6 @@ const initialModels: MLModel[] = [
     lowConfidencePolicy: "进入质检池",
     labelScope: "固定标签集",
     capabilityBoundary: "口音重或强噪声场景下准确率下降，需要人工抽检。",
-    isOpenVocabulary: false,
-    supportsActiveLearning: true,
-    activeLearningStrategy: "不确定性采样",
-    taskTypeDescriptions: {
-      语音识别: "支持中英文与常见方言",
-      语音转写: "支持长音频切片拼接",
-    },
-    versions: [
-      createVersion(
-        "MDL-005",
-        "v3.2.1",
-        "http://ml-backend.internal:9094/asr",
-        "none",
-        undefined,
-        "系统",
-        true,
-        [{ taskType: "语音转写", prompt: "请返回逐句转写结果和标点。" }]
-      ),
-    ],
     health: "健康",
     isDefault: true,
     creator: "系统",
@@ -362,24 +187,6 @@ const initialModels: MLModel[] = [
     lowConfidencePolicy: "人工复核",
     labelScope: "固定标签集",
     capabilityBoundary: "主要输出轨迹与 ID，语义标签需结合下游分类器。",
-    isOpenVocabulary: false,
-    supportsActiveLearning: false,
-    activeLearningStrategy: "不启用",
-    taskTypeDescriptions: {
-      目标追踪: "输出轨迹与跨帧 ID 关联",
-      视频分析: "支持关键帧定位",
-    },
-    versions: [
-      createVersion(
-        "MDL-006",
-        "v1.0.2",
-        "http://ml-backend.internal:9095/bytetrack",
-        "none",
-        undefined,
-        "系统",
-        true
-      ),
-    ],
     health: "健康",
     isDefault: true,
     creator: "系统",
@@ -403,24 +210,6 @@ const initialModels: MLModel[] = [
     lowConfidencePolicy: "自动驳回",
     labelScope: "固定标签集",
     capabilityBoundary: "适用于结构化指标异常，不适用于非结构化文本与图像。",
-    isOpenVocabulary: false,
-    supportsActiveLearning: true,
-    activeLearningStrategy: "不确定性采样",
-    taskTypeDescriptions: {
-      异常检测: "支持多指标异常评分",
-      时序分析: "支持趋势异常和突变检测",
-    },
-    versions: [
-      createVersion(
-        "MDL-007",
-        "v0.9.0",
-        "http://ml-backend.internal:9096/tabular",
-        "none",
-        undefined,
-        "李芳",
-        true
-      ),
-    ],
     health: "未检测",
     isDefault: true,
     creator: "李芳",
@@ -444,26 +233,6 @@ const initialModels: MLModel[] = [
     lowConfidencePolicy: "人工复核",
     labelScope: "开放标签集",
     capabilityBoundary: "偏检索打分能力，需配合业务规则映射到最终标签。",
-    isOpenVocabulary: true,
-    supportsActiveLearning: true,
-    activeLearningStrategy: "多样性采样",
-    taskTypeDescriptions: {
-      图文匹配: "支持图文相似度分数输出",
-      多模态检索: "支持文本检图与图检文",
-    },
-    versions: [
-      createVersion(
-        "MDL-008",
-        "v1.1.0",
-        "http://ml-backend.internal:9097/clip",
-        "token",
-        "",
-        "市场",
-        true,
-        [],
-        [{ source: "bag", target: "包" }]
-      ),
-    ],
     health: "健康",
     isDefault: true,
     creator: "市场",
@@ -479,19 +248,9 @@ export const useMLModelStore = create<MLModelState>()(
 
       addModel: (m) => {
         const id = `MDL-${String(Date.now()).slice(-6)}`;
-        const fallbackVersion = createVersion(
-          id,
-          m.version || "v1.0.0",
-          m.backendUrl,
-          m.authType,
-          m.authValue,
-          m.creator || "当前用户",
-          true
-        );
         const newModel: MLModel = {
           ...m,
           id,
-          versions: m.versions?.length ? m.versions : [fallbackVersion],
           createdAt: now(),
           health: "未检测",
           isDefault: false,
@@ -552,85 +311,6 @@ export const useMLModelStore = create<MLModelState>()(
           models.find((m) => m.modality === modality)
         );
       },
-      addVersion: (modelId, versionInput) => {
-        const id = `VER-${String(Date.now()).slice(-8)}`;
-        const newVersion: MLModelVersion = {
-          ...versionInput,
-          id,
-          modelId,
-          createdAt: now(),
-          health: "未检测",
-          isDefault: false,
-        };
-        set((state) => ({
-          models: state.models.map((m) => {
-            if (m.id !== modelId) return m;
-            const hasDefault = m.versions.some((v) => v.isDefault);
-            const versions = [...m.versions, { ...newVersion, isDefault: hasDefault ? false : true }];
-            const defaultVersion = versions.find((v) => v.isDefault) || versions[0];
-            return {
-              ...m,
-              versions,
-              version: defaultVersion.version,
-              backendUrl: defaultVersion.endpointUrl,
-              authType: defaultVersion.authType,
-              authValue: defaultVersion.authValue,
-            };
-          }),
-        }));
-        return id;
-      },
-      updateVersion: (modelId, versionId, updates) =>
-        set((state) => ({
-          models: state.models.map((m) => {
-            if (m.id !== modelId) return m;
-            const versions = m.versions.map((v) => (v.id === versionId ? { ...v, ...updates } : v));
-            const defaultVersion = versions.find((v) => v.isDefault) || versions[0];
-            return {
-              ...m,
-              versions,
-              version: defaultVersion?.version || m.version,
-              backendUrl: defaultVersion?.endpointUrl || m.backendUrl,
-              authType: defaultVersion?.authType || m.authType,
-              authValue: defaultVersion?.authValue,
-            };
-          }),
-        })),
-      removeVersion: (modelId, versionId) =>
-        set((state) => ({
-          models: state.models.map((m) => {
-            if (m.id !== modelId) return m;
-            const versions = m.versions.filter((v) => v.id !== versionId);
-            const normalized = versions.map((v, idx) =>
-              idx === 0 ? { ...v, isDefault: true } : { ...v, isDefault: v.isDefault }
-            );
-            const defaultVersion = normalized.find((v) => v.isDefault) || normalized[0];
-            return {
-              ...m,
-              versions: normalized,
-              version: defaultVersion?.version || m.version,
-              backendUrl: defaultVersion?.endpointUrl || m.backendUrl,
-              authType: defaultVersion?.authType || m.authType,
-              authValue: defaultVersion?.authValue,
-            };
-          }),
-        })),
-      setDefaultVersion: (modelId, versionId) =>
-        set((state) => ({
-          models: state.models.map((m) => {
-            if (m.id !== modelId) return m;
-            const versions = m.versions.map((v) => ({ ...v, isDefault: v.id === versionId }));
-            const defaultVersion = versions.find((v) => v.id === versionId) || versions[0];
-            return {
-              ...m,
-              versions,
-              version: defaultVersion?.version || m.version,
-              backendUrl: defaultVersion?.endpointUrl || m.backendUrl,
-              authType: defaultVersion?.authType || m.authType,
-              authValue: defaultVersion?.authValue,
-            };
-          }),
-        })),
     }),
     {
       name: "ml-model-storage",
