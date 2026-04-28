@@ -22,13 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import {
-  useMLModelStore,
-  type ActiveLearningStrategy,
-  type MLModel,
-  type ModelHealth,
-  type ModelModality,
-} from "@/stores/useMLModelStore";
+import { useMLModelStore, type MLModel, type ModelHealth, type ModelModality } from "@/stores/useMLModelStore";
 
 const modalityIcons: Record<ModelModality, any> = {
   文本类: Type,
@@ -67,7 +61,7 @@ interface ConnectFormState {
   avgInferenceMs: number;
   labelScope: "开放词汇" | "非开放词汇";
   supportsActiveLearning: boolean;
-  activeLearningStrategy: ActiveLearningStrategy;
+  activeLearningTriggerCondition: string;
 }
 
 const emptyForm: ConnectFormState = {
@@ -81,7 +75,7 @@ const emptyForm: ConnectFormState = {
   avgInferenceMs: 200,
   labelScope: "非开放词汇",
   supportsActiveLearning: false,
-  activeLearningStrategy: "不启用",
+  activeLearningTriggerCondition: "",
 };
 
 const DataAnnotationModels = () => {
@@ -136,15 +130,15 @@ const DataAnnotationModels = () => {
       avgInferenceMs: m.avgInferenceMs,
       labelScope: m.labelScope,
       supportsActiveLearning: m.supportsActiveLearning,
-      activeLearningStrategy: m.supportsActiveLearning ? m.activeLearningStrategy : "不启用",
+      activeLearningTriggerCondition: m.activeLearningTriggerCondition || "",
     });
     setShowConnect(true);
   };
 
   const handleSubmit = () => {
     if (!form.name.trim()) return toast.error("请填写模型名称");
-    if (form.supportsActiveLearning && form.activeLearningStrategy === "不启用") {
-      return toast.error("支持主动学习时请设置主动学习策略");
+    if (form.supportsActiveLearning && !form.activeLearningTriggerCondition.trim()) {
+      return toast.error("支持主动学习时请填写主动学习触发条件");
     }
 
     const payload = {
@@ -161,7 +155,9 @@ const DataAnnotationModels = () => {
       avgInferenceMs: form.avgInferenceMs,
       labelScope: form.labelScope,
       supportsActiveLearning: form.supportsActiveLearning,
-      activeLearningStrategy: form.supportsActiveLearning ? form.activeLearningStrategy : "不启用",
+      activeLearningTriggerCondition: form.supportsActiveLearning
+        ? form.activeLearningTriggerCondition.trim()
+        : undefined,
       creator: "当前用户",
     };
 
@@ -276,7 +272,9 @@ const DataAnnotationModels = () => {
                 <p>
                   主动学习：
                   <span className="text-foreground">
-                    {m.supportsActiveLearning ? m.activeLearningStrategy : "不支持"}
+                    {m.supportsActiveLearning
+                      ? m.activeLearningTriggerCondition || "已开启"
+                      : "不支持"}
                   </span>
                 </p>
               </div>
@@ -398,24 +396,19 @@ const DataAnnotationModels = () => {
                       setForm({
                         ...form,
                         supportsActiveLearning: e.target.checked,
-                        activeLearningStrategy: e.target.checked ? form.activeLearningStrategy : "不启用",
+                        activeLearningTriggerCondition: e.target.checked ? form.activeLearningTriggerCondition : "",
                       })
                     }
                   />
                   是否支持主动学习
                 </label>
                 {form.supportsActiveLearning && (
-                  <select
-                    value={form.activeLearningStrategy}
-                    onChange={(e) =>
-                      setForm({ ...form, activeLearningStrategy: e.target.value as ActiveLearningStrategy })
-                    }
+                  <input
+                    value={form.activeLearningTriggerCondition}
+                    onChange={(e) => setForm({ ...form, activeLearningTriggerCondition: e.target.value })}
+                    placeholder="如：累计100条低置信度样本触发"
                     className="w-full mt-2 px-3 py-2 text-sm border rounded-lg bg-background"
-                  >
-                    <option value="不确定性采样">不确定性采样</option>
-                    <option value="多样性采样">多样性采样</option>
-                    <option value="不确定性+多样性">不确定性+多样性</option>
-                  </select>
+                  />
                 )}
               </div>
             </div>

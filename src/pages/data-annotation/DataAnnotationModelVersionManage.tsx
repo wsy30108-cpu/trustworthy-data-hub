@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowUpDown, Brain, Edit3, Plus, Trash2, Upload } from "lucide-react";
+import { ArrowUpDown, Edit3, Plus, Trash2, Upload } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -13,7 +13,8 @@ interface VersionFormState {
   version: string;
   endpointUrl: string;
   authType: "none" | "apikey";
-  authValue: string;
+  apiKeyUsername: string;
+  apiKeyPassword: string;
   prompts: TaskPromptBinding[];
   vocabularyMappings: VocabularyMappingItem[];
 }
@@ -22,7 +23,8 @@ const emptyVersionForm: VersionFormState = {
   version: "v1.0.0",
   endpointUrl: "",
   authType: "none",
-  authValue: "",
+  apiKeyUsername: "",
+  apiKeyPassword: "",
   prompts: [{ taskType: "", prompt: "" }],
   vocabularyMappings: [{ sourceLabel: "", commonMappedLabel: "" }],
 };
@@ -31,7 +33,7 @@ const DataAnnotationModelVersionManage = () => {
   const { models, addVersion, updateVersion, removeVersion } = useMLModelStore();
   const [searchParams] = useSearchParams();
   const queryModelId = searchParams.get("modelId") || "";
-  const [selectedModelId, setSelectedModelId] = useState<string>(queryModelId);
+  const [selectedModelId, setSelectedModelId] = useState(queryModelId);
   const [editingVersionId, setEditingVersionId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<VersionFormState>(emptyVersionForm);
@@ -57,11 +59,13 @@ const DataAnnotationModelVersionManage = () => {
     const version = selectedModel.versions.find((v) => v.id === versionId);
     if (!version) return;
     setEditingVersionId(versionId);
+    const [username = "", password = ""] = (version.authValue || "").split(":", 2);
     setForm({
       version: version.version,
       endpointUrl: version.endpointUrl,
       authType: version.authType,
-      authValue: version.authValue || "",
+      apiKeyUsername: username,
+      apiKeyPassword: password,
       prompts: version.prompts.length ? version.prompts : [{ taskType: "", prompt: "" }],
       vocabularyMappings: version.vocabularyMappings.length
         ? version.vocabularyMappings
@@ -103,7 +107,9 @@ const DataAnnotationModelVersionManage = () => {
     if (!selectedModel) return;
     if (!form.version.trim()) return toast.error("请填写版本号");
     if (!/^https?:\/\//.test(form.endpointUrl)) return toast.error("模型链接需以 http:// 或 https:// 开头");
-    if (form.authType !== "none" && !form.authValue.trim()) return toast.error("请填写 API KEY");
+    if (form.authType === "apikey" && (!form.apiKeyUsername.trim() || !form.apiKeyPassword.trim())) {
+      return toast.error("请填写 API KEY 用户名和密码");
+    }
 
     const prompts = form.prompts
       .map((x) => ({ taskType: x.taskType.trim(), prompt: x.prompt.trim() }))
@@ -115,19 +121,22 @@ const DataAnnotationModelVersionManage = () => {
       }))
       .filter((x) => x.sourceLabel && x.commonMappedLabel);
 
-    if (selectedModel.labelScope === "开放词汇") {
-      if (prompts.length === 0) return toast.error("开放词汇模型需至少维护一条 Prompt 绑定");
+    if (selectedModel.labelScope === "开放标签集") {
+      if (prompts.length === 0) return toast.error("开放标签集模型需至少维护一条 Prompt 绑定");
     } else if (vocabularyMappings.length === 0) {
-      return toast.error("非开放词汇模型需至少维护一条词汇映射");
+      return toast.error("固定标签集模型需至少维护一条词汇映射");
     }
 
     const payload = {
       version: form.version.trim(),
       endpointUrl: form.endpointUrl.trim(),
       authType: form.authType,
-      authValue: form.authValue.trim() || undefined,
-      prompts: selectedModel.labelScope === "开放词汇" ? prompts : [],
-      vocabularyMappings: selectedModel.labelScope === "开放词汇" ? [] : vocabularyMappings,
+      authValue:
+        form.authType === "apikey"
+          ? `${form.apiKeyUsername.trim()}:${form.apiKeyPassword.trim()}`
+          : undefined,
+      prompts: selectedModel.labelScope === "开放标签集" ? prompts : [],
+      vocabularyMappings: selectedModel.labelScope === "开放标签集" ? [] : vocabularyMappings,
     };
 
     if (editingVersionId) {
@@ -140,107 +149,104 @@ const DataAnnotationModelVersionManage = () => {
     setShowForm(false);
   };
 
+  const currentVersions = selectedModel?.versions ?? [];
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="page-header">
         <div>
           <h1 className="page-title">模型版本管理</h1>
-          <p className="page-description">上方展示模型基本信息，下方仅维护当前模型版本</p>
+          <p className="page-description">参照版本列表样式，仅维护当前模型版本信息</p>
         </div>
         <button
           onClick={openCreate}
           className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-primary/90"
         >
-          <Plus className="w-4 h-4" /> 新增模型版本
+          <Plus className="w-4 h-4" /> 新增版本
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="rounded-xl border bg-card p-4 space-y-2">
-          <p className="text-xs text-muted-foreground">选择模型</p>
-          <div className="space-y-2 max-h-[520px] overflow-y-auto">
-            {models.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => setSelectedModelId(m.id)}
-                className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                  (selectedModel?.id || selectedModelId) === m.id
-                    ? "border-primary bg-primary/5"
-                    : "hover:bg-muted/30"
-                }`}
-              >
-                <p className="text-sm font-semibold">{m.name}</p>
-                <p className="text-[10px] text-muted-foreground">
-                  {m.id} · {m.labelScope} · {m.versions.length} 个版本
-                </p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="lg:col-span-2 rounded-xl border bg-card p-4 space-y-3">
-          {!selectedModel ? (
-            <div className="text-center py-16 text-muted-foreground">
-              <Brain className="w-10 h-10 mx-auto mb-2 opacity-40" />
-              暂无模型
-            </div>
-          ) : (
-            <>
-              <div className="rounded-lg border bg-muted/20 p-3">
-                <p className="text-sm font-semibold">{selectedModel.name}</p>
+      {!selectedModel ? (
+        <div className="rounded-xl border bg-card p-10 text-center text-muted-foreground">暂无可维护模型</div>
+      ) : (
+        <>
+          <div className="rounded-xl border bg-card p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold">{selectedModel.name}</h3>
                 <p className="text-xs text-muted-foreground mt-1">
                   模态：{selectedModel.modality} · 标签范围：{selectedModel.labelScope} · 任务类型：{selectedModel.taskTypes.join("、")}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">{selectedModel.description}</p>
               </div>
-
-              <div className="space-y-2">
-                {selectedModel.versions.map((v) => (
-                  <div key={v.id} className="rounded-lg border p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold">{v.version}</p>
-                        <p className="text-[10px] text-muted-foreground font-mono">{v.endpointUrl}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          认证：{v.authType === "none" ? "无认证" : "API KEY认证"} · {v.createdAt}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => openEdit(v.id)}
-                          className="px-2 py-1 text-xs border rounded hover:bg-muted/50"
-                          title="编辑版本"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (selectedModel.versions.length <= 1) {
-                              toast.error("至少保留一个版本");
-                              return;
-                            }
-                            removeVersion(selectedModel.id, v.id);
-                            toast.success("版本已删除");
-                          }}
-                          className="px-2 py-1 text-xs border rounded hover:bg-destructive/10 text-destructive"
-                          title="删除版本"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                    <p className="mt-2 text-[11px] text-muted-foreground">
-                      {selectedModel.labelScope === "开放词汇"
-                        ? `Prompt 数：${v.prompts.length}`
-                        : `词汇映射数：${v.vocabularyMappings.length}`}
-                    </p>
-                  </div>
-                ))}
+              <div className="text-right text-xs text-muted-foreground">
+                <p>模型健康：{selectedModel.health}</p>
+                <p>版本总数：{currentVersions.length}</p>
               </div>
-            </>
-          )}
-        </div>
-      </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-card">
+            <div className="px-4 py-3 border-b flex items-center justify-between">
+              <p className="text-sm font-semibold">版本列表</p>
+              <button onClick={openCreate} className="px-2 py-1 text-xs border rounded hover:bg-muted/50">
+                <Plus className="w-3.5 h-3.5 inline mr-1" />
+                新增版本
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left border-b bg-muted/30">
+                    <th className="py-3 px-4 text-xs text-muted-foreground">版本</th>
+                    <th className="py-3 px-4 text-xs text-muted-foreground">链接</th>
+                    <th className="py-3 px-4 text-xs text-muted-foreground">认证方式</th>
+                    <th className="py-3 px-4 text-xs text-muted-foreground">健康状态</th>
+                    <th className="py-3 px-4 text-xs text-muted-foreground">创建时间</th>
+                    <th className="py-3 px-4 text-xs text-muted-foreground">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentVersions.map((v) => (
+                    <tr key={v.id} className="border-b last:border-b-0 hover:bg-muted/20">
+                      <td className="py-3 px-4 font-medium">{v.version}</td>
+                      <td className="py-3 px-4 text-xs font-mono text-muted-foreground">{v.endpointUrl}</td>
+                      <td className="py-3 px-4">{v.authType === "none" ? "无认证" : "API KEY认证"}</td>
+                      <td className="py-3 px-4">{v.health}</td>
+                      <td className="py-3 px-4 text-xs text-muted-foreground">{v.createdAt}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => openEdit(v.id)}
+                            className="px-2 py-1 text-xs border rounded hover:bg-muted/50"
+                            title="编辑版本"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (currentVersions.length <= 1) {
+                                toast.error("至少保留一个版本");
+                                return;
+                              }
+                              removeVersion(selectedModel.id, v.id);
+                              toast.success("版本已删除");
+                            }}
+                            className="px-2 py-1 text-xs border rounded hover:bg-destructive/10 text-destructive"
+                            title="删除版本"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
 
       {showForm && selectedModel && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -271,7 +277,7 @@ const DataAnnotationModelVersionManage = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">认证方式</label>
                   <select
@@ -283,20 +289,30 @@ const DataAnnotationModelVersionManage = () => {
                     <option value="apikey">API KEY认证</option>
                   </select>
                 </div>
-                {form.authType !== "none" && (
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">API KEY</label>
-                    <input
-                      type="password"
-                      value={form.authValue}
-                      onChange={(e) => setForm({ ...form, authValue: e.target.value })}
-                      className="w-full px-3 py-2 text-sm border rounded-lg bg-background font-mono"
-                    />
-                  </div>
+                {form.authType === "apikey" && (
+                  <>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">用户名</label>
+                      <input
+                        value={form.apiKeyUsername}
+                        onChange={(e) => setForm({ ...form, apiKeyUsername: e.target.value })}
+                        className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">密码</label>
+                      <input
+                        type="password"
+                        value={form.apiKeyPassword}
+                        onChange={(e) => setForm({ ...form, apiKeyPassword: e.target.value })}
+                        className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                      />
+                    </div>
+                  </>
                 )}
               </div>
 
-              {selectedModel.labelScope === "开放词汇" ? (
+              {selectedModel.labelScope === "开放标签集" ? (
                 <div className="rounded-lg border p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold">Prompt 绑定（任务类型）</p>

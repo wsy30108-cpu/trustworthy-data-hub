@@ -4,8 +4,7 @@ import { persist } from "zustand/middleware";
 export type ModelModality = "文本类" | "图像类" | "音频类" | "视频类" | "表格类" | "跨模态类";
 export type ModelHealth = "健康" | "异常" | "未检测";
 export type ModelVersionHealth = "健康" | "异常" | "未检测";
-export type LabelScope = "固定标签范围" | "开放标签范围";
-export type ActiveLearningStrategy = "不确定性采样" | "多样性采样" | "不确定性+多样性";
+export type LabelScope = "固定标签集" | "开放标签集";
 
 export interface TaskPromptBinding {
   taskType: string;
@@ -22,7 +21,8 @@ export interface MLModelVersion {
   version: string;
   endpointUrl: string;
   authType: "none" | "api_key";
-  authValue?: string;
+  authUsername?: string;
+  authPassword?: string;
   health: ModelVersionHealth;
   creator: string;
   createdAt: string;
@@ -41,7 +41,7 @@ export interface MLModel {
   supportsInteractive: boolean;
   supportsTraining: boolean;
   supportsActiveLearning: boolean;
-  activeLearningStrategy?: ActiveLearningStrategy;
+  activeLearningTriggerCondition?: string;
   versions: MLModelVersion[];
   health: ModelHealth;
   creator: string;
@@ -49,17 +49,30 @@ export interface MLModel {
   version: string;
   backendUrl: string;
   authType: "none" | "api_key";
-  authValue?: string;
+  authUsername?: string;
+  authPassword?: string;
   avgInferenceMs: number;
 }
 
 interface MLModelState {
   models: MLModel[];
   addModel: (
-    m: Omit<MLModel, "id" | "createdAt" | "health" | "versions" | "version" | "backendUrl" | "authType" | "authValue">
+    m: Omit<
+      MLModel,
+      | "id"
+      | "createdAt"
+      | "health"
+      | "versions"
+      | "version"
+      | "backendUrl"
+      | "authType"
+      | "authUsername"
+      | "authPassword"
+    >
   ) => string;
   updateModel: (id: string, updates: Partial<MLModel>) => void;
   removeModel: (id: string) => void;
+  testConnection: (id: string) => { ok: boolean; latency: number; message: string };
   getModelsByModality: (modality: ModelModality) => MLModel[];
   getDefaultModel: (modality: ModelModality) => MLModel | undefined;
   addVersion: (
@@ -75,7 +88,10 @@ const mkModelId = () => `MDL-${String(Date.now()).slice(-6)}`;
 const mkVersionId = () => `VER-${String(Date.now()).slice(-7)}`;
 
 const withVersion = (
-  modelBase: Omit<MLModel, "versions" | "version" | "backendUrl" | "authType" | "authValue">,
+  modelBase: Omit<
+    MLModel,
+    "versions" | "version" | "backendUrl" | "authType" | "authUsername" | "authPassword"
+  >,
   version: MLModelVersion
 ): MLModel => ({
   ...modelBase,
@@ -83,7 +99,8 @@ const withVersion = (
   version: version.version,
   backendUrl: version.endpointUrl,
   authType: version.authType,
-  authValue: version.authValue,
+  authUsername: version.authUsername,
+  authPassword: version.authPassword,
 });
 
 const initialModels: MLModel[] = [
@@ -94,12 +111,12 @@ const initialModels: MLModel[] = [
       description: "文本情感分类基础模型",
       modality: "文本类",
       taskTypes: ["文本分类", "情感分析"],
-      labelScope: "固定标签范围",
+      labelScope: "固定标签集",
       supportsBatch: true,
       supportsInteractive: false,
       supportsTraining: true,
       supportsActiveLearning: true,
-      activeLearningStrategy: "不确定性采样",
+      activeLearningTriggerCondition: "100条",
       health: "健康",
       creator: "系统",
       createdAt: "2026-01-10 10:00",
@@ -127,12 +144,12 @@ const initialModels: MLModel[] = [
       description: "图像目标检测模型",
       modality: "图像类",
       taskTypes: ["目标检测", "图像分类"],
-      labelScope: "开放标签范围",
+      labelScope: "开放标签集",
       supportsBatch: true,
       supportsInteractive: true,
       supportsTraining: false,
       supportsActiveLearning: true,
-      activeLearningStrategy: "多样性采样",
+      activeLearningTriggerCondition: "200条",
       health: "健康",
       creator: "系统",
       createdAt: "2026-01-15 09:00",
@@ -160,7 +177,8 @@ const syncModelRuntimeFromLatestVersion = (m: MLModel): MLModel => {
     version: latest.version,
     backendUrl: latest.endpointUrl,
     authType: latest.authType,
-    authValue: latest.authValue,
+    authUsername: latest.authUsername,
+    authPassword: latest.authPassword,
   };
 };
 
@@ -178,9 +196,9 @@ export const useMLModelStore = create<MLModelState>()(
           health: "未检测",
           creator: "当前用户",
           createdAt: now(),
-          prompts: m.labelScope === "开放标签范围" ? [{ taskType: m.taskTypes[0] || "通用", prompt: "" }] : [],
+          prompts: m.labelScope === "开放标签集" ? [{ taskType: m.taskTypes[0] || "通用", prompt: "" }] : [],
           vocabularyMappings:
-            m.labelScope === "固定标签范围" ? [{ sourceLabel: "", commonMappedLabel: "" }] : [],
+            m.labelScope === "固定标签集" ? [{ sourceLabel: "", commonMappedLabel: "" }] : [],
         };
         const model = withVersion(
           {
@@ -203,6 +221,22 @@ export const useMLModelStore = create<MLModelState>()(
         set((state) => ({
           models: state.models.filter((m) => m.id !== id),
         })),
+      testConnection: (id) => {
+        const model = get().models.find((m) => m.id === id);
+        if (!model) return { ok: false, latency: 0, message: "模型不存在" };
+        const ok = Math.random() > 0.1;
+        const latency = Math.floor(80 + Math.random() * 320);
+        set((state) => ({
+          models: state.models.map((m) =>
+            m.id === id ? { ...m, health: ok ? "健康" : "异常" } : m
+          ),
+        }));
+        return {
+          ok,
+          latency,
+          message: ok ? `模型连接正常，响应 ${latency}ms` : "模型连接异常，请检查版本配置",
+        };
+      },
       getModelsByModality: (modality) =>
         get().models.filter((m) => m.modality === modality || m.modality === "跨模态类"),
       getDefaultModel: (modality) => get().models.find((m) => m.modality === modality),
