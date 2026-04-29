@@ -137,6 +137,34 @@ const syncModelRuntimeFromLatestVersion = (m: MLModel): MLModel => {
     authPassword: latest.authPassword,
   };
 };
+
+/** 作为主版本模板：优先手动来源，其次任意一条 */
+function pickTemplateVersion(versions: MLModelVersion[]): MLModelVersion | undefined {
+  const manual = versions.find((v) => (v.source ?? "manual") === "manual");
+  return manual ?? versions[0];
+}
+
+/** 「支持主动学习」的模型在版本管理中须至少有一条来源为主动学习的版本 */
+export function ensureActiveLearningVersion(model: MLModel): MLModel {
+  if (!model.supportsActiveLearning) return model;
+  if (model.versions.some((v) => v.source === "active_learning")) return model;
+  const template = pickTemplateVersion(model.versions);
+  if (!template) return model;
+  const al: MLModelVersion = {
+    ...template,
+    id: mkVersionId(),
+    version: template.version.endsWith("-al") ? `${template.version}-learn` : `${template.version}-al`,
+    creator: "主动学习任务",
+    createdAt: now(),
+    prompts: template.prompts.map((p) => ({ ...normalizeTaskPromptBinding(p as TaskPromptBinding & { taskType?: string }) })),
+    vocabularyMappings: template.vocabularyMappings.map((x) => ({ ...x })),
+    source: "active_learning",
+    activeLearningTriggerReached: false,
+    trainingStatus: "未训练",
+    health: "未检测",
+  };
+  return syncModelRuntimeFromLatestVersion({ ...model, versions: [...model.versions, al] });
+}
 const initialModels: MLModel[] = [
   syncModelRuntimeFromLatestVersion({
     id: "MDL-001",
@@ -267,7 +295,7 @@ export const useMLModelStore = create<MLModelState>()(
             m.labelScope === "固定标签集" ? [{ sourceLabel: "", commonMappedLabel: "" }] : [],
           source: "manual",
         };
-        const model = withVersion(
+        let model = withVersion(
           {
             ...m,
             id,
@@ -277,12 +305,15 @@ export const useMLModelStore = create<MLModelState>()(
           },
           initialVersion
         );
+        model = ensureActiveLearningVersion(model);
         set((state) => ({ models: [model, ...state.models] }));
         return id;
       },
       updateModel: (id, updates) =>
         set((state) => ({
-          models: state.models.map((m) => (m.id === id ? { ...m, ...updates } : m)),
+          models: state.models.map((m) =>
+            m.id === id ? ensureActiveLearningVersion({ ...m, ...updates }) : m
+          ),
         })),
       removeModel: (id) =>
         set((state) => ({
@@ -319,7 +350,12 @@ export const useMLModelStore = create<MLModelState>()(
         };
         set((state) => ({
           models: state.models.map((m) =>
-            m.id === modelId ? syncModelRuntimeFromLatestVersion({ ...m, versions: [...m.versions, newVersion] }) : m
+            m.id === modelId
+              ? ensureActiveLearningVersion({
+                  ...m,
+                  versions: [...m.versions, newVersion],
+                })
+              : m
           ),
         }));
         return id;
@@ -329,7 +365,7 @@ export const useMLModelStore = create<MLModelState>()(
           models: state.models.map((m) => {
             if (m.id !== modelId) return m;
             const versions = m.versions.map((v) => (v.id === versionId ? { ...v, ...updates } : v));
-            return syncModelRuntimeFromLatestVersion({ ...m, versions });
+            return ensureActiveLearningVersion({ ...m, versions });
           }),
         })),
       removeVersion: (modelId, versionId) =>
@@ -338,10 +374,21 @@ export const useMLModelStore = create<MLModelState>()(
             if (m.id !== modelId) return m;
             const versions = m.versions.filter((v) => v.id !== versionId);
             if (versions.length === 0) return m;
-            return syncModelRuntimeFromLatestVersion({ ...m, versions });
+            return ensureActiveLearningVersion({ ...m, versions });
           }),
         })),
     }),
-    { name: "ml-model-storage" }
+    {
+      name: "ml-model-storage",
+      merge: (persisted, current) => {
+        const cur = current as MLModelState;
+        const p = persisted as Partial<Pick<MLModelState, "models">> | undefined;
+        return {
+          ...cur,
+          ...p,
+          models: (p?.models ?? cur.models).map((model) => ensureActiveLearningVersion(model)),
+        };
+      },
+    }
   )
 );
