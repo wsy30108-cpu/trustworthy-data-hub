@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
+  X as XIcon,
   Brain,
   CheckCircle2,
   Clock,
@@ -89,6 +90,7 @@ const DataAnnotationModels = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ConnectFormState>(emptyForm);
   const [taskTypePopoverOpen, setTaskTypePopoverOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<MLModel | null>(null);
 
   const filtered = useMemo(() => {
     return models.filter((m) => {
@@ -245,7 +247,7 @@ const DataAnnotationModels = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filtered.map((m) => {
-          const Icon = modalityIcons[m.modality];
+          const Icon = modalityIcons[m.modality] ?? Type;
           return (
             <div
               key={m.id}
@@ -338,8 +340,8 @@ const DataAnnotationModels = () => {
                 <Brain className="w-5 h-5 text-primary" />
                 {editingId ? "编辑模型" : "新增模型"}
               </h3>
-              <button onClick={() => setShowConnect(false)} className="p-1 rounded hover:bg-muted/50">
-                <AlertTriangle className="w-4 h-4 opacity-0" />
+              <button type="button" onClick={() => setShowConnect(false)} className="p-1 rounded hover:bg-muted/50" aria-label="关闭">
+                <XIcon className="w-4 h-4" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
@@ -395,18 +397,19 @@ const DataAnnotationModels = () => {
                   <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-2 max-h-64 overflow-y-auto" align="start">
                     <div className="space-y-1">
                       {ANNOTATION_TASK_TYPES.map((taskType) => (
-                        <button
+                        <label
                           key={taskType}
-                          type="button"
-                          onClick={() => toggleTaskType(taskType)}
                           className={cn(
-                            "w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-left hover:bg-muted/60",
+                            "w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer hover:bg-muted/60",
                             form.taskTypes.includes(taskType) && "bg-primary/5 text-primary"
                           )}
                         >
-                          <Checkbox checked={form.taskTypes.includes(taskType)} />
+                          <Checkbox
+                            checked={form.taskTypes.includes(taskType)}
+                            onCheckedChange={() => toggleTaskType(taskType)}
+                          />
                           <span>{taskType}</span>
-                        </button>
+                        </label>
                       ))}
                     </div>
                   </PopoverContent>

@@ -96,6 +96,9 @@ const mockVocabularyByTaskType: Record<string, string[]> = {
   [tt6]: ["vehicle", "pedestrian", "event", "background"],
 };
 
+/** 无任务标签时词汇映射表里用于演示展示的默认行 */
+const VOCABULARY_MODAL_FALLBACK_TASK_LABELS = ["正面", "负面", "中性"];
+
 /** 词汇映射弹窗中回填的演示数据（与模型输出标签对齐） */
 const VOCABULARY_MAPPING_DEMOS: Record<string, string> = {
   正面: "positive",
@@ -239,35 +242,36 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
         (mockVocabularyByTaskType[binding.taskType] || []).forEach((x) => labels.add(x));
       }
     });
+    if (labels.size === 0 && taskTypeBindings.length > 0) {
+      taskTypeBindings.forEach((binding) => {
+        (mockVocabularyByTaskType[binding.taskType] || []).forEach((x) => labels.add(x));
+      });
+    }
+    if (labels.size === 0) {
+      ["positive", "negative", "neutral"].forEach((x) => labels.add(x));
+    }
     return Array.from(labels);
   }, [taskTypeBindings, bindingCandidates]);
 
-  useEffect(() => {
-    if (!showVocabularyModal || sourceLabels.length === 0 || taskLabels.length === 0) return;
-    setTaskLabelMappings((prev) => {
-      const next = { ...prev };
-      taskLabels.forEach((label, idx) => {
-        if (!next[label]) {
-          next[label] = sourceLabels[idx % sourceLabels.length];
-        }
-      });
-      return next;
-    });
-  }, [showVocabularyModal, sourceLabels, taskLabels]);
+  /** 新建任务未完成标签配置时词汇映射仍可展示演示行 */
+  const vocabularyModalTaskLabels =
+    taskLabels.length > 0 ? taskLabels : VOCABULARY_MODAL_FALLBACK_TASK_LABELS;
 
   useEffect(() => {
-    if (!showVocabularyModal || taskLabels.length === 0) return;
+    if (!showVocabularyModal || sourceLabels.length === 0) return;
     setTaskLabelMappings((prev) => {
       const next = { ...prev };
-      taskLabels.forEach((label) => {
-        if (!next[label]) {
-          const demo = VOCABULARY_MAPPING_DEMOS[label];
-          if (demo) next[label] = demo;
+      vocabularyModalTaskLabels.forEach((label, idx) => {
+        if (!next[label]?.trim()) {
+          next[label] =
+            VOCABULARY_MAPPING_DEMOS[label] ||
+            sourceLabels[idx % sourceLabels.length] ||
+            "";
         }
       });
       return next;
     });
-  }, [showVocabularyModal, taskLabels]);
+  }, [showVocabularyModal, sourceLabels, vocabularyModalTaskLabels]);
 
   useEffect(() => {
     if (!preannotationEnabled) {
@@ -2334,7 +2338,7 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {taskLabels.map((label) => (
+                  {vocabularyModalTaskLabels.map((label) => (
                     <tr key={label} className="border-b">
                       <td className="py-2 pr-2">{label}</td>
                       <td className="py-2">
