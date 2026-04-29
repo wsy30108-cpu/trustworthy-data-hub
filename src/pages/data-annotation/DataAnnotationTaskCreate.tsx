@@ -198,7 +198,8 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
       setSelectedModelId(defaultModelForCategory.id);
       setConfidenceThreshold(0.6);
       if (!defaultModelForCategory.supportsBatch) setPreannotationEnabled(false);
-      if (!defaultModelForCategory.supportsInteractive) setInteractiveEnabled(false);
+      if (!defaultModelForCategory.supportsInteractivePreannotation && !defaultModelForCategory.supportsInteractive)
+        setInteractiveEnabled(false);
     }
   }, [selectedCategory, availableModels, defaultModelForCategory, selectedModelId]);
 

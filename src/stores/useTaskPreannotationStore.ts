@@ -22,7 +22,10 @@ export interface TaskPreannotationConfig {
   taskType?: string;
   /** 模态快照 */
   modality: string;
-  /** 低于该置信度视为"低质预测"需要人工审校 */
+  /**
+   * 预标注质量置信度阈值，取值区间 [0, 1]（与模型输出概率一致）。
+   * 例如 0.6 表示低于 60% 置信度的预测需人工审校。
+   */
   confidenceThreshold: number;
   /** 是否自动接受（auto-accept），为 false 时标注员需要手动点接受 */
   autoAccept: boolean;

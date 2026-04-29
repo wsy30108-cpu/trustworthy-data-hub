@@ -193,7 +193,7 @@ const DataAnnotationModelVersionForm = () => {
       return toast.error("固定标签集模型需至少维护一条词汇映射");
     }
 
-    const payload = {
+    const payloadBase = {
       version: form.version.trim(),
       endpointUrl: form.endpointUrl.trim(),
       authType: form.authType,
@@ -204,10 +204,23 @@ const DataAnnotationModelVersionForm = () => {
     };
 
     if (versionId) {
-      updateVersion(selectedModel.id, versionId, payload);
+      const prevV = selectedModel.versions.find((v) => v.id === versionId);
+      updateVersion(selectedModel.id, versionId, {
+        ...payloadBase,
+        origin: prevV?.origin ?? "手动添加",
+        ...(prevV?.origin === "主动学习"
+          ? {
+              activeLearningThresholdMet: prevV.activeLearningThresholdMet,
+              activeLearningTrainingStatus: prevV.activeLearningTrainingStatus,
+            }
+          : {}),
+      });
       toast.success("版本配置已更新");
     } else {
-      addVersion(selectedModel.id, payload);
+      addVersion(selectedModel.id, {
+        ...payloadBase,
+        origin: "手动添加",
+      });
       toast.success("版本已新增");
     }
     navigate(`/data-annotation/models/versions?modelId=${encodeURIComponent(selectedModel.id)}`);

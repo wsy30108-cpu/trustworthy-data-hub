@@ -57,7 +57,7 @@ interface ConnectFormState {
   modality: ModelModality;
   taskTypes: string[];
   supportsBatch: boolean;
-  supportsInteractive: boolean;
+  supportsInteractivePreannotation: boolean;
   supportsTraining: boolean;
   avgInferenceMs: number;
   labelScope: "固定标签集" | "开放标签集";
@@ -71,7 +71,7 @@ const emptyForm: ConnectFormState = {
   modality: "文本类",
   taskTypes: [],
   supportsBatch: true,
-  supportsInteractive: false,
+  supportsInteractivePreannotation: false,
   supportsTraining: false,
   avgInferenceMs: 200,
   labelScope: "固定标签集",
@@ -131,7 +131,7 @@ const DataAnnotationModels = () => {
       modality: m.modality,
       taskTypes: m.taskTypes,
       supportsBatch: m.supportsBatch,
-      supportsInteractive: m.supportsInteractive,
+      supportsInteractivePreannotation: m.supportsInteractivePreannotation ?? m.supportsInteractive,
       supportsTraining: m.supportsTraining,
       avgInferenceMs: m.avgInferenceMs,
       labelScope: m.labelScope,
@@ -156,7 +156,8 @@ const DataAnnotationModels = () => {
         .map((t) => t.trim())
         .filter(Boolean),
       supportsBatch: form.supportsBatch,
-      supportsInteractive: form.supportsInteractive,
+      supportsInteractivePreannotation: form.supportsInteractivePreannotation,
+      supportsInteractive: form.supportsInteractivePreannotation,
       supportsTraining: form.supportsTraining,
       avgInferenceMs: form.avgInferenceMs,
       labelScope: form.labelScope,
@@ -470,6 +471,36 @@ const DataAnnotationModels = () => {
                     className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
                   />
                 </div>
+              </div>
+
+              <div className="rounded-lg border p-3 bg-muted/20 space-y-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={form.supportsBatch}
+                    onCheckedChange={(c) =>
+                      setForm((prev) => ({ ...prev, supportsBatch: c === true }))
+                    }
+                  />
+                  支持批量预标注
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={form.supportsInteractivePreannotation}
+                    onCheckedChange={(c) =>
+                      setForm((prev) => ({ ...prev, supportsInteractivePreannotation: c === true }))
+                    }
+                  />
+                  支持交互式预标注（标注操作时实时推理；模型置信度区间为 0～1）
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={form.supportsTraining}
+                    onCheckedChange={(c) =>
+                      setForm((prev) => ({ ...prev, supportsTraining: c === true }))
+                    }
+                  />
+                  支持本地/在线微调训练
+                </label>
               </div>
 
               <div className="rounded-lg border p-3 bg-muted/20">

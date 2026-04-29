@@ -6,6 +6,8 @@ export type ModelHealth = "健康" | "异常" | "未检测";
 export type ModelVersionHealth = "健康" | "异常" | "未检测";
 export type LabelScope = "固定标签集" | "开放标签集";
 
+/** 模型输出的置信度、阈值等均使用区间 [0, 1]，与概率一致（例如 0.72 表示 72%）。 */
+
 /** 开放标签集：一条 Prompt 可绑定多个任务类型 */
 export interface TaskPromptBinding {
   taskTypes: string[];
@@ -26,6 +28,17 @@ export interface VocabularyMappingItem {
   commonMappedLabel: string;
 }
 
+/** 模型版本来源 */
+export type ModelVersionOrigin = "手动添加" | "主动学习";
+
+/** 主动学习流水线训练状态（来源为主动学习时填写） */
+export type ActiveLearningTrainingStatus =
+  | "空闲"
+  | "排队中"
+  | "训练中"
+  | "已完成"
+  | "失败";
+
 export interface MLModelVersion {
   id: string;
   version: string;
@@ -38,6 +51,14 @@ export interface MLModelVersion {
   createdAt: string;
   prompts: TaskPromptBinding[];
   vocabularyMappings: VocabularyMappingItem[];
+  /** 默认为手动添加；后端旧数据可无此字段 */
+  origin?: ModelVersionOrigin;
+  /**
+   * 来源为主动学习时：是否已达到触发条件（如置信度阈值、标注量阈值等）。
+   */
+  activeLearningThresholdMet?: boolean;
+  /** 来源为主动学习时的训练流水线状态 */
+  activeLearningTrainingStatus?: ActiveLearningTrainingStatus;
 }
 
 export interface MLModel {
@@ -49,6 +70,8 @@ export interface MLModel {
   labelScope: LabelScope;
   supportsBatch: boolean;
   supportsInteractive: boolean;
+  /** 是否支持交互式预标注；未持久化时可由 supportsInteractive 推断 */
+  supportsInteractivePreannotation?: boolean;
   supportsTraining: boolean;
   supportsActiveLearning: boolean;
   activeLearningTriggerCondition?: string;
@@ -117,42 +140,77 @@ const withVersion = (
   authPassword: version.authPassword,
 });
 
+const syncModelRuntimeFromLatestVersion = (m: MLModel): MLModel => {
+  const latest = [...m.versions].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
+  if (!latest) return m;
+  return {
+    ...m,
+    version: latest.version,
+    backendUrl: latest.endpointUrl,
+    authType: latest.authType,
+    authUsername: latest.authUsername,
+    authPassword: latest.authPassword,
+  };
+};
+
 const initialModels: MLModel[] = [
-  withVersion(
-    {
-      id: "MDL-001",
-      name: "通用文本情感分类",
-      description: "文本情感分类基础模型",
-      modality: "文本类",
-      taskTypes: ["文本分类", "情感分析"],
-      labelScope: "固定标签集",
-      supportsBatch: true,
-      supportsInteractive: false,
-      supportsTraining: true,
-      supportsActiveLearning: true,
-      activeLearningTriggerCondition: "100条",
-      health: "健康",
-      creator: "系统",
-      createdAt: "2026-01-10 10:00",
-      avgInferenceMs: 120,
-      processingTasks: 12800,
-      annotatorAccepted: 9620,
-    },
-    {
-      id: "VER-001-1",
-      version: "v2.1.0",
-      endpointUrl: "http://ml-backend.internal:9090/text-sentiment",
-      authType: "none",
-      health: "健康",
-      creator: "系统",
-      createdAt: "2026-01-10 10:00",
-      prompts: [],
-      vocabularyMappings: [
-        { sourceLabel: "positive", commonMappedLabel: "正面" },
-        { sourceLabel: "negative", commonMappedLabel: "负面" },
-      ],
-    }
-  ),
+  syncModelRuntimeFromLatestVersion({
+    id: "MDL-001",
+    name: "通用文本情感分类",
+    description: "文本情感分类基础模型",
+    modality: "文本类",
+    taskTypes: ["文本分类", "情感分析"],
+    labelScope: "固定标签集",
+    supportsBatch: true,
+    supportsInteractive: false,
+    supportsInteractivePreannotation: false,
+    supportsTraining: true,
+    supportsActiveLearning: true,
+    activeLearningTriggerCondition: "100条",
+    health: "健康",
+    creator: "系统",
+    createdAt: "2026-01-10 10:00",
+    avgInferenceMs: 120,
+    processingTasks: 12800,
+    annotatorAccepted: 9620,
+    versions: [
+      {
+        id: "VER-001-1",
+        version: "v2.1.0",
+        endpointUrl: "http://ml-backend.internal:9090/text-sentiment",
+        authType: "none",
+        health: "健康",
+        creator: "系统",
+        createdAt: "2026-01-10 10:00",
+        prompts: [],
+        vocabularyMappings: [
+          { sourceLabel: "positive", commonMappedLabel: "正面" },
+          { sourceLabel: "negative", commonMappedLabel: "负面" },
+        ],
+        origin: "手动添加",
+      },
+      {
+        id: "VER-001-2",
+        version: "v2.2-al.0",
+        endpointUrl: "http://ml-backend.internal:9090/text-sentiment/al",
+        authType: "none",
+        health: "健康",
+        creator: "主动学习",
+        createdAt: "2026-01-12 11:00",
+        prompts: [],
+        vocabularyMappings: [
+          { sourceLabel: "positive", commonMappedLabel: "正面" },
+          { sourceLabel: "negative", commonMappedLabel: "负面" },
+        ],
+        origin: "主动学习",
+        activeLearningThresholdMet: true,
+        activeLearningTrainingStatus: "训练中",
+      },
+    ],
+    version: "v2.2-al.0",
+    backendUrl: "http://ml-backend.internal:9090/text-sentiment/al",
+    authType: "none",
+  }),
   withVersion(
     {
       id: "MDL-003",
@@ -163,6 +221,7 @@ const initialModels: MLModel[] = [
       labelScope: "固定标签集",
       supportsBatch: true,
       supportsInteractive: true,
+      supportsInteractivePreannotation: true,
       supportsTraining: false,
       supportsActiveLearning: true,
       activeLearningTriggerCondition: "200条",
@@ -186,22 +245,10 @@ const initialModels: MLModel[] = [
         { sourceLabel: "car", commonMappedLabel: "car" },
         { sourceLabel: "person", commonMappedLabel: "person" },
       ],
+      origin: "手动添加",
     }
   ),
 ];
-
-const syncModelRuntimeFromLatestVersion = (m: MLModel): MLModel => {
-  const latest = [...m.versions].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
-  if (!latest) return m;
-  return {
-    ...m,
-    version: latest.version,
-    backendUrl: latest.endpointUrl,
-    authType: latest.authType,
-    authUsername: latest.authUsername,
-    authPassword: latest.authPassword,
-  };
-};
 
 export const useMLModelStore = create<MLModelState>()(
   persist(
@@ -223,10 +270,13 @@ export const useMLModelStore = create<MLModelState>()(
               : [],
           vocabularyMappings:
             m.labelScope === "固定标签集" ? [{ sourceLabel: "", commonMappedLabel: "" }] : [],
+          origin: "手动添加",
         };
         const model = withVersion(
           {
             ...m,
+            supportsInteractivePreannotation: m.supportsInteractivePreannotation ?? m.supportsInteractive ?? false,
+            supportsInteractive: m.supportsInteractive ?? m.supportsInteractivePreannotation ?? false,
             id,
             health: "未检测",
             creator: "当前用户",
