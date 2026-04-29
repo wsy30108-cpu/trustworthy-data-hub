@@ -1,0 +1,12 @@
+---
+description: After any git commit in this repo, push the current branch to origin immediately.
+alwaysApply: true
+---
+
+# Git commit and push workflow
+
+Whenever you create a **`git commit`** in this workspace (fixes, features, chores), **`git push`** the **current branch** to **`origin`** in the same workflow before reporting task completion — unless push fails (network/auth) or the user explicitly asked not to push.
+
+Combine when possible: commit then push immediately; do not stop at "committed locally only."
+
+The repository may also configure `core.hooksPath` to `.githooks` so that `git commit` triggers a **`post-commit`** hook that runs `git push`; do not rely on hooks alone — if you bypass hooks or hooks fail, run **`git push`** yourself.
