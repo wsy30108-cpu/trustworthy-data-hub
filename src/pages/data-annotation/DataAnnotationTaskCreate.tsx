@@ -14,6 +14,7 @@ import {
   type ModelModality,
 } from "@/stores/useMLModelStore";
 import { useTaskPreannotationStore } from "@/stores/useTaskPreannotationStore";
+import { ANNOTATION_TASK_TYPES } from "@/constants/annotationTaskTypes";
 
 /* ─── Project types ─── */
 const projectTypes = [
@@ -52,14 +53,16 @@ const mockToolsMap: Record<string, string> = {
   "跨模态类": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&h=225&fit=crop"
 };
 
+const [tt0, tt1, tt2, tt3, tt4, tt5, tt6] = ANNOTATION_TASK_TYPES;
+
 const mockTools = [
-  { id: "TL-001", name: "通用文本分类器", type: "文本类", isPreset: true, desc: "支持对纯文本、超文本内容进行多标签分类标注，适用于舆情分析与内容审核。", image: "https://images.unsplash.com/photo-1517842645767-c639042777db?w=400&h=225&fit=crop", objects: [{ name: "文本分类", methods: ["标签"] }, { name: "情感分析", methods: ["标签"] }] },
-  { id: "TL-002", name: "复杂文档分析工具", type: "文本类", isPreset: true, desc: "针对段落、对话等复杂文本结构进行实体挖掘与关系标注。支持多级标签组联动。", image: "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=400&h=225&fit=crop", objects: [{ name: "实体识别", methods: ["标签"] }] },
-  { id: "TL-003", name: "图像目标检测插件", type: "图像类", isPreset: true, desc: "支持矩形框、多边形标注。内置智能回归算法，提升目标定位精准度。", image: "https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?w=400&h=225&fit=crop", objects: [{ name: "目标检测", methods: ["矩形框", "标签"] }] },
-  { id: "TL-004", name: "PDF版面分析高级版", type: "图像类", isPreset: true, desc: "提供PDF像素级的超高精度标注能力，支持对PDF内的文本块、图片块独立进行属性定义。", image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&h=225&fit=crop", objects: [{ name: "图像分类", methods: ["多边形", "标签"] }] },
-  { id: "TL-005", name: "ASR语音转写工具", type: "音频类", isPreset: true, desc: "专为长语音和大规模私有化部署设计，支持中英文混说，解析音频文件的内容、角色及情感。", image: "https://images.unsplash.com/photo-1558317374-067fb5f30001?w=400&h=225&fit=crop", objects: [{ name: "语音转写", methods: ["转写", "标签"] }] },
-  { id: "TL-006", name: "视频对象追踪系统", type: "视频类", isPreset: true, desc: "在连续视频帧流中实现目标位置追踪与关键帧属性插值，支持复杂运动轨迹修正。", image: "https://images.unsplash.com/photo-1492691523567-6170c3af93db?w=400&h=225&fit=crop", objects: [{ name: "视频追踪", methods: ["矩形框", "标签"] }] },
-  { id: "TL-007", name: "金融指标提取助理", type: "表格类", isPreset: true, desc: "专注于对结构化表格及动态时间序列数据进行精细化属性标注，确保事实正确性。", image: "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=400&h=225&fit=crop", objects: [{ name: "文本分类", methods: ["标签"] }] },
+  { id: "TL-001", name: "通用文本分类器", type: "文本类", isPreset: true, desc: "支持对纯文本、超文本内容进行多标签分类标注，适用于舆情分析与内容审核。", image: "https://images.unsplash.com/photo-1517842645767-c639042777db?w=400&h=225&fit=crop", objects: [{ name: tt0, methods: ["标签"] }] },
+  { id: "TL-002", name: "复杂文档与实体挖掘工具", type: "文本类", isPreset: true, desc: "针对段落、对话等复杂文本结构进行实体挖掘与关系标注。支持多级标签组联动。", image: "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=400&h=225&fit=crop", objects: [{ name: tt1, methods: ["标签"] }, { name: tt2, methods: ["标签"] }] },
+  { id: "TL-003", name: "图像目标检测插件", type: "图像类", isPreset: true, desc: "支持矩形框、多边形标注。内置智能回归算法，提升目标定位精准度。", image: "https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?w=400&h=225&fit=crop", objects: [{ name: tt3, methods: ["矩形框", "标签"] }] },
+  { id: "TL-004", name: "PDF版面分析高级版", type: "图像类", isPreset: true, desc: "提供PDF像素级的超高精度标注能力，支持对PDF内的文本块、图片块独立进行属性定义。", image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&h=225&fit=crop", objects: [{ name: tt4, methods: ["多边形", "标签"] }] },
+  { id: "TL-005", name: "ASR语音转写工具", type: "音频类", isPreset: true, desc: "专为长语音和大规模私有化部署设计，支持中英文混说，解析音频文件的内容、角色及情感。", image: "https://images.unsplash.com/photo-1558317374-067fb5f30001?w=400&h=225&fit=crop", objects: [{ name: tt5, methods: ["转写", "标签"] }] },
+  { id: "TL-006", name: "视频对象追踪系统", type: "视频类", isPreset: true, desc: "在连续视频帧流中实现目标位置追踪与关键帧属性插值，支持复杂运动轨迹修正。", image: "https://images.unsplash.com/photo-1492691523567-6170c3af93db?w=400&h=225&fit=crop", objects: [{ name: tt6, methods: ["矩形框", "标签"] }] },
+  { id: "TL-007", name: "金融指标提取助理", type: "表格类", isPreset: true, desc: "专注于对结构化表格及动态时间序列数据进行精细化属性标注，确保事实正确性。", image: "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=400&h=225&fit=crop", objects: [{ name: tt0, methods: ["标签"] }, { name: tt1, methods: ["标签"] }] },
 ];
 
 const mockUsers = [
@@ -84,13 +87,23 @@ interface TaskTypeModelBinding {
 }
 
 const mockVocabularyByTaskType: Record<string, string[]> = {
-  文本分类: ["positive", "negative", "neutral", "question"],
-  情感分析: ["very_positive", "positive", "neutral", "negative", "very_negative"],
-  实体识别: ["person", "organization", "location", "time", "money"],
-  目标检测: ["car", "person", "traffic-light", "lane"],
-  图像分类: ["invoice", "contract", "id-card", "receipt"],
-  语音转写: ["speaker-a", "speaker-b", "noise", "silence"],
-  视频追踪: ["vehicle", "pedestrian", "event", "background"],
+  [tt0]: ["positive", "negative", "neutral", "question"],
+  [tt1]: ["summary", "risk", "fact", "opinion"],
+  [tt2]: ["PER", "LOC", "ORG", "MISC"],
+  [tt3]: ["car", "person", "traffic-light", "lane"],
+  [tt4]: ["title", "table", "figure", "paragraph"],
+  [tt5]: ["speech", "music", "noise", "silence"],
+  [tt6]: ["vehicle", "pedestrian", "event", "background"],
+};
+
+/** 词汇映射弹窗中回填的演示数据（与模型输出标签对齐） */
+const VOCABULARY_MAPPING_DEMOS: Record<string, string> = {
+  正面: "positive",
+  负面: "negative",
+  中性: "neutral",
+  人名: "PER",
+  地名: "LOC",
+  动物: "ANIMAL_ORG",
 };
 
 interface Props { onBack: () => void; }
@@ -241,6 +254,20 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
       return next;
     });
   }, [showVocabularyModal, sourceLabels, taskLabels]);
+
+  useEffect(() => {
+    if (!showVocabularyModal || taskLabels.length === 0) return;
+    setTaskLabelMappings((prev) => {
+      const next = { ...prev };
+      taskLabels.forEach((label) => {
+        if (!next[label]) {
+          const demo = VOCABULARY_MAPPING_DEMOS[label];
+          if (demo) next[label] = demo;
+        }
+      });
+      return next;
+    });
+  }, [showVocabularyModal, taskLabels]);
 
   useEffect(() => {
     if (!preannotationEnabled) {

@@ -20,9 +20,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useMLModelStore, type MLModel, type ModelHealth, type ModelModality } from "@/stores/useMLModelStore";
-
-const TASK_TYPE_OPTIONS = ["文本分类", "情感分析", "实体识别", "目标检测", "图像分类", "语音转写", "视频追踪"];
+import { ANNOTATION_TASK_TYPES } from "@/constants/annotationTaskTypes";
 
 const modalityIcons: Record<ModelModality, any> = {
   文本类: Type,
@@ -80,13 +82,13 @@ const emptyForm: ConnectFormState = {
 
 const DataAnnotationModels = () => {
   const navigate = useNavigate();
-  const { models, addModel, updateModel, removeModel } = useMLModelStore();
+  const { models, addModel, updateModel, removeModel, testConnection } = useMLModelStore();
   const [search, setSearch] = useState("");
   const [modalityFilter, setModalityFilter] = useState<"全部" | ModelModality>("全部");
   const [showConnect, setShowConnect] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ConnectFormState>(emptyForm);
-  const [deleteTarget, setDeleteTarget] = useState<MLModel | null>(null);
+  const [taskTypePopoverOpen, setTaskTypePopoverOpen] = useState(false);
 
   const filtered = useMemo(() => {
     return models.filter((m) => {
@@ -114,7 +116,18 @@ const DataAnnotationModels = () => {
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setTaskTypePopoverOpen(false);
     setShowConnect(true);
+  };
+
+  const toggleTaskType = (t: string) => {
+    setForm((prev) => {
+      const has = prev.taskTypes.includes(t);
+      return {
+        ...prev,
+        taskTypes: has ? prev.taskTypes.filter((x) => x !== t) : [...prev.taskTypes, t],
+      };
+    });
   };
 
   const openEdit = (m: MLModel) => {
@@ -169,6 +182,12 @@ const DataAnnotationModels = () => {
       toast.success(`模型「${payload.name}」已创建（${id}）`);
     }
     setShowConnect(false);
+  };
+
+  const handleTest = (m: MLModel) => {
+    const result = testConnection(m.id);
+    if (result.ok) toast.success(result.message);
+    else toast.error(result.message);
   };
 
   return (
@@ -230,12 +249,10 @@ const DataAnnotationModels = () => {
           return (
             <div
               key={m.id}
-              className="rounded-xl border bg-card p-5 shadow-sm hover:shadow-md transition-all flex flex-col gap-3 relative cursor-pointer"
+              role="presentation"
+              className="rounded-xl border bg-card p-5 shadow-sm hover:shadow-md transition-all flex flex-col gap-3 relative cursor-pointer group"
               onClick={() => navigate(`/data-annotation/models/versions?modelId=${m.id}`)}
             >
-              <div className="absolute top-3 right-3 text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                {m.versions.length} 版本
-              </div>
               <div className="flex items-start gap-3">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${modalityColors[m.modality]}`}>
                   <Icon className="w-5 h-5" />
@@ -259,30 +276,46 @@ const DataAnnotationModels = () => {
                   {m.health}
                 </span>
               </div>
+              {m.taskTypes.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {m.taskTypes.slice(0, 6).map((tt) => (
+                    <span
+                      key={tt}
+                      className="px-2 py-0.5 rounded-full text-[10px] font-medium border border-primary/20 bg-primary/5 text-primary"
+                    >
+                      {tt}
+                    </span>
+                  ))}
+                  {m.taskTypes.length > 6 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] border border-muted text-muted-foreground">
+                      +{m.taskTypes.length - 6}
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="text-[10px] text-muted-foreground bg-muted/30 rounded-md p-2">
-                <p>
-                  任务类型：<span className="text-foreground">{m.taskTypes.join("、") || "未设置"}</span>
-                </p>
                 <p>
                   标签范围：<span className="text-foreground">{m.labelScope}</span>
                 </p>
                 <p>
                   主动学习：
                   <span className="text-foreground">
-                    {m.supportsActiveLearning
-                      ? m.activeLearningTriggerCondition || "已开启"
-                      : "不支持"}
+                    {m.supportsActiveLearning ? m.activeLearningTriggerCondition || "已开启" : "不支持"}
                   </span>
                 </p>
               </div>
               <div className="flex items-center gap-1.5 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
-                <button onClick={() => openEdit(m)} className="px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50">
+                <button
+                  type="button"
+                  onClick={() => handleTest(m)}
+                  className="flex-1 px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50 flex items-center justify-center gap-1"
+                >
+                  <Cpu className="w-3.5 h-3.5" /> 连接测试
+                </button>
+                <button type="button" onClick={() => openEdit(m)} className="px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50">
                   <Edit3 className="w-3.5 h-3.5" />
                 </button>
-                <button
-                  onClick={() => setDeleteTarget(m)}
-                  className="px-2 py-1.5 text-xs border rounded-lg hover:bg-destructive/10 text-destructive"
-                >
+                <button type="button" onClick={() => setDeleteTarget(m)} className="px-2 py-1.5 text-xs border rounded-lg hover:bg-destructive/10 text-destructive">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -346,24 +379,52 @@ const DataAnnotationModels = () => {
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">可处理任务类型（多选）</label>
-                <select
-                  multiple
-                  value={form.taskTypes}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      taskTypes: Array.from(e.target.selectedOptions).map((option) => option.value),
-                    })
-                  }
-                  className="w-full px-3 py-2 text-sm border rounded-lg bg-background min-h-28"
-                >
-                  {TASK_TYPE_OPTIONS.map((taskType) => (
-                    <option key={taskType} value={taskType}>
-                      {taskType}
-                    </option>
+                <label className="text-xs text-muted-foreground mb-1 block">任务类型（可多选）</label>
+                <Popover open={taskTypePopoverOpen} onOpenChange={setTaskTypePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="w-full px-3 py-2 text-sm border rounded-lg bg-background flex items-center justify-between gap-2 text-left"
+                    >
+                      <span className={cn("truncate", form.taskTypes.length === 0 && "text-muted-foreground")}>
+                        {form.taskTypes.length ? `已选 ${form.taskTypes.length} 项` : "点击选择任务类型（支持多选）"}
+                      </span>
+                      <Brain className="w-4 h-4 shrink-0 text-muted-foreground" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-2 max-h-64 overflow-y-auto" align="start">
+                    <div className="space-y-1">
+                      {ANNOTATION_TASK_TYPES.map((taskType) => (
+                        <button
+                          key={taskType}
+                          type="button"
+                          onClick={() => toggleTaskType(taskType)}
+                          className={cn(
+                            "w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-left hover:bg-muted/60",
+                            form.taskTypes.includes(taskType) && "bg-primary/5 text-primary"
+                          )}
+                        >
+                          <Checkbox checked={form.taskTypes.includes(taskType)} />
+                          <span>{taskType}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {form.taskTypes.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => toggleTaskType(t)}
+                      className="px-2 py-0.5 rounded-full border border-primary/20 bg-primary/5 text-[10px] font-medium text-primary hover:bg-primary/10"
+                      title="点击移除"
+                    >
+                      {t}
+                      <span className="ml-1 opacity-60">✕</span>
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

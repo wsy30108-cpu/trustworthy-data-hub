@@ -20,6 +20,8 @@ interface MyTask {
   done: number;
   status: "进行中" | "已完成";
   projectType: string;
+  /** 文本类细分：默认识别为标签分类；NER 为人名/地名/动物等多类型实体 */
+  annotationMode?: "classification" | "ner";
   taskType: "标注" | "标注-质检" | "标注-质检-验收" | "标注-验收";
   currentStage: string;
   source: "任务大厅" | "质检驳回" | "验收驳回" | "转派";
@@ -70,7 +72,29 @@ const mockMyTasks: MyTask[] = [
     ]
   },
   {
-    id: "BT-018", taskName: "法律文书命名体识别（人名/机构/地点/案号）", authorizedTo: "任务池", progress: 0, total: 200, done: 0, status: "进行中", projectType: "文本类", taskType: "标注", currentStage: "标注", source: "任务大厅",
+    id: "BT-NER-001",
+    taskName: "新闻多命名体识别（人名·地名·动物）",
+    authorizedTo: "任务池",
+    progress: 0,
+    total: 180,
+    done: 0,
+    status: "进行中",
+    projectType: "文本类",
+    annotationMode: "ner",
+    taskType: "标注",
+    currentStage: "标注",
+    source: "任务大厅",
+    currentStatus: "标注中",
+    latestOperator: "张明",
+    creator: "平台",
+    createdAt: "2026-04-29",
+    history: [
+      { operator: "系统", action: "下发 NER 标注批次", time: "2026-04-29 09:00" },
+      { operator: "张明", action: "领取任务", time: "2026-04-29 09:15" },
+    ],
+  },
+  {
+    id: "BT-018", taskName: "法律文书NER识别", authorizedTo: "任务池", progress: 0, total: 200, done: 0, status: "进行中", projectType: "文本类", taskType: "标注", currentStage: "标注", source: "任务大厅",
     currentStatus: "标注中", latestOperator: "刘洋", creator: "赵敏", createdAt: "2026-03-18",
     history: [
       { operator: "刘洋", action: "从大厅领取", time: "2026-03-18 10:20" }
