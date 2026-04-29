@@ -6,8 +6,6 @@ export type ModelHealth = "健康" | "异常" | "未检测";
 export type ModelVersionHealth = "健康" | "异常" | "未检测";
 export type LabelScope = "固定标签集" | "开放标签集";
 
-/** 模型输出的置信度、阈值等均使用区间 [0, 1]，与概率一致（例如 0.72 表示 72%）。 */
-
 /** 开放标签集：一条 Prompt 可绑定多个任务类型 */
 export interface TaskPromptBinding {
   taskTypes: string[];
@@ -28,16 +26,7 @@ export interface VocabularyMappingItem {
   commonMappedLabel: string;
 }
 
-/** 模型版本来源 */
-export type ModelVersionOrigin = "手动添加" | "主动学习";
-
-/** 主动学习流水线训练状态（来源为主动学习时填写） */
-export type ActiveLearningTrainingStatus =
-  | "空闲"
-  | "排队中"
-  | "训练中"
-  | "已完成"
-  | "失败";
+export type MLModelVersionSource = "manual" | "active_learning";
 
 export interface MLModelVersion {
   id: string;
@@ -51,14 +40,12 @@ export interface MLModelVersion {
   createdAt: string;
   prompts: TaskPromptBinding[];
   vocabularyMappings: VocabularyMappingItem[];
-  /** 默认为手动添加；后端旧数据可无此字段 */
-  origin?: ModelVersionOrigin;
-  /**
-   * 来源为主动学习时：是否已达到触发条件（如置信度阈值、标注量阈值等）。
-   */
-  activeLearningThresholdMet?: boolean;
-  /** 来源为主动学习时的训练流水线状态 */
-  activeLearningTrainingStatus?: ActiveLearningTrainingStatus;
+  /** 手动添加｜主动学习 */
+  source: MLModelVersionSource;
+  /** 来源为主动学习时：是否达到主动学习触发条件 */
+  activeLearningTriggerReached?: boolean;
+  /** 来源为主动学习时：训练状态 */
+  trainingStatus?: "未训练" | "训练中" | "已完成";
 }
 
 export interface MLModel {
@@ -70,8 +57,6 @@ export interface MLModel {
   labelScope: LabelScope;
   supportsBatch: boolean;
   supportsInteractive: boolean;
-  /** 是否支持交互式预标注；未持久化时可由 supportsInteractive 推断 */
-  supportsInteractivePreannotation?: boolean;
   supportsTraining: boolean;
   supportsActiveLearning: boolean;
   activeLearningTriggerCondition?: string;
@@ -152,7 +137,6 @@ const syncModelRuntimeFromLatestVersion = (m: MLModel): MLModel => {
     authPassword: latest.authPassword,
   };
 };
-
 const initialModels: MLModel[] = [
   syncModelRuntimeFromLatestVersion({
     id: "MDL-001",
@@ -163,7 +147,6 @@ const initialModels: MLModel[] = [
     labelScope: "固定标签集",
     supportsBatch: true,
     supportsInteractive: false,
-    supportsInteractivePreannotation: false,
     supportsTraining: true,
     supportsActiveLearning: true,
     activeLearningTriggerCondition: "100条",
@@ -187,69 +170,81 @@ const initialModels: MLModel[] = [
           { sourceLabel: "positive", commonMappedLabel: "正面" },
           { sourceLabel: "negative", commonMappedLabel: "负面" },
         ],
-        origin: "手动添加",
+        source: "manual",
       },
       {
-        id: "VER-001-2",
-        version: "v2.2-al.0",
-        endpointUrl: "http://ml-backend.internal:9090/text-sentiment/al",
+        id: "VER-001-AL",
+        version: "v2.2.0-al",
+        endpointUrl: "http://ml-backend.internal:9090/text-sentiment/active",
         authType: "none",
         health: "健康",
-        creator: "主动学习",
-        createdAt: "2026-01-12 11:00",
+        creator: "主动学习任务",
+        createdAt: "2026-01-12 11:05",
         prompts: [],
         vocabularyMappings: [
           { sourceLabel: "positive", commonMappedLabel: "正面" },
           { sourceLabel: "negative", commonMappedLabel: "负面" },
         ],
-        origin: "主动学习",
-        activeLearningThresholdMet: true,
-        activeLearningTrainingStatus: "训练中",
+        source: "active_learning",
+        activeLearningTriggerReached: true,
+        trainingStatus: "已完成",
       },
     ],
-    version: "v2.2-al.0",
-    backendUrl: "http://ml-backend.internal:9090/text-sentiment/al",
-    authType: "none",
-  }),
-  withVersion(
-    {
-      id: "MDL-003",
-      name: "通用目标检测 YOLO",
-      description: "图像目标检测模型",
-      modality: "图像类",
-      taskTypes: ["目标检测", "图像分类"],
-      labelScope: "固定标签集",
-      supportsBatch: true,
-      supportsInteractive: true,
-      supportsInteractivePreannotation: true,
-      supportsTraining: false,
-      supportsActiveLearning: true,
-      activeLearningTriggerCondition: "200条",
-      health: "健康",
-      creator: "系统",
-      createdAt: "2026-01-15 09:00",
-      avgInferenceMs: 250,
-      processingTasks: 6420,
-      annotatorAccepted: 5100,
-    },
-    {
-      id: "VER-003-1",
-      version: "v8.0.1",
-      endpointUrl: "http://ml-backend.internal:9092/yolo",
-      authType: "none",
-      health: "健康",
-      creator: "系统",
-      createdAt: "2026-01-15 09:00",
-      prompts: [],
-      vocabularyMappings: [
-        { sourceLabel: "car", commonMappedLabel: "car" },
-        { sourceLabel: "person", commonMappedLabel: "person" },
-      ],
-      origin: "手动添加",
-    }
-  ),
+  } as MLModel),
+  syncModelRuntimeFromLatestVersion({
+    id: "MDL-003",
+    name: "通用目标检测 YOLO",
+    description: "图像目标检测模型",
+    modality: "图像类",
+    taskTypes: ["目标检测", "图像分类"],
+    labelScope: "固定标签集",
+    supportsBatch: true,
+    supportsInteractive: true,
+    supportsTraining: false,
+    supportsActiveLearning: true,
+    activeLearningTriggerCondition: "200条",
+    health: "健康",
+    creator: "系统",
+    createdAt: "2026-01-15 09:00",
+    avgInferenceMs: 250,
+    processingTasks: 6420,
+    annotatorAccepted: 5100,
+    versions: [
+      {
+        id: "VER-003-1",
+        version: "v8.0.1",
+        endpointUrl: "http://ml-backend.internal:9092/yolo",
+        authType: "none",
+        health: "健康",
+        creator: "系统",
+        createdAt: "2026-01-15 09:00",
+        prompts: [],
+        vocabularyMappings: [
+          { sourceLabel: "car", commonMappedLabel: "car" },
+          { sourceLabel: "person", commonMappedLabel: "person" },
+        ],
+        source: "manual",
+      },
+      {
+        id: "VER-003-AL",
+        version: "v8.0.2-al",
+        endpointUrl: "http://ml-backend.internal:9092/yolo/active",
+        authType: "none",
+        health: "健康",
+        creator: "主动学习任务",
+        createdAt: "2026-01-18 16:20",
+        prompts: [],
+        vocabularyMappings: [
+          { sourceLabel: "car", commonMappedLabel: "car" },
+          { sourceLabel: "person", commonMappedLabel: "person" },
+        ],
+        source: "active_learning",
+        activeLearningTriggerReached: false,
+        trainingStatus: "训练中",
+      },
+    ],
+  } as MLModel),
 ];
-
 export const useMLModelStore = create<MLModelState>()(
   persist(
     (set, get) => ({
@@ -270,13 +265,11 @@ export const useMLModelStore = create<MLModelState>()(
               : [],
           vocabularyMappings:
             m.labelScope === "固定标签集" ? [{ sourceLabel: "", commonMappedLabel: "" }] : [],
-          origin: "手动添加",
+          source: "manual",
         };
         const model = withVersion(
           {
             ...m,
-            supportsInteractivePreannotation: m.supportsInteractivePreannotation ?? m.supportsInteractive ?? false,
-            supportsInteractive: m.supportsInteractive ?? m.supportsInteractivePreannotation ?? false,
             id,
             health: "未检测",
             creator: "当前用户",
@@ -322,6 +315,7 @@ export const useMLModelStore = create<MLModelState>()(
           health: "未检测",
           creator: "当前用户",
           createdAt: now(),
+          source: version.source ?? "manual",
         };
         set((state) => ({
           models: state.models.map((m) =>

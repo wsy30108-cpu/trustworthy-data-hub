@@ -1453,7 +1453,7 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                                       </div>
                                       <div className="flex items-center gap-1 mt-0.5 text-primary">
                                         <Brain className="w-3 h-3 shrink-0 opacity-85" />
-                                        <span className="text-[10px] font-mono tabular-nums font-semibold">{(row.confidence * 100).toFixed(0)}%</span>
+                                        <span className="text-[10px] font-mono tabular-nums font-semibold">{row.confidence.toFixed(4)}</span>
                                       </div>
                                       {rs !== "pending" && (
                                         <span className="text-[9px] mt-0.5 block text-muted-foreground">
@@ -1540,7 +1540,7 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                                     <div className="font-semibold text-slate-800 leading-tight truncate">{row.label}</div>
                                     <div className="flex items-center gap-1 mt-0.5 text-primary">
                                       <Brain className="w-3 h-3 shrink-0 opacity-85" />
-                                      <span className="text-[10px] font-mono tabular-nums font-semibold">{(metaConf * 100).toFixed(0)}%</span>
+                                      <span className="text-[10px] font-mono tabular-nums font-semibold">{metaConf.toFixed(4)}</span>
                                     </div>
                                   </td>
                                   <td className="px-1.5 py-1 align-top max-w-0 min-w-0">

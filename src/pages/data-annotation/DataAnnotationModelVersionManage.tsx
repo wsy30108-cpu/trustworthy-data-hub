@@ -3,7 +3,11 @@ import { ArrowLeft, Edit3, Plus, Trash2, Wifi } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { useMLModelStore, type MLModel } from "@/stores/useMLModelStore";
+import { useMLModelStore, type MLModel, type MLModelVersion } from "@/stores/useMLModelStore";
+
+function versionSourceLabel(source?: MLModelVersion["source"]) {
+  return (source ?? "manual") === "active_learning" ? "主动学习" : "手动添加";
+}
 
 const DataAnnotationModelVersionManage = () => {
   const navigate = useNavigate();
@@ -89,47 +93,31 @@ const DataAnnotationModelVersionManage = () => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted/30 border-b">
-                    <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">版本</th>
+                    <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">版本</th>
                     <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">来源</th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground min-w-[168px]">主动学习与训练</th>
+                    <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap min-w-[140px]">
+                      主动学习训练
+                    </th>
                     <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">链接</th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">认证方式</th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">健康状态</th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">创建时间</th>
+                    <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">认证方式</th>
+                    <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">健康状态</th>
+                    <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">创建时间</th>
                     <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentVersions.map((v) => (
                     <tr key={v.id} className="border-b last:border-0 hover:bg-muted/20">
-                      <td className="py-3 px-3 font-medium whitespace-nowrap">{v.version}</td>
-                      <td className="py-3 px-3 whitespace-nowrap text-xs">
-                        <span
-                          className={
-                            v.origin === "主动学习"
-                              ? "text-violet-700 bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded font-medium"
-                              : ""
-                          }
-                        >
-                          {v.origin ?? "手动添加"}
-                        </span>
-                      </td>
+                      <td className="py-3 px-3 font-medium">{v.version}</td>
+                      <td className="py-3 px-3 whitespace-nowrap">{versionSourceLabel(v.source)}</td>
                       <td className="py-3 px-3 align-top">
-                        {(v.origin ?? "手动添加") === "主动学习" ? (
-                          <div className="space-y-1 text-[11px] leading-snug">
-                            <p className="text-muted-foreground">
-                              触发条件：
-                              <span className={v.activeLearningThresholdMet ? "text-emerald-600 font-semibold" : "text-amber-600 font-semibold"}>
-                                {v.activeLearningThresholdMet ? "已达到" : "未达标"}
-                              </span>
-                            </p>
-                            <p className="text-muted-foreground">
-                              训练状态：
-                              <span className="text-foreground font-medium">{v.activeLearningTrainingStatus ?? "—"}</span>
-                            </p>
+                        {(v.source ?? "manual") === "active_learning" ? (
+                          <div className="space-y-0.5 text-xs leading-snug">
+                            <div>触发条件：{v.activeLearningTriggerReached === true ? "已达到" : "未达到"}</div>
+                            <div>训练状态：{v.trainingStatus ?? "—"}</div>
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="py-3 px-3 text-xs font-mono text-muted-foreground max-w-[220px] truncate" title={v.endpointUrl}>
