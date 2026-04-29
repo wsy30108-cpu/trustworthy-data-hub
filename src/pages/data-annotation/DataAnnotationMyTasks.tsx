@@ -343,51 +343,26 @@ const DataAnnotationMyTasks = () => {
                 <td className="py-3 px-4">
                   {(() => {
                     const pc = preannotationConfigs[t.id];
-                    if (!pc || !pc.batchEnabled) {
-                      return <span className="text-[10px] text-muted-foreground/60">未开启</span>;
-                    }
+                    if (!pc || !pc.batchEnabled) return <span className="text-[10px] text-muted-foreground/60">未开启</span>;
                     const percent = Math.round((pc.preannotated / pc.total) * 100);
-                    const isDone = pc.status === "已完成" || pc.status === "部分失败";
                     return (
-                      <div className="flex flex-col gap-1 min-w-[120px]">
-                        <div className="flex items-center gap-1.5">
-                          {isDone ? (
-                            <CheckCircle className="w-3 h-3 text-emerald-600 shrink-0" />
-                          ) : (
-                            <Loader2 className="w-3 h-3 text-primary animate-spin shrink-0" />
-                          )}
-                          <span className="text-[11px] font-mono">
-                            <span className={isDone ? "text-emerald-700 font-semibold" : "text-primary font-semibold"}>
-                              {pc.preannotated.toLocaleString()}
-                            </span>
-                            <span className="text-muted-foreground">/{pc.total.toLocaleString()}</span>
+                      <div className="flex items-center gap-1">
+                        {pc.status === "已完成" ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-bold">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            已预标注 100%
                           </span>
-                          <span className="text-[9px] text-muted-foreground">{percent}%</span>
-                        </div>
-                        <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${
-                              isDone ? "bg-emerald-500" : "bg-primary"
-                            }`}
-                            style={{ width: `${percent}%` }}
-                          />
-                        </div>
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <span
-                            className="text-[9px] text-muted-foreground truncate max-w-[90px]"
-                            title={pc.modelName}
-                          >
-                            {pc.modelName}
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-700 text-[9px] font-bold">
+                            <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                            预标注中 {percent}%
                           </span>
-                          {pc.interactiveEnabled && (
-                            <span
-                              className="text-[8px] px-1 rounded bg-purple-50 text-purple-700 font-bold"
-                              title="支持交互式预标注"
-                            >
-                              交互
-                            </span>
-                          )}
-                        </div>
+                        )}
+                        {pc.interactiveEnabled && (
+                          <span className="inline-flex items-center px-1 py-0.5 rounded bg-purple-50 border border-purple-200 text-purple-700 text-[9px] font-bold">
+                            <Brain className="w-2.5 h-2.5 mr-0.5" />交互
+                          </span>
+                        )}
                       </div>
                     );
                   })()}

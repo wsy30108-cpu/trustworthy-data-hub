@@ -77,6 +77,11 @@ const mockUsers = [
 
 interface User { name: string; account: string; }
 interface PersonGroup { id: string; name: string; persons: User[]; batchLimit: number; }
+interface TaskTypeModelBinding {
+  taskType: string;
+  modelId: string;
+  versionId: string;
+}
 
 interface Props { onBack: () => void; }
 
@@ -149,6 +154,10 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   const [selectedModelId, setSelectedModelId] = useState<string>("");
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.6);
   const [autoAccept, setAutoAccept] = useState(false);
+  const [taskTypeBindings, setTaskTypeBindings] = useState<TaskTypeModelBinding[]>([]);
+  const [showVocabularyModal, setShowVocabularyModal] = useState(false);
+  const [sourceLabelSearch, setSourceLabelSearch] = useState("");
+  const [taskLabelMappings, setTaskLabelMappings] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!selectedCategory) return;
@@ -171,6 +180,61 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
     () => availableModels.find((m) => m.id === selectedModelId),
     [availableModels, selectedModelId]
   );
+
+  const taskLabels = useMemo(() => {
+    return Object.values(objectLabels)
+      .flat()
+      .map((x) => x.value)
+      .filter(Boolean);
+  }, [objectLabels]);
+
+  const bindingCandidates = useMemo(() => {
+    return availableModels.flatMap((m) =>
+      m.versions.map((v) => ({
+        key: `${m.id}:${v.id}`,
+        modelId: m.id,
+        modelName: m.name,
+        versionId: v.id,
+        version: v.version,
+        taskTypes: m.taskTypes,
+        modality: m.modality,
+        labelScope: m.labelScope,
+        vocabularyMappings: v.vocabularyMappings,
+      }))
+    );
+  }, [availableModels]);
+
+  const sourceLabels = useMemo(() => {
+    const labels = new Set<string>();
+    taskTypeBindings.forEach((binding) => {
+      const candidate = bindingCandidates.find(
+        (x) => x.modelId === binding.modelId && x.versionId === binding.versionId
+      );
+      candidate?.vocabularyMappings.forEach((item) => labels.add(item.sourceLabel));
+    });
+    return Array.from(labels);
+  }, [taskTypeBindings, bindingCandidates]);
+
+  useEffect(() => {
+    if (!preannotationEnabled) {
+      setTaskTypeBindings([]);
+      return;
+    }
+    const allTaskTypes = Array.from(new Set(availableModels.flatMap((m) => m.taskTypes)));
+    setTaskTypeBindings((prev) => {
+      const next = allTaskTypes.map((taskType) => {
+        const existed = prev.find((x) => x.taskType === taskType);
+        if (existed) return existed;
+        const candidate = bindingCandidates.find((x) => x.taskTypes.includes(taskType));
+        return {
+          taskType,
+          modelId: candidate?.modelId || "",
+          versionId: candidate?.versionId || "",
+        };
+      });
+      return next;
+    });
+  }, [preannotationEnabled, availableModels, bindingCandidates]);
 
   const handleModelChange = (id: string) => {
     setSelectedModelId(id);
@@ -327,15 +391,24 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   };
 
   const handlePublish = () => {
-    if ((preannotationEnabled || interactiveEnabled) && selectedModel && generatedBatches.length > 0) {
+    const firstBinding = taskTypeBindings.find((x) => x.modelId && x.versionId);
+    const bindingCandidate = firstBinding
+      ? bindingCandidates.find(
+          (x) => x.modelId === firstBinding.modelId && x.versionId === firstBinding.versionId
+        )
+      : undefined;
+    if ((preannotationEnabled || interactiveEnabled) && bindingCandidate && generatedBatches.length > 0) {
       generatedBatches.forEach((batch) => {
         dispatchPreannotation({
           taskId: batch.id,
-          batchEnabled: preannotationEnabled && selectedModel.supportsBatch,
-          interactiveEnabled: interactiveEnabled && selectedModel.supportsInteractive,
-          modelId: selectedModel.id,
-          modelName: selectedModel.name,
-          modality: selectedModel.modality,
+          batchEnabled: preannotationEnabled,
+          interactiveEnabled,
+          modelId: bindingCandidate.modelId,
+          modelName: bindingCandidate.modelName,
+          modelVersionId: bindingCandidate.versionId,
+          modelVersion: bindingCandidate.version,
+          taskType: firstBinding?.taskType,
+          modality: bindingCandidate.modality,
           confidenceThreshold,
           autoAccept,
           total: batch.size,
@@ -960,192 +1033,58 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                       <div className="flex items-center justify-between">
                         <h3 className="font-medium flex items-center gap-2">
                           <Brain className="w-4 h-4 text-primary" /> 智能预标注
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold">NEW</span>
                         </h3>
-                        {selectedModel && (
-                          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                            <Sparkles className="w-3 h-3 text-amber-500" />
-                            已选模型：<span className="font-medium text-foreground">{selectedModel.name}</span>
-                          </div>
-                        )}
+                        <Switch checked={preannotationEnabled} onCheckedChange={setPreannotationEnabled} />
                       </div>
-
-                      {availableModels.length === 0 ? (
-                        <div className="p-4 rounded-lg border border-dashed bg-amber-50/30 flex items-start gap-3">
-                          <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5" />
-                          <div className="flex-1">
-                            <p className="text-xs font-medium text-amber-800">
-                              当前任务类型（{selectedCategory || "未选择"}）暂未接入任何模型
-                            </p>
-                            <p className="text-[11px] text-amber-700/80 mt-1 leading-relaxed">
-                              请先前往 <span className="font-bold">数据标注 / 管理中心 / 模型管理</span> 连接对应模态的模型。跳过此步骤将关闭本任务的预标注能力。
-                            </p>
-                          </div>
-                        </div>
+                      {!preannotationEnabled ? (
+                        <p className="text-xs text-muted-foreground">未开启</p>
                       ) : (
                         <>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <label
-                              className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all ${
-                                preannotationEnabled
-                                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                                  : "border-slate-200 hover:border-slate-300"
-                              } ${!selectedModel?.supportsBatch ? "opacity-50 cursor-not-allowed" : ""}`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={preannotationEnabled}
-                                disabled={!selectedModel?.supportsBatch}
-                                onChange={(e) => setPreannotationEnabled(e.target.checked)}
-                                className="mt-0.5"
-                              />
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <Zap className="w-4 h-4 text-primary" />
-                                  <span className="text-sm font-semibold text-slate-800">批量预标注</span>
-                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold">
-                                    默认开启
-                                  </span>
-                                </div>
-                                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-                                  任务下发后，后端自动对全量样本执行模型推理，人工打开工作台时直接审校预标注结果。
-                                </p>
-                                {!selectedModel?.supportsBatch && (
-                                  <p className="text-[10px] text-rose-500 mt-1">当前模型不支持批量预标注</p>
-                                )}
-                              </div>
-                            </label>
-
-                            <label
-                              className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all ${
-                                interactiveEnabled
-                                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                                  : "border-slate-200 hover:border-slate-300"
-                              } ${!selectedModel?.supportsInteractive ? "opacity-50 cursor-not-allowed" : ""}`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={interactiveEnabled}
-                                disabled={!selectedModel?.supportsInteractive}
-                                onChange={(e) => setInteractiveEnabled(e.target.checked)}
-                                className="mt-0.5"
-                              />
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <MousePointer2 className="w-4 h-4 text-primary" />
-                                  <span className="text-sm font-semibold text-slate-800">交互式预标注</span>
-                                </div>
-                                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-                                  标注员操作（点击、框选、输入提示词）时实时请求模型，辅助生成局部标注建议。
-                                </p>
-                                {!selectedModel?.supportsInteractive && (
-                                  <p className="text-[10px] text-rose-500 mt-1">当前模型不支持交互式预标注</p>
-                                )}
-                              </div>
-                            </label>
-                          </div>
-
-                          <div className="space-y-3 pt-2 border-t">
-                            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                              <Brain className="w-3.5 h-3.5" /> 选择预标注模型
-                              <span className="text-[10px] text-muted-foreground/60">
-                                （仅展示与「{selectedCategory || "任务类型"}」兼容的模型）
-                              </span>
-                            </label>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                              {availableModels.map((m) => {
-                                const active = selectedModelId === m.id;
+                          {taskTypeBindings.length === 0 ? (
+                            <div className="p-4 rounded-lg border border-dashed bg-amber-50/30 text-xs text-amber-800">
+                              当前模态未找到可用于预标注的模型版本
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {taskTypeBindings.map((binding, idx) => {
+                                const options = bindingCandidates.filter((x) => x.taskTypes.includes(binding.taskType));
+                                const selected = options.find(
+                                  (x) => x.modelId === binding.modelId && x.versionId === binding.versionId
+                                );
+                                const mappedCount = taskLabels.filter((label) => !!taskLabelMappings[label]).length;
+                                const unmappedCount = Math.max(0, taskLabels.length - mappedCount);
                                 return (
-                                  <button
-                                    key={m.id}
-                                    type="button"
-                                    onClick={() => handleModelChange(m.id)}
-                                    className={`text-left p-3 rounded-lg border transition-all ${
-                                      active
-                                        ? "border-primary bg-primary/5 ring-1 ring-primary/20 shadow-sm"
-                                        : "border-slate-200 hover:border-primary/40 hover:bg-muted/30"
-                                    }`}
-                                  >
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-sm font-semibold text-foreground truncate">
-                                            {m.name}
-                                          </span>
-                                        </div>
-                                        <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">
-                                          {m.description}
-                                        </p>
-                                        <div className="flex flex-wrap gap-1 mt-1.5">
-                                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
-                                            {m.modality}
-                                          </span>
-                                          {m.supportsBatch && (
-                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">
-                                              批量
-                                            </span>
-                                          )}
-                                          {m.supportsInteractive && (
-                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">
-                                              交互
-                                            </span>
-                                          )}
-                                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-50 text-slate-500 font-mono">
-                                            {m.avgInferenceMs}ms
-                                          </span>
-                                        </div>
-                                      </div>
-                                      {active && (
-                                        <Check className="w-4 h-4 text-primary shrink-0 mt-1" />
-                                      )}
-                                    </div>
-                                  </button>
+                                  <div key={binding.taskType} className="rounded-lg border p-3 space-y-2">
+                                    <div className="text-xs text-muted-foreground">任务类型：{binding.taskType}</div>
+                                    <select
+                                      value={selected ? `${selected.modelId}:${selected.versionId}` : ""}
+                                      onChange={(e) => {
+                                        const [modelId, versionId] = e.target.value.split(":");
+                                        setTaskTypeBindings((prev) =>
+                                          prev.map((item, i) => (i === idx ? { ...item, modelId, versionId } : item))
+                                        );
+                                      }}
+                                      className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                                    >
+                                      <option value="">请选择预处理模型版本</option>
+                                      {options.map((x) => (
+                                        <option key={x.key} value={`${x.modelId}:${x.versionId}`}>
+                                          {x.modelName} / {x.version}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {selected?.labelScope === "固定标签集" && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowVocabularyModal(true)}
+                                        className="text-xs text-primary hover:underline"
+                                      >
+                                        词汇映射表（已映射 {mappedCount}、未映射 {unmappedCount}）
+                                      </button>
+                                    )}
+                                  </div>
                                 );
                               })}
-                            </div>
-                          </div>
-
-                          {selectedModel && (preannotationEnabled || interactiveEnabled) && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 rounded-lg bg-slate-50/50 border border-slate-100">
-                              <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                  置信度阈值
-                                </label>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <input
-                                    type="number"
-                                    value={confidenceThreshold}
-                                    onChange={(e) => setConfidenceThreshold(Number(e.target.value))}
-                                    min={0}
-                                    max={1}
-                                    step={0.05}
-                                    className="w-20 px-2 py-1 text-sm border rounded bg-white font-mono"
-                                  />
-                                  <span className="text-[10px] text-muted-foreground">低于阈值需人工审校</span>
-                                </div>
-                              </div>
-                              <div />
-                              <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                  预估耗时
-                                </label>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-sm font-bold text-foreground">
-                                    {estimatedMinutes > 0 ? `≈ ${estimatedMinutes} 分钟` : "—"}
-                                  </span>
-                                  {preAnnotationTotal > 0 && (
-                                    <span className="text-[10px] text-muted-foreground">
-                                      （{preAnnotationTotal.toLocaleString()} 条）
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <Switch checked={autoAccept} onCheckedChange={setAutoAccept} />
-                                  <span className="text-[11px] text-muted-foreground">
-                                    {autoAccept ? "高置信度自动接受" : "全部需人工确认"}
-                                  </span>
-                                </div>
-                              </div>
                             </div>
                           )}
                         </>
@@ -2105,15 +2044,12 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               <Brain className="w-3 h-3" /> 智能预标注
                             </p>
-                            {selectedModel && (preannotationEnabled || interactiveEnabled) ? (
+                            {preannotationEnabled && taskTypeBindings.length > 0 ? (
                               <div className="mt-1 flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-medium">{selectedModel.name}</span>
-                                <span className="text-[10px] text-muted-foreground font-mono">{selectedModel.version}</span>
-                                {preannotationEnabled && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">
-                                    批量
-                                  </span>
-                                )}
+                                <span className="text-sm font-medium">已配置 {taskTypeBindings.length} 条任务类型映射</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">
+                                  批量
+                                </span>
                                 {interactiveEnabled && (
                                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-bold">
                                     交互
@@ -2124,9 +2060,6 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                                 </span>
                                 <span className="text-[10px] text-muted-foreground">
                                   · {autoAccept ? "自动接受" : "人工确认"}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground">
-                                  · 标签范围 {selectedModel.labelRange}
                                 </span>
                                 {preannotationEnabled && estimatedMinutes > 0 && (
                                   <span className="text-[10px] text-amber-700 font-bold">
@@ -2319,6 +2252,63 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
       </footer>
 
       {/* Publish confirmation dialog */}
+      {showVocabularyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card rounded-lg border shadow-xl p-6 max-w-3xl w-full mx-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold">词汇映射表</h3>
+              <button onClick={() => setShowVocabularyModal(false)} className="px-2 py-1 text-xs border rounded">关闭</button>
+            </div>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
+              本模型能预标注的标签范围有限，无对应源标签的数据模型无法预测。
+            </p>
+            <div className="mb-2">
+              <input
+                value={sourceLabelSearch}
+                onChange={(e) => setSourceLabelSearch(e.target.value)}
+                placeholder="搜索源标签"
+                className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+              />
+            </div>
+            <div className="max-h-80 overflow-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="py-2 text-left">当前任务标签</th>
+                    <th className="py-2 text-left">源标签</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {taskLabels.map((label) => (
+                    <tr key={label} className="border-b">
+                      <td className="py-2 pr-2">{label}</td>
+                      <td className="py-2">
+                        <select
+                          value={taskLabelMappings[label] || ""}
+                          onChange={(e) =>
+                            setTaskLabelMappings((prev) => ({ ...prev, [label]: e.target.value }))
+                          }
+                          className="w-full px-2 py-1 border rounded"
+                        >
+                          <option value="">请选择源标签</option>
+                          {sourceLabels
+                            .filter((x) => x.toLowerCase().includes(sourceLabelSearch.toLowerCase()))
+                            .map((x) => (
+                              <option key={x} value={x}>
+                                {x}
+                              </option>
+                            ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {publishConfirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-card rounded-lg border shadow-xl p-6 max-w-md w-full mx-4">

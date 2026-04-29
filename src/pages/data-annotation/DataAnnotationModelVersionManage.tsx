@@ -12,9 +12,9 @@ import {
 interface VersionFormState {
   version: string;
   endpointUrl: string;
-  authType: "none" | "apikey";
-  apiKeyUsername: string;
-  apiKeyPassword: string;
+  authType: "none" | "api_key";
+  authUsername: string;
+  authPassword: string;
   prompts: TaskPromptBinding[];
   vocabularyMappings: VocabularyMappingItem[];
 }
@@ -23,8 +23,8 @@ const emptyVersionForm: VersionFormState = {
   version: "v1.0.0",
   endpointUrl: "",
   authType: "none",
-  apiKeyUsername: "",
-  apiKeyPassword: "",
+  authUsername: "",
+  authPassword: "",
   prompts: [{ taskType: "", prompt: "" }],
   vocabularyMappings: [{ sourceLabel: "", commonMappedLabel: "" }],
 };
@@ -59,13 +59,12 @@ const DataAnnotationModelVersionManage = () => {
     const version = selectedModel.versions.find((v) => v.id === versionId);
     if (!version) return;
     setEditingVersionId(versionId);
-    const [username = "", password = ""] = (version.authValue || "").split(":", 2);
     setForm({
       version: version.version,
       endpointUrl: version.endpointUrl,
       authType: version.authType,
-      apiKeyUsername: username,
-      apiKeyPassword: password,
+      authUsername: version.authUsername || "",
+      authPassword: version.authPassword || "",
       prompts: version.prompts.length ? version.prompts : [{ taskType: "", prompt: "" }],
       vocabularyMappings: version.vocabularyMappings.length
         ? version.vocabularyMappings
@@ -107,7 +106,7 @@ const DataAnnotationModelVersionManage = () => {
     if (!selectedModel) return;
     if (!form.version.trim()) return toast.error("请填写版本号");
     if (!/^https?:\/\//.test(form.endpointUrl)) return toast.error("模型链接需以 http:// 或 https:// 开头");
-    if (form.authType === "apikey" && (!form.apiKeyUsername.trim() || !form.apiKeyPassword.trim())) {
+    if (form.authType === "api_key" && (!form.authUsername.trim() || !form.authPassword.trim())) {
       return toast.error("请填写 API KEY 用户名和密码");
     }
 
@@ -131,10 +130,8 @@ const DataAnnotationModelVersionManage = () => {
       version: form.version.trim(),
       endpointUrl: form.endpointUrl.trim(),
       authType: form.authType,
-      authValue:
-        form.authType === "apikey"
-          ? `${form.apiKeyUsername.trim()}:${form.apiKeyPassword.trim()}`
-          : undefined,
+      authUsername: form.authType === "api_key" ? form.authUsername.trim() : undefined,
+      authPassword: form.authType === "api_key" ? form.authPassword.trim() : undefined,
       prompts: selectedModel.labelScope === "开放标签集" ? prompts : [],
       vocabularyMappings: selectedModel.labelScope === "开放标签集" ? [] : vocabularyMappings,
     };
@@ -249,15 +246,14 @@ const DataAnnotationModelVersionManage = () => {
       )}
 
       {showForm && selectedModel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card rounded-xl border shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-            <div className="p-5 border-b flex items-center justify-between">
-              <h3 className="text-lg font-semibold">{editingVersionId ? "编辑模型版本" : "新增模型版本"}</h3>
-              <button onClick={() => setShowForm(false)} className="px-2 py-1 text-xs border rounded hover:bg-muted/50">
-                关闭
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="rounded-xl border bg-card">
+          <div className="p-5 border-b flex items-center justify-between">
+            <h3 className="text-lg font-semibold">{editingVersionId ? "编辑模型版本" : "新增模型版本"}</h3>
+            <button onClick={() => setShowForm(false)} className="px-2 py-1 text-xs border rounded hover:bg-muted/50">
+              返回版本列表
+            </button>
+          </div>
+          <div className="p-5 space-y-4">
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">版本号</label>
@@ -282,20 +278,20 @@ const DataAnnotationModelVersionManage = () => {
                   <label className="text-xs text-muted-foreground mb-1 block">认证方式</label>
                   <select
                     value={form.authType}
-                    onChange={(e) => setForm({ ...form, authType: e.target.value as "none" | "apikey" })}
+                    onChange={(e) => setForm({ ...form, authType: e.target.value as "none" | "api_key" })}
                     className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
                   >
                     <option value="none">无认证</option>
-                    <option value="apikey">API KEY认证</option>
+                    <option value="api_key">API KEY认证</option>
                   </select>
                 </div>
-                {form.authType === "apikey" && (
+                {form.authType === "api_key" && (
                   <>
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">用户名</label>
                       <input
-                        value={form.apiKeyUsername}
-                        onChange={(e) => setForm({ ...form, apiKeyUsername: e.target.value })}
+                        value={form.authUsername}
+                        onChange={(e) => setForm({ ...form, authUsername: e.target.value })}
                         className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
                       />
                     </div>
@@ -303,8 +299,8 @@ const DataAnnotationModelVersionManage = () => {
                       <label className="text-xs text-muted-foreground mb-1 block">密码</label>
                       <input
                         type="password"
-                        value={form.apiKeyPassword}
-                        onChange={(e) => setForm({ ...form, apiKeyPassword: e.target.value })}
+                        value={form.authPassword}
+                        onChange={(e) => setForm({ ...form, authPassword: e.target.value })}
                         className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
                       />
                     </div>
@@ -473,18 +469,17 @@ const DataAnnotationModelVersionManage = () => {
                   </div>
                 </div>
               )}
-            </div>
-            <div className="p-5 border-t flex items-center justify-end gap-2 bg-muted/20">
-              <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-muted/50">
-                取消
-              </button>
-              <button
-                onClick={handleSubmit}
-                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-              >
-                保存版本
-              </button>
-            </div>
+          </div>
+          <div className="p-5 border-t flex items-center justify-end gap-2 bg-muted/20">
+            <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-muted/50">
+              取消
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+            >
+              保存版本
+            </button>
           </div>
         </div>
       )}

@@ -9,7 +9,6 @@ import {
   Edit3,
   Image as ImageIcon,
   Mic,
-  MousePointer2,
   Plus,
   RefreshCw,
   Search,
@@ -18,11 +17,12 @@ import {
   Video,
   Table2,
   Layers,
-  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useMLModelStore, type MLModel, type ModelHealth, type ModelModality } from "@/stores/useMLModelStore";
+
+const TASK_TYPE_OPTIONS = ["文本分类", "情感分析", "实体识别", "目标检测", "图像分类", "语音转写", "视频追踪"];
 
 const modalityIcons: Record<ModelModality, any> = {
   文本类: Type,
@@ -54,12 +54,12 @@ interface ConnectFormState {
   name: string;
   description: string;
   modality: ModelModality;
-  taskTypes: string;
+  taskTypes: string[];
   supportsBatch: boolean;
   supportsInteractive: boolean;
   supportsTraining: boolean;
   avgInferenceMs: number;
-  labelScope: "开放词汇" | "非开放词汇";
+  labelScope: "固定标签集" | "开放标签集";
   supportsActiveLearning: boolean;
   activeLearningTriggerCondition: string;
 }
@@ -68,14 +68,14 @@ const emptyForm: ConnectFormState = {
   name: "",
   description: "",
   modality: "文本类",
-  taskTypes: "",
+  taskTypes: [],
   supportsBatch: true,
   supportsInteractive: false,
   supportsTraining: false,
   avgInferenceMs: 200,
-  labelScope: "非开放词汇",
+  labelScope: "固定标签集",
   supportsActiveLearning: false,
-  activeLearningTriggerCondition: "",
+  activeLearningTriggerCondition: "100",
 };
 
 const DataAnnotationModels = () => {
@@ -123,7 +123,7 @@ const DataAnnotationModels = () => {
       name: m.name,
       description: m.description,
       modality: m.modality,
-      taskTypes: m.taskTypes.join("，"),
+      taskTypes: m.taskTypes,
       supportsBatch: m.supportsBatch,
       supportsInteractive: m.supportsInteractive,
       supportsTraining: m.supportsTraining,
@@ -137,6 +137,7 @@ const DataAnnotationModels = () => {
 
   const handleSubmit = () => {
     if (!form.name.trim()) return toast.error("请填写模型名称");
+    if (form.taskTypes.length === 0) return toast.error("请至少选择一个任务类型");
     if (form.supportsActiveLearning && !form.activeLearningTriggerCondition.trim()) {
       return toast.error("支持主动学习时请填写主动学习触发条件");
     }
@@ -146,7 +147,6 @@ const DataAnnotationModels = () => {
       description: form.description.trim(),
       modality: form.modality,
       taskTypes: form.taskTypes
-        .split(/[,，、\s]+/)
         .map((t) => t.trim())
         .filter(Boolean),
       supportsBatch: form.supportsBatch,
@@ -355,12 +355,24 @@ const DataAnnotationModels = () => {
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">可处理任务类型（逗号分隔）</label>
-                <input
+                <label className="text-xs text-muted-foreground mb-1 block">可处理任务类型（多选）</label>
+                <select
+                  multiple
                   value={form.taskTypes}
-                  onChange={(e) => setForm({ ...form, taskTypes: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                />
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      taskTypes: Array.from(e.target.selectedOptions).map((option) => option.value),
+                    })
+                  }
+                  className="w-full px-3 py-2 text-sm border rounded-lg bg-background min-h-28"
+                >
+                  {TASK_TYPE_OPTIONS.map((taskType) => (
+                    <option key={taskType} value={taskType}>
+                      {taskType}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -368,11 +380,11 @@ const DataAnnotationModels = () => {
                   <label className="text-xs text-muted-foreground mb-1 block">标签范围</label>
                   <select
                     value={form.labelScope}
-                    onChange={(e) => setForm({ ...form, labelScope: e.target.value as "开放词汇" | "非开放词汇" })}
+                    onChange={(e) => setForm({ ...form, labelScope: e.target.value as "固定标签集" | "开放标签集" })}
                     className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
                   >
-                    <option value="开放词汇">开放词汇</option>
-                    <option value="非开放词汇">非开放词汇</option>
+                    <option value="固定标签集">固定标签集</option>
+                    <option value="开放标签集">开放标签集</option>
                   </select>
                 </div>
                 <div>
@@ -403,12 +415,16 @@ const DataAnnotationModels = () => {
                   是否支持主动学习
                 </label>
                 {form.supportsActiveLearning && (
-                  <input
-                    value={form.activeLearningTriggerCondition}
-                    onChange={(e) => setForm({ ...form, activeLearningTriggerCondition: e.target.value })}
-                    placeholder="如：累计100条低置信度样本触发"
-                    className="w-full mt-2 px-3 py-2 text-sm border rounded-lg bg-background"
-                  />
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      value={form.activeLearningTriggerCondition}
+                      onChange={(e) => setForm({ ...form, activeLearningTriggerCondition: e.target.value })}
+                      type="number"
+                      min={1}
+                      className="w-24 px-3 py-2 text-sm border rounded-lg bg-background"
+                    />
+                    <span className="text-sm text-muted-foreground">条</span>
+                  </div>
                 )}
               </div>
             </div>

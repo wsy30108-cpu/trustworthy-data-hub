@@ -14,6 +14,12 @@ export interface TaskPreannotationConfig {
   modelId: string;
   /** 模型名称快照，方便展示 */
   modelName: string;
+  /** 模型版本 ID */
+  modelVersionId?: string;
+  /** 模型版本号快照 */
+  modelVersion?: string;
+  /** 当前任务类型 */
+  taskType?: string;
   /** 模态快照 */
   modality: string;
   /** 低于该置信度视为"低质预测"需要人工审校 */

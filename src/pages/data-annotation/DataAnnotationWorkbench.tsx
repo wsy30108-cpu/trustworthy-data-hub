@@ -524,6 +524,15 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
     toast.info(`已拒绝样本 #${sampleId} 的预标注`, { duration: 1200 });
   }, []);
 
+  const deletePreAnnotation = useCallback((sampleId: number) => {
+    setPreAnnotations((prev) => {
+      const next = new Map(prev);
+      next.delete(sampleId);
+      return next;
+    });
+    toast.info(`已删除样本 #${sampleId} 的预标注结果`);
+  }, []);
+
   const acceptAllHighConfidence = useCallback(() => {
     if (!preannotationConfig) return;
     const threshold = preannotationConfig.confidenceThreshold;
@@ -641,6 +650,20 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
         a.id.includes(listSearch);
       return matchesSearch;
     });
+
+    const pre = preAnnotations.get(current.id);
+    if (pre && !filteredAnnotations.some((x) => x.id === `pre-${current.id}`)) {
+      filteredAnnotations.push({
+        id: `pre-${current.id}`,
+        sampleId: current.id,
+        label: pre.label,
+        content: "来自预标注结果",
+        group: "AI 预标注",
+        tool: `模型 · ${preannotationConfig?.modelName || "预标注"}`,
+        createdAt: new Date().toLocaleString(),
+        score: Math.round(pre.confidence * 100),
+      });
+    }
 
     filteredAnnotations.sort((a, b) => {
       if (listSortMode === "score") return b.score - a.score;
@@ -857,96 +880,12 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
               {renderContent()}
 
               {currentPreAnnotation && currentState.status === "未标注" && (
-                <section className="rounded-2xl border-2 border-dashed border-primary/30 bg-primary/[0.03] p-5 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                      <Brain className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-bold text-primary uppercase tracking-wider">
-                          AI 模型预标注建议
-                        </span>
-                        {currentPreAnnotation.reviewStatus === "rejected" && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold">
-                            已拒绝
-                          </span>
-                        )}
-                        <span className="ml-auto text-[10px] text-muted-foreground">
-                          来源：{preannotationConfig?.modelName}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 mt-2">
-                        <div className="flex items-center rounded-sm overflow-hidden border border-primary/30 bg-white h-8">
-                          <div
-                            className="w-1 h-full"
-                            style={{
-                              backgroundColor:
-                                labels.find((l) => l.value === currentPreAnnotation.label)?.color ||
-                                "currentColor",
-                            }}
-                          />
-                          <div className="px-3 flex items-center gap-2">
-                            <span className="text-sm font-semibold text-slate-700">
-                              {currentPreAnnotation.label}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-muted-foreground">置信度</span>
-                          <span
-                            className={`text-sm font-mono font-bold ${
-                              currentPreAnnotation.confidence >= (preannotationConfig?.confidenceThreshold || 0.6)
-                                ? "text-emerald-600"
-                                : "text-amber-600"
-                            }`}
-                          >
-                            {(currentPreAnnotation.confidence * 100).toFixed(1)}%
-                          </span>
-                          {currentPreAnnotation.confidence < (preannotationConfig?.confidenceThreshold || 0.6) && (
-                            <AlertTriangle
-                              className="w-3 h-3 text-amber-500"
-                              aria-label="低于阈值，建议人工复核"
-                            />
-                          )}
-                        </div>
-                        <div className="flex-1" />
-                        {currentPreAnnotation.reviewStatus === "pending" && (
-                          <>
-                            <button
-                              onClick={() => acceptPreAnnotation(current.id)}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors shadow-sm"
-                            >
-                              <Check className="w-3.5 h-3.5" /> 接受 (Y)
-                            </button>
-                            <button
-                              onClick={() => rejectPreAnnotation(current.id)}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
-                            >
-                              <X className="w-3.5 h-3.5" /> 拒绝 (N)
-                            </button>
-                          </>
-                        )}
-                        {currentPreAnnotation.reviewStatus === "rejected" && (
-                          <button
-                            onClick={() => acceptPreAnnotation(current.id)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm"
-                          >
-                            <ThumbsUp className="w-3.5 h-3.5" /> 改为接受
-                          </button>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">
-                        模型基于历史样本给出的初步建议，您可以接受、拒绝，或直接在下方手动选择新的标签覆盖。
-                        {preannotationConfig?.interactiveEnabled && (
-                          <span className="ml-1 text-purple-700 font-medium">
-                            · 已开启交互式预标注，操作样本时模型可实时辅助。
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </section>
+                <div className="rounded-lg border border-dashed border-primary/40 bg-primary/[0.03] px-4 py-3 text-xs flex items-center gap-2">
+                  <Brain className="w-3.5 h-3.5 text-primary" />
+                  <span>
+                    当前样本含预标注结果：{currentPreAnnotation.label}（{(currentPreAnnotation.confidence * 100).toFixed(1)}%）
+                  </span>
+                </div>
               )}
 
               {currentPreAnnotation && currentState.status === "已标注" && currentPreAnnotation.reviewStatus === "accepted" && (
@@ -1224,7 +1163,9 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                                   <div
                                     key={ann.id}
                                     onClick={() => setCurrentIndex(ann.sampleId - 1)}
-                                    className="group flex flex-col gap-1.5 p-3 rounded-xl border border-slate-100 bg-white hover:border-primary/30 hover:shadow-md transition-all cursor-pointer relative overflow-hidden"
+                                    className={`group flex flex-col gap-1.5 p-3 rounded-xl border bg-white hover:border-primary/30 hover:shadow-md transition-all cursor-pointer relative overflow-hidden ${
+                                      ann.id.startsWith("pre-") ? "border-primary/30 bg-primary/[0.02]" : "border-slate-100"
+                                    }`}
                                   >
                                     <div className="absolute top-0 right-0 px-2 py-0.5 bg-slate-50 border-l border-b border-slate-100 rounded-bl-lg text-[9px] font-bold text-slate-400">
                                       {ann.id}
@@ -1241,6 +1182,9 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                                         {ann.label}
                                       </span>
                                       <span className="text-[9px] text-slate-400 font-medium">来自 {ann.tool}</span>
+                                      {ann.id.startsWith("pre-") && (
+                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">预标注</span>
+                                      )}
                                       <span className={`ml-auto text-[10px] font-bold ${ann.score >= 90 ? "text-emerald-500" : "text-amber-500"}`}>
                                         {ann.score}分
                                       </span>
@@ -1250,6 +1194,28 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                                       <span className="font-mono">SAMPLE #{ann.sampleId}</span>
                                       <span>{ann.createdAt}</span>
                                     </div>
+                                    {ann.id.startsWith("pre-") && (
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            acceptPreAnnotation(ann.sampleId);
+                                          }}
+                                          className="px-2 py-1 rounded bg-emerald-500 text-white text-[10px] font-bold"
+                                        >
+                                          接受
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            deletePreAnnotation(ann.sampleId);
+                                          }}
+                                          className="px-2 py-1 rounded border text-[10px] font-bold"
+                                        >
+                                          删除
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
                               </div>
