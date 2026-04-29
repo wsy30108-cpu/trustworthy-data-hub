@@ -83,6 +83,18 @@ interface TaskTypeModelBinding {
   versionId: string;
 }
 
+const mockVocabularyByTaskType: Record<string, string[]> = {
+  文本: ["positive", "negative", "neutral", "question"],
+  段落: ["summary", "risk", "fact", "opinion"],
+  对话: ["intent_buy", "intent_refund", "greeting", "complaint"],
+  图像: ["car", "person", "traffic-light", "lane"],
+  PDF: ["title", "table", "figure", "paragraph"],
+  音频: ["speech", "music", "noise", "silence"],
+  视频: ["vehicle", "pedestrian", "event", "background"],
+  表格: ["header", "cell", "subtotal", "total"],
+  时间序列: ["trend_up", "trend_down", "anomaly", "stable"],
+};
+
 interface Props { onBack: () => void; }
 
 const DataAnnotationTaskCreate = ({ onBack }: Props) => {
@@ -176,9 +188,10 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
     }
   }, [selectedCategory, availableModels, defaultModelForCategory, selectedModelId]);
 
-  const selectedModel = useMemo<MLModel | undefined>(
-    () => availableModels.find((m) => m.id === selectedModelId),
-    [availableModels, selectedModelId]
+  const selectedToolData = useMemo(() => mockTools.find((t) => t.id === selectedTool), [selectedTool]);
+  const selectedToolTaskTypes = useMemo(
+    () => Array.from(new Set((selectedToolData?.objects || []).map((obj) => obj.name))),
+    [selectedToolData]
   );
 
   const taskLabels = useMemo(() => {
@@ -211,16 +224,32 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
         (x) => x.modelId === binding.modelId && x.versionId === binding.versionId
       );
       candidate?.vocabularyMappings.forEach((item) => labels.add(item.sourceLabel));
+      if (candidate && candidate.vocabularyMappings.length === 0) {
+        (mockVocabularyByTaskType[binding.taskType] || []).forEach((x) => labels.add(x));
+      }
     });
     return Array.from(labels);
   }, [taskTypeBindings, bindingCandidates]);
+
+  useEffect(() => {
+    if (!showVocabularyModal || sourceLabels.length === 0 || taskLabels.length === 0) return;
+    setTaskLabelMappings((prev) => {
+      const next = { ...prev };
+      taskLabels.forEach((label, idx) => {
+        if (!next[label]) {
+          next[label] = sourceLabels[idx % sourceLabels.length];
+        }
+      });
+      return next;
+    });
+  }, [showVocabularyModal, sourceLabels, taskLabels]);
 
   useEffect(() => {
     if (!preannotationEnabled) {
       setTaskTypeBindings([]);
       return;
     }
-    const allTaskTypes = Array.from(new Set(availableModels.flatMap((m) => m.taskTypes)));
+    const allTaskTypes = selectedToolTaskTypes;
     setTaskTypeBindings((prev) => {
       const next = allTaskTypes.map((taskType) => {
         const existed = prev.find((x) => x.taskType === taskType);
@@ -234,17 +263,7 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
       });
       return next;
     });
-  }, [preannotationEnabled, availableModels, bindingCandidates]);
-
-  const handleModelChange = (id: string) => {
-    setSelectedModelId(id);
-    const m = availableModels.find((x) => x.id === id);
-    if (m) {
-      setConfidenceThreshold(0.6);
-      if (!m.supportsBatch && preannotationEnabled) setPreannotationEnabled(false);
-      if (!m.supportsInteractive && interactiveEnabled) setInteractiveEnabled(false);
-    }
-  };
+  }, [preannotationEnabled, selectedToolTaskTypes, bindingCandidates]);
 
   const preAnnotationTotal = useMemo(() => {
     const allMockDatasets = [...myMockDatasets, ...subscribedMockDatasets, ...sharedMockDatasets];
@@ -255,9 +274,11 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   }, [selectedDatasets]);
 
   const estimatedMinutes = useMemo(() => {
-    if (!selectedModel || preAnnotationTotal === 0) return 0;
-    return Math.max(1, Math.round((preAnnotationTotal * selectedModel.avgInferenceMs) / 1000 / 60));
-  }, [selectedModel, preAnnotationTotal]);
+    const firstBinding = taskTypeBindings.find((x) => x.modelId);
+    const selected = firstBinding ? availableModels.find((x) => x.id === firstBinding.modelId) : undefined;
+    if (!selected || preAnnotationTotal === 0) return 0;
+    return Math.max(1, Math.round((preAnnotationTotal * selected.avgInferenceMs) / 1000 / 60));
+  }, [taskTypeBindings, availableModels, preAnnotationTotal]);
 
   const [timeoutEnabled, setTimeoutEnabled] = useState(false);
   const [timeoutHours, setTimeoutHours] = useState(48);
@@ -786,6 +807,15 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                               <div>
                                 <h3 className="font-bold text-xl">{mockTools.find(t => t.id === selectedTool)?.name}</h3>
                                 <p className="text-xs text-muted-foreground">工具 ID: {selectedTool} · 分类: {mockTools.find(t => t.id === selectedTool)?.type}</p>
+                                {selectedToolTaskTypes.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {selectedToolTaskTypes.map((taskType) => (
+                                      <span key={taskType} className="text-[10px] px-2 py-0.5 rounded bg-primary/10 text-primary font-semibold">
+                                        任务类型：{taskType}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>

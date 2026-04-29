@@ -504,12 +504,22 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
   );
 
   const rejectPreAnnotation = useCallback((sampleId: number) => {
+    const pre = preAnnotations.get(sampleId);
     setPreAnnotations((prev) => {
-      const pre = prev.get(sampleId);
-      if (!pre) return prev;
       const next = new Map(prev);
-      next.set(sampleId, { ...pre, reviewStatus: "rejected" });
+      next.delete(sampleId);
       return next;
+    });
+    setAnnotations((prev) => prev.filter((a) => a.sampleId !== sampleId || !a.tool.includes("模型 ·")));
+    setSampleStates((prev) => {
+      const currentState = prev.get(sampleId);
+      if (!currentState || currentState.status !== "已标注") return prev;
+      if (pre && currentState.label === pre.label) {
+        const next = new Map(prev);
+        next.set(sampleId, { status: "未标注", label: null });
+        return next;
+      }
+      return prev;
     });
     setLogs((l) => [
       {
@@ -521,8 +531,8 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
       },
       ...l,
     ]);
-    toast.info(`已拒绝样本 #${sampleId} 的预标注`, { duration: 1200 });
-  }, []);
+    toast.info(`已拒绝并删除样本 #${sampleId} 的预标注`, { duration: 1200 });
+  }, [preAnnotations]);
 
   const deletePreAnnotation = useCallback((sampleId: number) => {
     setPreAnnotations((prev) => {
@@ -532,6 +542,18 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
     });
     toast.info(`已删除样本 #${sampleId} 的预标注结果`);
   }, []);
+
+  const acceptAllPreAnnotationsInCurrentSample = useCallback(() => {
+    const pre = preAnnotations.get(current.id);
+    if (!pre) return toast.info("当前样本无预标注数据");
+    acceptPreAnnotation(current.id);
+  }, [preAnnotations, current.id, acceptPreAnnotation]);
+
+  const rejectAllPreAnnotationsInCurrentSample = useCallback(() => {
+    const pre = preAnnotations.get(current.id);
+    if (!pre) return toast.info("当前样本无预标注数据");
+    rejectPreAnnotation(current.id);
+  }, [preAnnotations, current.id, rejectPreAnnotation]);
 
   const acceptAllHighConfidence = useCallback(() => {
     if (!preannotationConfig) return;
@@ -1091,13 +1113,12 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
               <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                 {rightLowerTab === "list" && (
                   <div className="space-y-4">
-                    {/* List Search */}
                     <div className="relative group/search">
                       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 group-focus-within/search:text-primary transition-colors" />
                       <input
                         value={listSearch}
                         onChange={e => setListSearch(e.target.value)}
-                        placeholder="搜索标注标签或内容..."
+                        placeholder="搜索标签或内容..."
                         className="w-full pl-8 pr-3 py-1.5 text-[10px] border rounded bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary/20 transition-all"
                       />
                       {listSearch && (
@@ -1107,128 +1128,111 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                       )}
                     </div>
 
-                    {/* Sort & Group controls */}
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 relative">
-                        <Filter className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
-                        <select
-                          value={listGroupMode}
-                          onChange={e => setListGroupMode(e.target.value as any)}
-                          className="w-full text-[10px] border rounded-md pl-6 pr-1 py-1 bg-slate-50 focus:ring-1 focus:ring-primary/20 outline-none appearance-none cursor-pointer hover:bg-slate-100 transition-colors"
-                        >
-                          <option value="none">不分组</option>
-                          <option value="tool">按工具分组</option>
-                          <option value="label">按标签分组</option>
-                        </select>
-                      </div>
-                      <div className="flex-1 relative">
-                        <SortAsc className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
-                        <select
-                          value={listSortMode}
-                          onChange={e => setListSortMode(e.target.value as any)}
-                          className="w-full text-[10px] border rounded-md pl-6 pr-1 py-1 bg-slate-50 focus:ring-1 focus:ring-primary/20 outline-none appearance-none cursor-pointer hover:bg-slate-100 transition-colors"
-                        >
-                          <option value="time">按时间</option>
-                          <option value="score">按分数</option>
-                        </select>
-                      </div>
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={acceptAllPreAnnotationsInCurrentSample}
+                        className="px-2 py-1 text-[10px] rounded bg-emerald-500 text-white font-bold"
+                      >
+                        一键接受
+                      </button>
+                      <button
+                        onClick={rejectAllPreAnnotationsInCurrentSample}
+                        className="px-2 py-1 text-[10px] rounded border font-bold"
+                      >
+                        一键拒绝
+                      </button>
                     </div>
 
-                    <div className="space-y-3">
-                      {Object.entries(getGroupedAnnotations()).map(([group, anns]) => {
-                        const isCollapsed = collapsedGroups.has(group);
-                        return (
-                          <div key={group} className="space-y-1.5">
-                            {listGroupMode !== "none" && (
-                              <div
-                                onClick={() => {
-                                  const next = new Set(collapsedGroups);
-                                  if (next.has(group)) next.delete(group);
-                                  else next.add(group);
-                                  setCollapsedGroups(next);
-                                }}
-                                className="flex items-center gap-2 px-1 cursor-pointer group/header hover:opacity-80 transition-opacity"
-                              >
-                                <div className="h-px flex-1 bg-slate-100" />
-                                <div className="flex items-center gap-1.5 bg-white px-2">
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{group}</span>
-                                  <ChevronDown className={`w-3 h-3 text-slate-300 transition-transform duration-200 ${isCollapsed ? "-rotate-90" : ""}`} />
-                                </div>
-                                <div className="h-px flex-1 bg-slate-100" />
-                              </div>
-                            )}
-                            {!isCollapsed && (
-                              <div className="space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                                {anns.slice(0, 30).map(ann => (
-                                  <div
-                                    key={ann.id}
-                                    onClick={() => setCurrentIndex(ann.sampleId - 1)}
-                                    className={`group flex flex-col gap-1.5 p-3 rounded-xl border bg-white hover:border-primary/30 hover:shadow-md transition-all cursor-pointer relative overflow-hidden ${
-                                      ann.id.startsWith("pre-") ? "border-primary/30 bg-primary/[0.02]" : "border-slate-100"
-                                    }`}
-                                  >
-                                    <div className="absolute top-0 right-0 px-2 py-0.5 bg-slate-50 border-l border-b border-slate-100 rounded-bl-lg text-[9px] font-bold text-slate-400">
-                                      {ann.id}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <span
-                                        className="px-2 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-tight"
-                                        style={{
-                                          color: labels.find(l => l.value === ann.label)?.color,
-                                          backgroundColor: (labels.find(l => l.value === ann.label)?.color || "#666") + "10",
-                                          borderLeft: `2px solid ${labels.find(l => l.value === ann.label)?.color || "#666"}`
-                                        }}
-                                      >
-                                        {ann.label}
-                                      </span>
-                                      <span className="text-[9px] text-slate-400 font-medium">来自 {ann.tool}</span>
-                                      {ann.id.startsWith("pre-") && (
-                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">预标注</span>
+                    <div className="overflow-hidden border rounded-lg">
+                      <table className="w-full text-[11px]">
+                        <thead className="bg-muted/20 border-b">
+                          <tr>
+                            <th className="text-left px-2 py-2 w-10">序号</th>
+                            <th className="text-left px-2 py-2 w-24">标签</th>
+                            <th className="text-left px-2 py-2">内容</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const anns = annotations
+                              .filter((a) => a.sampleId === current.id)
+                              .filter((a) => listSearch === "" || a.label.includes(listSearch) || a.content.includes(listSearch));
+                            const pre = preAnnotations.get(current.id);
+                            const rows = [...anns];
+                            if (pre) {
+                              rows.unshift({
+                                id: `pre-${current.id}`,
+                                sampleId: current.id,
+                                label: pre.label,
+                                content: "AI 预标注建议",
+                                group: "AI 预标注",
+                                tool: `模型 · ${preannotationConfig?.modelName || "预标注"}`,
+                                createdAt: new Date().toLocaleString(),
+                                score: pre.confidence,
+                              } as unknown as Annotation);
+                            }
+                            if (rows.length === 0) {
+                              return (
+                                <tr>
+                                  <td colSpan={3} className="py-8 text-center text-slate-400">当前样本暂无标注</td>
+                                </tr>
+                              );
+                            }
+                            return rows.map((ann, index) => {
+                              const isPre = String(ann.id).startsWith("pre-");
+                              return (
+                                <tr
+                                  key={ann.id}
+                                  onClick={() => setCurrentIndex(ann.sampleId - 1)}
+                                  className={`border-b last:border-b-0 cursor-pointer ${isPre ? "bg-blue-50/40" : ""}`}
+                                >
+                                  <td className="px-2 py-2 text-slate-500">{index + 1}</td>
+                                  <td className="px-2 py-2">
+                                    <div className="flex items-center gap-1">
+                                      <span>{ann.label}</span>
+                                      {isPre && (
+                                        <>
+                                          <Brain className="w-3 h-3 text-primary" />
+                                          <span className="text-[10px] text-primary font-mono">
+                                            {(preAnnotations.get(current.id)?.confidence ?? 0).toFixed(2)}
+                                          </span>
+                                        </>
                                       )}
-                                      <span className={`ml-auto text-[10px] font-bold ${ann.score >= 90 ? "text-emerald-500" : "text-amber-500"}`}>
-                                        {ann.score}分
-                                      </span>
                                     </div>
-                                    <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">{ann.content}</p>
-                                    <div className="flex items-center justify-between text-[9px] text-slate-400 mt-0.5">
-                                      <span className="font-mono">SAMPLE #{ann.sampleId}</span>
-                                      <span>{ann.createdAt}</span>
+                                  </td>
+                                  <td className="px-2 py-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="truncate">{ann.content}</span>
+                                      {isPre && (
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              acceptPreAnnotation(ann.sampleId);
+                                            }}
+                                            className="px-2 py-0.5 rounded bg-emerald-500 text-white text-[10px] font-bold"
+                                          >
+                                            接受
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              rejectPreAnnotation(ann.sampleId);
+                                            }}
+                                            className="px-2 py-0.5 rounded border text-[10px] font-bold"
+                                          >
+                                            拒绝
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
-                                    {ann.id.startsWith("pre-") && (
-                                      <div className="flex items-center gap-2 mt-1">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            acceptPreAnnotation(ann.sampleId);
-                                          }}
-                                          className="px-2 py-1 rounded bg-emerald-500 text-white text-[10px] font-bold"
-                                        >
-                                          接受
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            deletePreAnnotation(ann.sampleId);
-                                          }}
-                                          className="px-2 py-1 rounded border text-[10px] font-bold"
-                                        >
-                                          删除
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {Object.keys(getGroupedAnnotations()).length === 0 && (
-                        <div className="text-center py-10 opacity-40">
-                          <List className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                          <p className="text-xs text-slate-400">当前样本暂无标注</p>
-                        </div>
-                      )}
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          })()}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}

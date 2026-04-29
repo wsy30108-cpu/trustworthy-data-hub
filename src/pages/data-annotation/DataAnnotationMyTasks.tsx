@@ -314,11 +314,6 @@ const DataAnnotationMyTasks = () => {
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">任务名称</th>
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">授权对象</th>
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground min-w-[120px]">进度</th>
-              <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground min-w-[140px]">
-                <div className="flex items-center gap-1">
-                  <Brain className="w-3.5 h-3.5 text-primary" /> 预标注
-                </div>
-              </th>
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">任务类型</th>
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">任务流程</th>
               <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">任务来源</th>
@@ -332,40 +327,42 @@ const DataAnnotationMyTasks = () => {
             {paginated.map(t => (
               <tr key={t.id} className="border-b last:border-0 hover:bg-muted/20">
                 <td className="py-3 px-4 font-medium">{t.id}</td>
-                <td className="py-3 px-4 text-foreground">{t.taskName}</td>
+                <td className="py-3 px-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-foreground">{t.taskName}</span>
+                    {(() => {
+                      const pc = preannotationConfigs[t.id];
+                      if (!pc || !pc.batchEnabled) return null;
+                      const percent = Math.round((pc.preannotated / pc.total) * 100);
+                      return (
+                        <div className="flex items-center gap-1">
+                          {pc.status === "已完成" ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-bold">
+                              <Sparkles className="w-2.5 h-2.5" />
+                              已预标注 100%
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-700 text-[9px] font-bold">
+                              <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                              预标注中 {percent}%
+                            </span>
+                          )}
+                          {pc.interactiveEnabled && (
+                            <span className="inline-flex items-center px-1 py-0.5 rounded bg-purple-50 border border-purple-200 text-purple-700 text-[9px] font-bold">
+                              <Brain className="w-2.5 h-2.5 mr-0.5" />交互
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </td>
                 <td className="py-3 px-4"><span className="px-2 py-0.5 bg-muted rounded text-xs">{t.authorizedTo}</span></td>
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-2">
                     <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden"><div className="h-full bg-primary rounded-full" style={{ width: `${t.progress}%` }} /></div>
                     <span className="text-xs text-muted-foreground">{t.done}/{t.total}</span>
                   </div>
-                </td>
-                <td className="py-3 px-4">
-                  {(() => {
-                    const pc = preannotationConfigs[t.id];
-                    if (!pc || !pc.batchEnabled) return <span className="text-[10px] text-muted-foreground/60">未开启</span>;
-                    const percent = Math.round((pc.preannotated / pc.total) * 100);
-                    return (
-                      <div className="flex items-center gap-1">
-                        {pc.status === "已完成" ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-bold">
-                            <Sparkles className="w-2.5 h-2.5" />
-                            已预标注 100%
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-700 text-[9px] font-bold">
-                            <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                            预标注中 {percent}%
-                          </span>
-                        )}
-                        {pc.interactiveEnabled && (
-                          <span className="inline-flex items-center px-1 py-0.5 rounded bg-purple-50 border border-purple-200 text-purple-700 text-[9px] font-bold">
-                            <Brain className="w-2.5 h-2.5 mr-0.5" />交互
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })()}
                 </td>
                 <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColors[t.projectType] || "bg-muted text-muted-foreground"}`}>{t.projectType}</span></td>
                 <td className="py-3 px-4 text-sm text-foreground">{t.taskType}</td>

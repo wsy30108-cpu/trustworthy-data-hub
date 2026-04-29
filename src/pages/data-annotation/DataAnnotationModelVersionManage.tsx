@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ArrowUpDown, Edit3, Plus, Trash2, Upload } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   useMLModelStore,
@@ -30,6 +30,7 @@ const emptyVersionForm: VersionFormState = {
 };
 
 const DataAnnotationModelVersionManage = () => {
+  const navigate = useNavigate();
   const { models, addVersion, updateVersion, removeVersion } = useMLModelStore();
   const [searchParams] = useSearchParams();
   const queryModelId = searchParams.get("modelId") || "";
@@ -155,16 +156,248 @@ const DataAnnotationModelVersionManage = () => {
           <h1 className="page-title">模型版本管理</h1>
           <p className="page-description">参照版本列表样式，仅维护当前模型版本信息</p>
         </div>
-        <button
-          onClick={openCreate}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-primary/90"
-        >
-          <Plus className="w-4 h-4" /> 新增版本
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate("/data-annotation/models")}
+            className="px-4 py-2 border rounded-lg text-sm font-medium hover:bg-muted/50"
+          >
+            返回上级页面
+          </button>
+          <button
+            onClick={openCreate}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-primary/90"
+          >
+            <Plus className="w-4 h-4" /> 新增版本
+          </button>
+        </div>
       </div>
 
       {!selectedModel ? (
         <div className="rounded-xl border bg-card p-10 text-center text-muted-foreground">暂无可维护模型</div>
+      ) : showForm ? (
+        <div className="rounded-xl border bg-card">
+          <div className="p-5 border-b flex items-center justify-between">
+            <h3 className="text-lg font-semibold">{editingVersionId ? "编辑模型版本" : "新增模型版本"}</h3>
+            <button onClick={() => setShowForm(false)} className="px-2 py-1 text-xs border rounded hover:bg-muted/50">
+              返回版本列表
+            </button>
+          </div>
+          <div className="p-5 space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">版本号</label>
+                <input
+                  value={form.version}
+                  onChange={(e) => setForm({ ...form, version: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground mb-1 block">模型链接（Endpoint）</label>
+                <input
+                  value={form.endpointUrl}
+                  onChange={(e) => setForm({ ...form, endpointUrl: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border rounded-lg bg-background font-mono"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">认证方式</label>
+                <select
+                  value={form.authType}
+                  onChange={(e) => setForm({ ...form, authType: e.target.value as "none" | "api_key" })}
+                  className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                >
+                  <option value="none">无认证</option>
+                  <option value="api_key">API KEY认证</option>
+                </select>
+              </div>
+              {form.authType === "api_key" && (
+                <>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">用户名</label>
+                    <input
+                      value={form.authUsername}
+                      onChange={(e) => setForm({ ...form, authUsername: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">密码</label>
+                    <input
+                      type="password"
+                      value={form.authPassword}
+                      onChange={(e) => setForm({ ...form, authPassword: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+            {selectedModel.labelScope === "开放标签集" ? (
+              <div className="rounded-lg border p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">Prompt 绑定（任务类型）</p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        prompts: [...prev.prompts, { taskType: selectedModel.taskTypes[0] || "", prompt: "" }],
+                      }))
+                    }
+                    className="px-2 py-1 text-xs border rounded hover:bg-muted/50"
+                  >
+                    <Plus className="w-3.5 h-3.5 inline mr-1" />
+                    新增 Prompt
+                  </button>
+                </div>
+                {form.prompts.map((item, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-start">
+                    <select
+                      value={item.taskType}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          prompts: prev.prompts.map((x, i) => (i === idx ? { ...x, taskType: e.target.value } : x)),
+                        }))
+                      }
+                      className="col-span-3 px-2 py-2 text-sm border rounded bg-background"
+                    >
+                      <option value="">选择任务类型</option>
+                      {selectedModel.taskTypes.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                    <textarea
+                      value={item.prompt}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          prompts: prev.prompts.map((x, i) => (i === idx ? { ...x, prompt: e.target.value } : x)),
+                        }))
+                      }
+                      rows={2}
+                      placeholder="输入 prompt 内容"
+                      className="col-span-8 px-2 py-2 text-sm border rounded bg-background resize-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          prompts: prev.prompts.filter((_, i) => i !== idx),
+                        }))
+                      }
+                      className="col-span-1 px-2 py-2 text-xs border rounded hover:bg-destructive/10 text-destructive"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">词汇表映射（表格）</p>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={importVocabularyByText} className="px-2 py-1 text-xs border rounded hover:bg-muted/50">
+                      <Upload className="w-3.5 h-3.5 inline mr-1" />
+                      导入
+                    </button>
+                    <button type="button" onClick={importVocabularyFromLastVersion} className="px-2 py-1 text-xs border rounded hover:bg-muted/50">
+                      <ArrowUpDown className="w-3.5 h-3.5 inline mr-1" />
+                      从上一版本引入
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          vocabularyMappings: [...prev.vocabularyMappings, { sourceLabel: "", commonMappedLabel: "" }],
+                        }))
+                      }
+                      className="px-2 py-1 text-xs border rounded hover:bg-muted/50"
+                    >
+                      <Plus className="w-3.5 h-3.5 inline mr-1" />
+                      新增行
+                    </button>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left border-b">
+                        <th className="py-2 pr-2 text-xs text-muted-foreground">源标签</th>
+                        <th className="py-2 pr-2 text-xs text-muted-foreground">常见映射标签</th>
+                        <th className="py-2 text-xs text-muted-foreground">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {form.vocabularyMappings.map((row, idx) => (
+                        <tr key={idx} className="border-b last:border-b-0">
+                          <td className="py-1 pr-2">
+                            <input
+                              value={row.sourceLabel}
+                              onChange={(e) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  vocabularyMappings: prev.vocabularyMappings.map((x, i) =>
+                                    i === idx ? { ...x, sourceLabel: e.target.value } : x
+                                  ),
+                                }))
+                              }
+                              className="w-full px-2 py-1 border rounded bg-background"
+                            />
+                          </td>
+                          <td className="py-1 pr-2">
+                            <input
+                              value={row.commonMappedLabel || ""}
+                              onChange={(e) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  vocabularyMappings: prev.vocabularyMappings.map((x, i) =>
+                                    i === idx ? { ...x, commonMappedLabel: e.target.value } : x
+                                  ),
+                                }))
+                              }
+                              className="w-full px-2 py-1 border rounded bg-background"
+                            />
+                          </td>
+                          <td className="py-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  vocabularyMappings: prev.vocabularyMappings.filter((_, i) => i !== idx),
+                                }))
+                              }
+                              className="px-2 py-1 text-xs border rounded hover:bg-destructive/10 text-destructive"
+                            >
+                              删除
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="p-5 border-t flex items-center justify-end gap-2 bg-muted/20">
+            <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-muted/50">
+              取消
+            </button>
+            <button onClick={handleSubmit} className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">
+              保存版本
+            </button>
+          </div>
+        </div>
       ) : (
         <>
           <div className="rounded-xl border bg-card p-4">
@@ -245,244 +478,6 @@ const DataAnnotationModelVersionManage = () => {
         </>
       )}
 
-      {showForm && selectedModel && (
-        <div className="rounded-xl border bg-card">
-          <div className="p-5 border-b flex items-center justify-between">
-            <h3 className="text-lg font-semibold">{editingVersionId ? "编辑模型版本" : "新增模型版本"}</h3>
-            <button onClick={() => setShowForm(false)} className="px-2 py-1 text-xs border rounded hover:bg-muted/50">
-              返回版本列表
-            </button>
-          </div>
-          <div className="p-5 space-y-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">版本号</label>
-                  <input
-                    value={form.version}
-                    onChange={(e) => setForm({ ...form, version: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs text-muted-foreground mb-1 block">模型链接（Endpoint）</label>
-                  <input
-                    value={form.endpointUrl}
-                    onChange={(e) => setForm({ ...form, endpointUrl: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">认证方式</label>
-                  <select
-                    value={form.authType}
-                    onChange={(e) => setForm({ ...form, authType: e.target.value as "none" | "api_key" })}
-                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                  >
-                    <option value="none">无认证</option>
-                    <option value="api_key">API KEY认证</option>
-                  </select>
-                </div>
-                {form.authType === "api_key" && (
-                  <>
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">用户名</label>
-                      <input
-                        value={form.authUsername}
-                        onChange={(e) => setForm({ ...form, authUsername: e.target.value })}
-                        className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">密码</label>
-                      <input
-                        type="password"
-                        value={form.authPassword}
-                        onChange={(e) => setForm({ ...form, authPassword: e.target.value })}
-                        className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {selectedModel.labelScope === "开放标签集" ? (
-                <div className="rounded-lg border p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold">Prompt 绑定（任务类型）</p>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setForm((prev) => ({
-                          ...prev,
-                          prompts: [...prev.prompts, { taskType: selectedModel.taskTypes[0] || "", prompt: "" }],
-                        }))
-                      }
-                      className="px-2 py-1 text-xs border rounded hover:bg-muted/50"
-                    >
-                      <Plus className="w-3.5 h-3.5 inline mr-1" />
-                      新增 Prompt
-                    </button>
-                  </div>
-                  {form.prompts.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-start">
-                      <select
-                        value={item.taskType}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            prompts: prev.prompts.map((x, i) => (i === idx ? { ...x, taskType: e.target.value } : x)),
-                          }))
-                        }
-                        className="col-span-3 px-2 py-2 text-sm border rounded bg-background"
-                      >
-                        <option value="">选择任务类型</option>
-                        {selectedModel.taskTypes.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </select>
-                      <textarea
-                        value={item.prompt}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            prompts: prev.prompts.map((x, i) => (i === idx ? { ...x, prompt: e.target.value } : x)),
-                          }))
-                        }
-                        rows={2}
-                        placeholder="输入 prompt 内容"
-                        className="col-span-8 px-2 py-2 text-sm border rounded bg-background resize-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setForm((prev) => ({
-                            ...prev,
-                            prompts: prev.prompts.filter((_, i) => i !== idx),
-                          }))
-                        }
-                        className="col-span-1 px-2 py-2 text-xs border rounded hover:bg-destructive/10 text-destructive"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-lg border p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold">词汇表映射（表格）</p>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={importVocabularyByText}
-                        className="px-2 py-1 text-xs border rounded hover:bg-muted/50"
-                      >
-                        <Upload className="w-3.5 h-3.5 inline mr-1" />
-                        导入
-                      </button>
-                      <button
-                        type="button"
-                        onClick={importVocabularyFromLastVersion}
-                        className="px-2 py-1 text-xs border rounded hover:bg-muted/50"
-                      >
-                        <ArrowUpDown className="w-3.5 h-3.5 inline mr-1" />
-                        从上一版本引入
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setForm((prev) => ({
-                            ...prev,
-                            vocabularyMappings: [...prev.vocabularyMappings, { sourceLabel: "", commonMappedLabel: "" }],
-                          }))
-                        }
-                        className="px-2 py-1 text-xs border rounded hover:bg-muted/50"
-                      >
-                        <Plus className="w-3.5 h-3.5 inline mr-1" />
-                        新增行
-                      </button>
-                    </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left border-b">
-                          <th className="py-2 pr-2 text-xs text-muted-foreground">源标签</th>
-                          <th className="py-2 pr-2 text-xs text-muted-foreground">常见映射标签</th>
-                          <th className="py-2 text-xs text-muted-foreground">操作</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {form.vocabularyMappings.map((row, idx) => (
-                          <tr key={idx} className="border-b last:border-b-0">
-                            <td className="py-1 pr-2">
-                              <input
-                                value={row.sourceLabel}
-                                onChange={(e) =>
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    vocabularyMappings: prev.vocabularyMappings.map((x, i) =>
-                                      i === idx ? { ...x, sourceLabel: e.target.value } : x
-                                    ),
-                                  }))
-                                }
-                                className="w-full px-2 py-1 border rounded bg-background"
-                              />
-                            </td>
-                            <td className="py-1 pr-2">
-                              <input
-                                value={row.commonMappedLabel || ""}
-                                onChange={(e) =>
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    vocabularyMappings: prev.vocabularyMappings.map((x, i) =>
-                                      i === idx ? { ...x, commonMappedLabel: e.target.value } : x
-                                    ),
-                                  }))
-                                }
-                                className="w-full px-2 py-1 border rounded bg-background"
-                              />
-                            </td>
-                            <td className="py-1">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    vocabularyMappings: prev.vocabularyMappings.filter((_, i) => i !== idx),
-                                  }))
-                                }
-                                className="px-2 py-1 text-xs border rounded hover:bg-destructive/10 text-destructive"
-                              >
-                                删除
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-          </div>
-          <div className="p-5 border-t flex items-center justify-end gap-2 bg-muted/20">
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-muted/50">
-              取消
-            </button>
-            <button
-              onClick={handleSubmit}
-              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-            >
-              保存版本
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
