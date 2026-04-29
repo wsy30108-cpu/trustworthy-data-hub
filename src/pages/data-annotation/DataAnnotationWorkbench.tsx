@@ -239,12 +239,16 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
           alt="Annotation"
           className="w-full h-full object-contain opacity-90 group-hover:opacity-100 transition-opacity"
         />
-        <div className="absolute top-[20%] left-[30%] w-[15%] h-[20%] border-2 border-primary bg-primary/10 rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.5)]">
-          <span className="absolute -top-6 left-0 bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-t-sm font-bold shadow-sm">车辆</span>
-        </div>
-        <div className="absolute top-[45%] left-[55%] w-[10%] h-[15%] border-2 border-emerald-500 bg-emerald-500/10 rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.5)]">
-          <span className="absolute -top-6 left-0 bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-t-sm font-bold shadow-sm">行人</span>
-        </div>
+        {currentState.status === "已标注" && (
+          <>
+            <div className="absolute top-[20%] left-[30%] w-[15%] h-[20%] border-2 border-primary bg-primary/10 rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.5)]">
+              <span className="absolute -top-6 left-0 bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-t-sm font-bold shadow-sm">车辆</span>
+            </div>
+            <div className="absolute top-[45%] left-[55%] w-[10%] h-[15%] border-2 border-emerald-500 bg-emerald-500/10 rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.5)]">
+              <span className="absolute -top-6 left-0 bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-t-sm font-bold shadow-sm">行人</span>
+            </div>
+          </>
+        )}
 
         <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-[10px] text-white flex items-center gap-3 border border-white/10 uppercase tracking-widest font-mono">
           <span>X: 1024</span>
@@ -271,7 +275,9 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
             className="max-h-full max-w-full"
             onTimeUpdate={e => setVideoTime(e.currentTarget.currentTime)}
           />
-          <div className="absolute top-[30%] left-[40%] w-[100px] h-[100px] border-2 border-amber-500 bg-amber-500/20" />
+          {currentState.status === "已标注" && (
+            <div className="absolute top-[30%] left-[40%] w-[100px] h-[100px] border-2 border-amber-500 bg-amber-500/20" />
+          )}
         </div>
 
         <div className="bg-slate-900/95 backdrop-blur-md border-t border-white/10 p-4 space-y-4">
@@ -1159,7 +1165,7 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                               .filter((a) => listSearch === "" || a.label.includes(listSearch) || a.content.includes(listSearch));
                             const pre = preAnnotations.get(current.id);
                             const rows = [...anns];
-                            if (pre) {
+                            if (pre && pre.reviewStatus === "pending") {
                               rows.unshift({
                                 id: `pre-${current.id}`,
                                 sampleId: current.id,
@@ -1184,7 +1190,7 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                                 <tr
                                   key={ann.id}
                                   onClick={() => setCurrentIndex(ann.sampleId - 1)}
-                                  className={`border-b last:border-b-0 cursor-pointer ${isPre ? "bg-blue-50/40" : ""}`}
+                                  className={`border-b last:border-b-0 cursor-pointer ${isPre ? "bg-rose-50/60" : ""}`}
                                 >
                                   <td className="px-2 py-2 text-slate-500">{index + 1}</td>
                                   <td className="px-2 py-2">
@@ -1192,8 +1198,8 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                                       <span>{ann.label}</span>
                                       {isPre && (
                                         <>
-                                          <Brain className="w-3 h-3 text-primary" />
-                                          <span className="text-[10px] text-primary font-mono">
+                                          <Brain className="w-3 h-3 text-rose-600" />
+                                          <span className="text-[10px] text-rose-600 font-mono">
                                             {(preAnnotations.get(current.id)?.confidence ?? 0).toFixed(2)}
                                           </span>
                                         </>
@@ -1210,18 +1216,20 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                                               e.stopPropagation();
                                               acceptPreAnnotation(ann.sampleId);
                                             }}
-                                            className="px-2 py-0.5 rounded bg-emerald-500 text-white text-[10px] font-bold"
+                                            className="w-5 h-5 inline-flex items-center justify-center rounded border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                            title="接受预标注"
                                           >
-                                            接受
+                                            <Check className="w-3 h-3" />
                                           </button>
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               rejectPreAnnotation(ann.sampleId);
                                             }}
-                                            className="px-2 py-0.5 rounded border text-[10px] font-bold"
+                                            className="w-5 h-5 inline-flex items-center justify-center rounded border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                                            title="拒绝预标注"
                                           >
-                                            拒绝
+                                            <X className="w-3 h-3" />
                                           </button>
                                         </div>
                                       )}

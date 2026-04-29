@@ -80,7 +80,7 @@ const emptyForm: ConnectFormState = {
 
 const DataAnnotationModels = () => {
   const navigate = useNavigate();
-  const { models, addModel, updateModel, removeModel, testConnection } = useMLModelStore();
+  const { models, addModel, updateModel, removeModel } = useMLModelStore();
   const [search, setSearch] = useState("");
   const [modalityFilter, setModalityFilter] = useState<"全部" | ModelModality>("全部");
   const [showConnect, setShowConnect] = useState(false);
@@ -169,12 +169,6 @@ const DataAnnotationModels = () => {
       toast.success(`模型「${payload.name}」已创建（${id}）`);
     }
     setShowConnect(false);
-  };
-
-  const handleTest = (m: MLModel) => {
-    const result = testConnection(m.id);
-    if (result.ok) toast.success(result.message);
-    else toast.error(result.message);
   };
 
   return (
@@ -267,6 +261,9 @@ const DataAnnotationModels = () => {
               </div>
               <div className="text-[10px] text-muted-foreground bg-muted/30 rounded-md p-2">
                 <p>
+                  任务类型：<span className="text-foreground">{m.taskTypes.join("、") || "未设置"}</span>
+                </p>
+                <p>
                   标签范围：<span className="text-foreground">{m.labelScope}</span>
                 </p>
                 <p>
@@ -279,12 +276,6 @@ const DataAnnotationModels = () => {
                 </p>
               </div>
               <div className="flex items-center gap-1.5 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => handleTest(m)}
-                  className="flex-1 px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50 flex items-center justify-center gap-1"
-                >
-                  <Brain className="w-3.5 h-3.5" /> 模型版本功能
-                </button>
                 <button onClick={() => openEdit(m)} className="px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50">
                   <Edit3 className="w-3.5 h-3.5" />
                 </button>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowUpDown, Edit3, Plus, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, Edit3, Plus, Trash2, Upload } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -159,9 +159,10 @@ const DataAnnotationModelVersionManage = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate("/data-annotation/models")}
-            className="px-4 py-2 border rounded-lg text-sm font-medium hover:bg-muted/50"
+            className="px-3 py-2 border rounded-lg text-sm font-medium hover:bg-muted/50 inline-flex items-center gap-1.5"
           >
-            返回上级页面
+            <ArrowLeft className="w-4 h-4" />
+            返回
           </button>
           <button
             onClick={openCreate}
@@ -419,10 +420,6 @@ const DataAnnotationModelVersionManage = () => {
           <div className="rounded-xl border bg-card">
             <div className="px-4 py-3 border-b flex items-center justify-between">
               <p className="text-sm font-semibold">版本列表</p>
-              <button onClick={openCreate} className="px-2 py-1 text-xs border rounded hover:bg-muted/50">
-                <Plus className="w-3.5 h-3.5 inline mr-1" />
-                新增版本
-              </button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

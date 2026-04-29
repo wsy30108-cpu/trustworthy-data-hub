@@ -53,13 +53,13 @@ const mockToolsMap: Record<string, string> = {
 };
 
 const mockTools = [
-  { id: "TL-001", name: "通用文本分类器", type: "文本类", isPreset: true, desc: "支持对纯文本、超文本内容进行多标签分类标注，适用于舆情分析与内容审核。", image: "https://images.unsplash.com/photo-1517842645767-c639042777db?w=400&h=225&fit=crop", objects: [{ name: "文本", methods: ["标签"] }] },
-  { id: "TL-002", name: "复杂文档分析工具", type: "文本类", isPreset: true, desc: "针对段落、对话等复杂文本结构进行实体挖掘与关系标注。支持多级标签组联动。", image: "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=400&h=225&fit=crop", objects: [{ name: "段落", methods: ["标签"] }, { name: "对话", methods: ["标签"] }] },
-  { id: "TL-003", name: "图像目标检测插件", type: "图像类", isPreset: true, desc: "支持矩形框、多边形标注。内置智能回归算法，提升目标定位精准度。", image: "https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?w=400&h=225&fit=crop", objects: [{ name: "图像", methods: ["矩形框", "标签"] }] },
-  { id: "TL-004", name: "PDF版面分析高级版", type: "图像类", isPreset: true, desc: "提供PDF像素级的超高精度标注能力，支持对PDF内的文本块、图片块独立进行属性定义。", image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&h=225&fit=crop", objects: [{ name: "PDF", methods: ["多边形", "标签"] }] },
-  { id: "TL-005", name: "ASR语音转写工具", type: "音频类", isPreset: true, desc: "专为长语音和大规模私有化部署设计，支持中英文混说，解析音频文件的内容、角色及情感。", image: "https://images.unsplash.com/photo-1558317374-067fb5f30001?w=400&h=225&fit=crop", objects: [{ name: "音频", methods: ["转写", "标签"] }] },
-  { id: "TL-006", name: "视频对象追踪系统", type: "视频类", isPreset: true, desc: "在连续视频帧流中实现目标位置追踪与关键帧属性插值，支持复杂运动轨迹修正。", image: "https://images.unsplash.com/photo-1492691523567-6170c3af93db?w=400&h=225&fit=crop", objects: [{ name: "视频", methods: ["矩形框", "标签"] }] },
-  { id: "TL-007", name: "金融指标提取助理", type: "表格类", isPreset: true, desc: "专注于对结构化表格及动态时间序列数据进行精细化属性标注，确保事实正确性。", image: "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=400&h=225&fit=crop", objects: [{ name: "表格", methods: ["标签"] }, { name: "时间序列", methods: ["标签"] }] },
+  { id: "TL-001", name: "通用文本分类器", type: "文本类", isPreset: true, desc: "支持对纯文本、超文本内容进行多标签分类标注，适用于舆情分析与内容审核。", image: "https://images.unsplash.com/photo-1517842645767-c639042777db?w=400&h=225&fit=crop", objects: [{ name: "文本分类", methods: ["标签"] }, { name: "情感分析", methods: ["标签"] }] },
+  { id: "TL-002", name: "复杂文档分析工具", type: "文本类", isPreset: true, desc: "针对段落、对话等复杂文本结构进行实体挖掘与关系标注。支持多级标签组联动。", image: "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=400&h=225&fit=crop", objects: [{ name: "实体识别", methods: ["标签"] }] },
+  { id: "TL-003", name: "图像目标检测插件", type: "图像类", isPreset: true, desc: "支持矩形框、多边形标注。内置智能回归算法，提升目标定位精准度。", image: "https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?w=400&h=225&fit=crop", objects: [{ name: "目标检测", methods: ["矩形框", "标签"] }] },
+  { id: "TL-004", name: "PDF版面分析高级版", type: "图像类", isPreset: true, desc: "提供PDF像素级的超高精度标注能力，支持对PDF内的文本块、图片块独立进行属性定义。", image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&h=225&fit=crop", objects: [{ name: "图像分类", methods: ["多边形", "标签"] }] },
+  { id: "TL-005", name: "ASR语音转写工具", type: "音频类", isPreset: true, desc: "专为长语音和大规模私有化部署设计，支持中英文混说，解析音频文件的内容、角色及情感。", image: "https://images.unsplash.com/photo-1558317374-067fb5f30001?w=400&h=225&fit=crop", objects: [{ name: "语音转写", methods: ["转写", "标签"] }] },
+  { id: "TL-006", name: "视频对象追踪系统", type: "视频类", isPreset: true, desc: "在连续视频帧流中实现目标位置追踪与关键帧属性插值，支持复杂运动轨迹修正。", image: "https://images.unsplash.com/photo-1492691523567-6170c3af93db?w=400&h=225&fit=crop", objects: [{ name: "视频追踪", methods: ["矩形框", "标签"] }] },
+  { id: "TL-007", name: "金融指标提取助理", type: "表格类", isPreset: true, desc: "专注于对结构化表格及动态时间序列数据进行精细化属性标注，确保事实正确性。", image: "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=400&h=225&fit=crop", objects: [{ name: "文本分类", methods: ["标签"] }] },
 ];
 
 const mockUsers = [
@@ -84,15 +84,13 @@ interface TaskTypeModelBinding {
 }
 
 const mockVocabularyByTaskType: Record<string, string[]> = {
-  文本: ["positive", "negative", "neutral", "question"],
-  段落: ["summary", "risk", "fact", "opinion"],
-  对话: ["intent_buy", "intent_refund", "greeting", "complaint"],
-  图像: ["car", "person", "traffic-light", "lane"],
-  PDF: ["title", "table", "figure", "paragraph"],
-  音频: ["speech", "music", "noise", "silence"],
-  视频: ["vehicle", "pedestrian", "event", "background"],
-  表格: ["header", "cell", "subtotal", "total"],
-  时间序列: ["trend_up", "trend_down", "anomaly", "stable"],
+  文本分类: ["positive", "negative", "neutral", "question"],
+  情感分析: ["very_positive", "positive", "neutral", "negative", "very_negative"],
+  实体识别: ["person", "organization", "location", "time", "money"],
+  目标检测: ["car", "person", "traffic-light", "lane"],
+  图像分类: ["invoice", "contract", "id-card", "receipt"],
+  语音转写: ["speaker-a", "speaker-b", "noise", "silence"],
+  视频追踪: ["vehicle", "pedestrian", "event", "background"],
 };
 
 interface Props { onBack: () => void; }
