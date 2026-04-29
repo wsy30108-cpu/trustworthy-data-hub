@@ -10,7 +10,6 @@ import {
   Image as ImageIcon,
   Mic,
   Plus,
-  RefreshCw,
   Search,
   Trash2,
   Type,
@@ -101,16 +100,9 @@ const DataAnnotationModels = () => {
 
   const stats = useMemo(() => {
     const healthyModelCount = models.filter((m) => m.health === "健康").length;
-    const totalVersions = models.reduce((sum, m) => sum + m.versions.length, 0);
-    const healthyVersions = models.reduce(
-      (sum, m) => sum + m.versions.filter((v) => v.health === "健康").length,
-      0
-    );
     return [
       { label: "模型总数", value: models.length, icon: Brain, color: "text-blue-600" },
       { label: "模型健康数", value: healthyModelCount, icon: Activity, color: "text-emerald-600" },
-      { label: "版本总数", value: totalVersions, icon: RefreshCw, color: "text-amber-600" },
-      { label: "版本健康数", value: healthyVersions, icon: CheckCircle2, color: "text-purple-600" },
     ];
   }, [models]);
 
@@ -200,7 +192,7 @@ const DataAnnotationModels = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 max-w-2xl">
         {stats.map((s, i) => (
           <div key={i} className="stat-card flex items-center gap-4">
             <div className={s.color}>
@@ -320,18 +312,28 @@ const DataAnnotationModels = () => {
                   </span>
                 </p>
               </div>
-              <div className="flex items-center gap-2 justify-end pt-2 border-t" onClick={(e) => e.stopPropagation()}>
-                <button
-                  type="button"
-                  onClick={() => openEdit(m)}
-                  className="px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50 inline-flex items-center justify-center gap-1"
-                  title="编辑模型"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                </button>
-                <button type="button" onClick={() => setDeleteTarget(m)} className="px-2 py-1.5 text-xs border rounded-lg hover:bg-destructive/10 text-destructive" title="删除模型">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+              <div className="flex flex-wrap items-end justify-between gap-3 pt-2 mt-auto border-t text-[10px] text-muted-foreground" onClick={(e) => e.stopPropagation()}>
+                <div className="space-y-1 min-w-0 text-left">
+                  <p>
+                    处理任务：<span className="text-foreground font-mono tabular-nums">{m.processingTasks ?? 0}</span>
+                  </p>
+                  <p>
+                    标注员接受：<span className="text-foreground font-mono tabular-nums">{m.annotatorAccepted ?? 0}</span>
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(m)}
+                    className="px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50 inline-flex items-center justify-center gap-1"
+                    title="编辑模型"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                  <button type="button" onClick={() => setDeleteTarget(m)} className="px-2 py-1.5 text-xs border rounded-lg hover:bg-destructive/10 text-destructive" title="删除模型">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           );

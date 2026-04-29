@@ -1,13 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowUpDown, Edit3, Plus, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, ChevronDown, Edit3, Plus, Trash2, Upload } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   useMLModelStore,
+  normalizeTaskPromptBinding,
   type MLModel,
   type TaskPromptBinding,
   type VocabularyMappingItem,
 } from "@/stores/useMLModelStore";
+import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface VersionFormState {
   version: string;
@@ -25,7 +36,7 @@ const emptyVersionForm: VersionFormState = {
   authType: "none",
   authUsername: "",
   authPassword: "",
-  prompts: [{ taskType: "", prompt: "" }],
+  prompts: [{ taskTypes: [], prompt: "" }],
   vocabularyMappings: [{ sourceLabel: "", commonMappedLabel: "" }],
 };
 
@@ -42,6 +53,10 @@ const DataAnnotationModelVersionForm = () => {
   );
 
   const [form, setForm] = useState<VersionFormState>(emptyVersionForm);
+  const [promptDialogOpen, setPromptDialogOpen] = useState(false);
+  const [promptDialogIdx, setPromptDialogIdx] = useState(0);
+  const [promptDraft, setPromptDraft] = useState("");
+  const [bindingsTaskPopover, setBindingsTaskPopover] = useState<number | null>(null);
 
   useEffect(() => {
     if (!modelId) {
@@ -55,7 +70,12 @@ const DataAnnotationModelVersionForm = () => {
       setForm({
         ...emptyVersionForm,
         endpointUrl: selectedModel.backendUrl || "https://ml-backend.internal/placeholder",
-        prompts: [{ taskType: selectedModel.taskTypes[0] || "", prompt: "" }],
+        prompts: [
+          {
+            taskTypes: selectedModel.taskTypes[0] ? [selectedModel.taskTypes[0]] : [],
+            prompt: "",
+          },
+        ],
         vocabularyMappings: [
           { sourceLabel: "positive", commonMappedLabel: "正面" },
           { sourceLabel: "negative", commonMappedLabel: "负面" },
@@ -77,7 +97,9 @@ const DataAnnotationModelVersionForm = () => {
       authType: version.authType,
       authUsername: version.authUsername || "",
       authPassword: version.authPassword || "",
-      prompts: version.prompts.length ? version.prompts : [{ taskType: "", prompt: "" }],
+      prompts: version.prompts.length
+        ? version.prompts.map((p) => normalizeTaskPromptBinding(p as TaskPromptBinding & { taskType?: string }))
+        : [{ taskTypes: [], prompt: "" }],
       vocabularyMappings: version.vocabularyMappings.length
         ? version.vocabularyMappings
         : [{ sourceLabel: "", commonMappedLabel: "" }],
@@ -113,6 +135,36 @@ const DataAnnotationModelVersionForm = () => {
     toast.success(`导入成功：${rows.length} 条`);
   };
 
+  const openPromptEditor = (idx: number) => {
+    const row = form.prompts[idx];
+    if (!row) return;
+    setPromptDialogIdx(idx);
+    setPromptDraft(row.prompt);
+    setPromptDialogOpen(true);
+  };
+
+  const savePromptEditor = () => {
+    setForm((prev) => ({
+      ...prev,
+      prompts: prev.prompts.map((p, i) => (i === promptDialogIdx ? { ...p, prompt: promptDraft } : p)),
+    }));
+    setPromptDialogOpen(false);
+  };
+
+  const togglePromptBindingTaskType = (rowIdx: number, tt: string) => {
+    setForm((prev) => ({
+      ...prev,
+      prompts: prev.prompts.map((p, i) => {
+        if (i !== rowIdx) return p;
+        const n = normalizeTaskPromptBinding(p as TaskPromptBinding & { taskType?: string });
+        const next = new Set(n.taskTypes);
+        if (next.has(tt)) next.delete(tt);
+        else next.add(tt);
+        return { taskTypes: Array.from(next), prompt: p.prompt };
+      }),
+    }));
+  };
+
   const handleSubmit = () => {
     if (!selectedModel) return;
     if (!form.version.trim()) return toast.error("请填写版本号");
@@ -122,8 +174,12 @@ const DataAnnotationModelVersionForm = () => {
     }
 
     const prompts = form.prompts
-      .map((x) => ({ taskType: x.taskType.trim(), prompt: x.prompt.trim() }))
-      .filter((x) => x.taskType && x.prompt);
+      .map((raw) => normalizeTaskPromptBinding(raw as TaskPromptBinding & { taskType?: string }))
+      .map((x) => ({
+        taskTypes: [...x.taskTypes].filter((t) => t.trim()),
+        prompt: x.prompt.trim(),
+      }))
+      .filter((x) => x.taskTypes.length > 0 && x.prompt);
     const vocabularyMappings = form.vocabularyMappings
       .map((x) => ({
         sourceLabel: x.sourceLabel.trim(),
@@ -271,13 +327,19 @@ const DataAnnotationModelVersionForm = () => {
             {selectedModel.labelScope === "开放标签集" ? (
               <div className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold">Prompt 绑定（任务类型）</p>
+                  <p className="text-sm font-semibold">Prompt 绑定（表格）</p>
                   <button
                     type="button"
                     onClick={() =>
                       setForm((prev) => ({
                         ...prev,
-                        prompts: [...prev.prompts, { taskType: selectedModel.taskTypes[0] || "", prompt: "" }],
+                        prompts: [
+                          ...prev.prompts,
+                          {
+                            taskTypes: selectedModel.taskTypes[0] ? [selectedModel.taskTypes[0]] : [],
+                            prompt: "",
+                          },
+                        ],
                       }))
                     }
                     className="px-2 py-1 text-xs border rounded hover:bg-muted/50"
@@ -286,51 +348,97 @@ const DataAnnotationModelVersionForm = () => {
                     新增 Prompt
                   </button>
                 </div>
-                {form.prompts.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-start">
-                    <select
-                      value={item.taskType}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          prompts: prev.prompts.map((x, i) => (i === idx ? { ...x, taskType: e.target.value } : x)),
-                        }))
-                      }
-                      className="col-span-3 px-2 py-2 text-sm border rounded bg-background"
-                    >
-                      <option value="">选择任务类型</option>
-                      {selectedModel.taskTypes.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                    <textarea
-                      value={item.prompt}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          prompts: prev.prompts.map((x, i) => (i === idx ? { ...x, prompt: e.target.value } : x)),
-                        }))
-                      }
-                      rows={2}
-                      placeholder="输入 prompt 内容"
-                      className="col-span-8 px-2 py-2 text-sm border rounded bg-background resize-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setForm((prev) => ({
-                          ...prev,
-                          prompts: prev.prompts.filter((_, i) => i !== idx),
-                        }))
-                      }
-                      className="col-span-1 px-2 py-2 text-xs border rounded hover:bg-destructive/10 text-destructive"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                <div className="overflow-x-auto rounded-md border">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left bg-muted/30 border-b">
+                        <th className="py-2 px-2 font-semibold text-muted-foreground whitespace-nowrap w-[30%] min-w-[180px]">
+                          绑定任务类型（可多选）
+                        </th>
+                        <th className="py-2 px-2 font-semibold text-muted-foreground">Prompt</th>
+                        <th className="py-2 px-2 font-semibold text-muted-foreground whitespace-nowrap w-16 text-center">
+                          操作
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {form.prompts.map((raw, idx) => {
+                        const item = normalizeTaskPromptBinding(raw as TaskPromptBinding & { taskType?: string });
+                        const preview = item.prompt.trim()
+                          ? item.prompt.trim().length > 96
+                            ? `${item.prompt.trim().slice(0, 96)}…`
+                            : item.prompt.trim()
+                          : "（暂无内容）";
+                        return (
+                          <tr key={idx} className="border-b last:border-b-0 align-top hover:bg-muted/10">
+                            <td className="py-2 px-2">
+                              <Popover
+                                open={bindingsTaskPopover === idx}
+                                onOpenChange={(open) => setBindingsTaskPopover(open ? idx : null)}
+                              >
+                                <PopoverTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="w-full max-w-[220px] px-2 py-1.5 border rounded-lg bg-background text-left flex items-center justify-between gap-2"
+                                  >
+                                    <span className={cn("truncate text-[11px]", item.taskTypes.length === 0 && "text-muted-foreground")}>
+                                      {item.taskTypes.length ? item.taskTypes.join("、") : "请选择任务类型"}
+                                    </span>
+                                    <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-70" />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[260px] p-2 space-y-1 max-h-56 overflow-y-auto" align="start">
+                                  {selectedModel.taskTypes.map((tt) => (
+                                    <label
+                                      key={tt}
+                                      className={cn(
+                                        "flex items-center gap-2 rounded px-2 py-1 cursor-pointer hover:bg-muted/70 text-xs",
+                                        item.taskTypes.includes(tt) && "bg-primary/10"
+                                      )}
+                                    >
+                                      <Checkbox
+                                        checked={item.taskTypes.includes(tt)}
+                                        onCheckedChange={() => togglePromptBindingTaskType(idx, tt)}
+                                      />
+                                      <span>{tt}</span>
+                                    </label>
+                                  ))}
+                                </PopoverContent>
+                              </Popover>
+                            </td>
+                            <td className="py-2 px-2">
+                              <button
+                                type="button"
+                                className="w-full text-left rounded-md border px-2 py-1.5 hover:bg-muted/50 transition-colors flex items-start justify-between gap-2 min-w-0"
+                                onClick={() => openPromptEditor(idx)}
+                              >
+                                <span className={cn("line-clamp-2 break-all text-[11px]", !item.prompt.trim() && "text-muted-foreground")}>
+                                  {preview}
+                                </span>
+                                <Edit3 className="w-3.5 h-3.5 shrink-0 text-primary mt-0.5" />
+                              </button>
+                            </td>
+                            <td className="py-2 px-2 text-center whitespace-nowrap">
+                              <button
+                                type="button"
+                                title="删除行"
+                                onClick={() =>
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    prompts: prev.prompts.filter((_, i) => i !== idx),
+                                  }))
+                                }
+                                className="p-2 text-destructive border border-transparent hover:border-destructive/30 hover:bg-destructive/10 rounded-md"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ) : (
               <div className="rounded-lg border p-4 space-y-3">
@@ -432,6 +540,37 @@ const DataAnnotationModelVersionForm = () => {
           </div>
         </div>
       </main>
+
+      <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>编辑 Prompt</DialogTitle>
+          </DialogHeader>
+          <textarea
+            value={promptDraft}
+            onChange={(e) => setPromptDraft(e.target.value)}
+            rows={14}
+            className="w-full flex-1 min-h-[200px] px-3 py-2 text-sm border rounded-lg bg-background resize-y font-mono leading-relaxed"
+            placeholder="在此输入完整 Prompt 内容…"
+          />
+          <DialogFooter className="gap-2 sm:gap-0">
+            <button
+              type="button"
+              className="px-4 py-2 text-sm border rounded-lg hover:bg-muted/50"
+              onClick={() => setPromptDialogOpen(false)}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+              onClick={savePromptEditor}
+            >
+              确定
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -6,9 +6,19 @@ export type ModelHealth = "健康" | "异常" | "未检测";
 export type ModelVersionHealth = "健康" | "异常" | "未检测";
 export type LabelScope = "固定标签集" | "开放标签集";
 
+/** 开放标签集：一条 Prompt 可绑定多个任务类型 */
 export interface TaskPromptBinding {
-  taskType: string;
+  taskTypes: string[];
   prompt: string;
+}
+
+/** 兼容持久化旧数据中仅有 taskType 的版本 */
+export function normalizeTaskPromptBinding(p: TaskPromptBinding & { taskType?: string }): TaskPromptBinding {
+  if (Array.isArray(p.taskTypes)) {
+    return { taskTypes: [...p.taskTypes], prompt: p.prompt };
+  }
+  const legacy = (p as { taskType?: string }).taskType;
+  return { taskTypes: legacy ? [legacy] : [], prompt: p.prompt };
 }
 
 export interface VocabularyMappingItem {
@@ -52,6 +62,10 @@ export interface MLModel {
   authUsername?: string;
   authPassword?: string;
   avgInferenceMs: number;
+  /** 处理任务累计条数（展示用模拟） */
+  processingTasks?: number;
+  /** 标注员累计接受批次数据条数（展示用模拟） */
+  annotatorAccepted?: number;
 }
 
 interface MLModelState {
@@ -121,6 +135,8 @@ const initialModels: MLModel[] = [
       creator: "系统",
       createdAt: "2026-01-10 10:00",
       avgInferenceMs: 120,
+      processingTasks: 12800,
+      annotatorAccepted: 9620,
     },
     {
       id: "VER-001-1",
@@ -144,7 +160,7 @@ const initialModels: MLModel[] = [
       description: "图像目标检测模型",
       modality: "图像类",
       taskTypes: ["目标检测", "图像分类"],
-      labelScope: "开放标签集",
+      labelScope: "固定标签集",
       supportsBatch: true,
       supportsInteractive: true,
       supportsTraining: false,
@@ -154,6 +170,8 @@ const initialModels: MLModel[] = [
       creator: "系统",
       createdAt: "2026-01-15 09:00",
       avgInferenceMs: 250,
+      processingTasks: 6420,
+      annotatorAccepted: 5100,
     },
     {
       id: "VER-003-1",
@@ -163,8 +181,11 @@ const initialModels: MLModel[] = [
       health: "健康",
       creator: "系统",
       createdAt: "2026-01-15 09:00",
-      prompts: [{ taskType: "目标检测", prompt: "检测图中目标，输出 bbox+label+score。" }],
-      vocabularyMappings: [],
+      prompts: [],
+      vocabularyMappings: [
+        { sourceLabel: "car", commonMappedLabel: "car" },
+        { sourceLabel: "person", commonMappedLabel: "person" },
+      ],
     }
   ),
 ];
@@ -196,7 +217,10 @@ export const useMLModelStore = create<MLModelState>()(
           health: "未检测",
           creator: "当前用户",
           createdAt: now(),
-          prompts: m.labelScope === "开放标签集" ? [{ taskType: m.taskTypes[0] || "通用", prompt: "" }] : [],
+          prompts:
+            m.labelScope === "开放标签集"
+              ? [{ taskTypes: m.taskTypes[0] ? [m.taskTypes[0]] : [], prompt: "" }]
+              : [],
           vocabularyMappings:
             m.labelScope === "固定标签集" ? [{ sourceLabel: "", commonMappedLabel: "" }] : [],
         };

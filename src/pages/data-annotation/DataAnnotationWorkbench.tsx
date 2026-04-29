@@ -191,47 +191,11 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const renderTextContent = () => {
-    const pre = preAnnotations.get(current.id);
-    const pinCanvas =
-      !!pre && pre.reviewStatus === "pending" && currentState.status === "未标注";
     return (
       <section>
         <h2 className="text-xl font-bold text-slate-800 mb-2">请阅读标注内容</h2>
         <div className="text-sm text-slate-500 mb-4">Sample: #{current.id} · {currentState.status}</div>
         <div className="rounded-xl border border-slate-200 bg-card overflow-hidden shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
-          {pinCanvas && task.annotationMode !== "ner" && (
-            <div className="px-4 py-2 border-b border-primary/15 bg-primary/[0.06] flex flex-wrap gap-x-3 gap-y-1.5 items-center">
-              <span className="text-[11px] font-semibold text-primary shrink-0">预标注候选</span>
-              <span className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-white px-2 py-0.5 text-xs font-semibold text-slate-800">
-                <span>{pre!.label}</span>
-                <span className="font-mono text-primary">{(pre!.confidence * 100).toFixed(1)}%</span>
-              </span>
-              {(pre!.alternatives || []).map((a) => (
-                <span
-                  key={a.id}
-                  className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white/90 px-2 py-0.5 text-[11px] text-slate-700"
-                >
-                  {a.label}
-                  <span className="font-mono text-primary/80">{(a.confidence * 100).toFixed(1)}%</span>
-                </span>
-              ))}
-            </div>
-          )}
-          {pinCanvas && task.annotationMode === "ner" && pre?.nerEntities && pre.nerEntities.length > 0 && (
-            <div className="px-4 py-2 border-b border-primary/15 bg-primary/[0.06] flex flex-wrap gap-x-3 gap-y-1.5 items-center">
-              <span className="text-[11px] font-semibold text-primary shrink-0">预标注候选</span>
-              {pre.nerEntities.map((e, ix) => (
-                <span
-                  key={`${e.entityType}-${ix}`}
-                  className="inline-flex items-center gap-1 rounded-md border border-primary/25 bg-white px-2 py-0.5 text-[11px] text-slate-800"
-                >
-                  <span className="font-bold text-primary/90">{e.entityType}</span>
-                  {e.mention}
-                  <span className="font-mono text-primary">{(e.confidence * 100).toFixed(0)}%</span>
-                </span>
-              ))}
-            </div>
-          )}
           <div className="flex divide-x divide-slate-100">
             <div className="bg-slate-50/50 py-6 px-4 flex flex-col items-end select-none text-slate-300 font-mono text-xs gap-[1.4em]">
               {current.content.split("\n").map((_, i) => (
@@ -523,6 +487,25 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
 
   const currentPreAnnotation = preAnnotations.get(current.id);
 
+  const labelPreConfidence = useMemo(() => {
+    const m = new Map<string, number>();
+    if (currentState.status !== "未标注") return m;
+    const pre = preAnnotations.get(current.id);
+    if (!pre || pre.reviewStatus !== "pending") return m;
+    const mode = task.annotationMode ?? "classification";
+    if (mode === "ner") {
+      pre.nerEntities?.forEach((e) => {
+        m.set(e.entityType, e.confidence);
+      });
+      return m;
+    }
+    m.set(pre.label, pre.confidence);
+    pre.alternatives?.forEach((a) => {
+      m.set(a.label, a.confidence);
+    });
+    return m;
+  }, [current.id, currentState.status, preAnnotations, task.annotationMode]);
+
   type AnnotationTableRow =
     | { kind: "ann"; key: string; ann: Annotation }
     | {
@@ -547,6 +530,7 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
         label: string;
         content: string;
         confidence: number;
+        showActions: boolean;
       };
 
   const annotationTableRows = useMemo((): AnnotationTableRow[] => {
@@ -558,18 +542,30 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
 
     if (pre && pre.reviewStatus === "pending") {
       if (task.annotationMode === "ner") {
-        const content =
-          pre.nerEntities
-            ?.map((e) => `${e.entityType}「${e.mention}」(${(e.confidence * 100).toFixed(0)}%)`)
-            .join(" · ") || pre.label;
-        rows.push({
-          kind: "pre-ner",
-          key: `pre-ner-${current.id}`,
-          sampleId: current.id,
-          label: "实体预标注",
-          content,
-          confidence: pre.confidence,
-        });
+        const ents = pre.nerEntities ?? [];
+        if (ents.length > 0) {
+          ents.forEach((e, ei) => {
+            rows.push({
+              kind: "pre-ner",
+              key: `pre-ner-${current.id}-${ei}`,
+              sampleId: current.id,
+              label: e.entityType,
+              content: `「${e.mention}」`,
+              confidence: e.confidence,
+              showActions: ei === 0,
+            });
+          });
+        } else {
+          rows.push({
+            kind: "pre-ner",
+            key: `pre-ner-${current.id}`,
+            sampleId: current.id,
+            label: "—",
+            content: pre.label,
+            confidence: pre.confidence,
+            showActions: true,
+          });
+        }
       } else {
         rows.push({
           kind: "pre-primary",
@@ -1011,17 +1007,23 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
               {labels.filter(l => l.value.includes(labelSearch)).map(l => {
                 const isSelected = currentState.label === l.value;
                 const count = Array.from(sampleStates.values()).filter(s => s.label === l.value).length;
+                const pconf = labelPreConfidence.get(l.value);
                 return (
                   <button
                     key={l.value}
                     onClick={() => setLabel(l.value)}
-                    className={`flex items-center rounded-sm overflow-hidden border transition-all hover:shadow-sm h-8 ${isSelected ? "ring-1 ring-primary ring-offset-0 border-primary bg-primary/5 shadow-sm" : "border-border hover:border-muted-foreground/30 bg-card"}`}
+                    className={`flex items-center rounded-sm overflow-hidden border transition-all hover:shadow-sm min-h-8 max-w-full ${isSelected ? "ring-1 ring-primary ring-offset-0 border-primary bg-primary/5 shadow-sm" : "border-border hover:border-muted-foreground/30 bg-card"}`}
                   >
-                    <div className="w-1 h-full shrink-0" style={{ backgroundColor: l.color }} />
-                    <div className="px-3 py-1 flex items-center gap-2">
-                      <span className="text-xs font-semibold" style={{ color: isSelected ? "inherit" : "#374151" }}>{l.value}</span>
-                      <span className="text-[10px] text-muted-foreground/60 font-mono bg-muted/30 px-1 rounded">{l.shortcut}</span>
-                      {count > 0 && <span className="text-[10px] text-muted-foreground">({count})</span>}
+                    <div className="w-1 h-full shrink-0 self-stretch min-h-[32px]" style={{ backgroundColor: l.color }} />
+                    <div className="px-2.5 py-1 flex items-center gap-1.5 flex-wrap min-w-0">
+                      <span className="text-xs font-semibold truncate" style={{ color: isSelected ? "inherit" : "#374151" }}>{l.value}</span>
+                      <span className="text-[10px] text-muted-foreground/60 font-mono bg-muted/30 px-1 rounded shrink-0">{l.shortcut}</span>
+                      {count > 0 && <span className="text-[10px] text-muted-foreground shrink-0">({count})</span>}
+                      {pconf !== undefined && (
+                        <span className="text-[10px] font-mono font-semibold text-primary shrink-0 tabular-nums">
+                          {(pconf * 100).toFixed(1)}%
+                        </span>
+                      )}
                     </div>
                   </button>
                 );
@@ -1251,13 +1253,19 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                     </div>
 
                     <div className="overflow-hidden border rounded-lg">
-                      <table className="w-full text-[11px] leading-tight">
+                      <table className="table-fixed w-full text-[11px] leading-tight">
+                        <colgroup>
+                          <col className="w-8" />
+                          <col className="w-[92px]" />
+                          <col />
+                          <col className="w-[68px]" />
+                        </colgroup>
                         <thead className="bg-muted/20 border-b">
                           <tr>
-                            <th className="text-left px-2 py-1.5 w-9">序号</th>
-                            <th className="text-left px-2 py-1.5 w-[120px]">标签</th>
-                            <th className="text-left px-2 py-1.5">内容</th>
-                            <th className="text-right px-2 py-1.5 w-[64px]">操作</th>
+                            <th className="text-left px-1.5 py-1.5">序号</th>
+                            <th className="text-left px-1.5 py-1.5">标签</th>
+                            <th className="text-left px-1.5 py-1.5">内容</th>
+                            <th className="text-right px-1.5 py-1.5">操作</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1271,12 +1279,14 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                                 const ann = row.ann;
                                 return (
                                   <tr key={row.key} onClick={() => setCurrentIndex(ann.sampleId - 1)} className="border-b last:border-b-0 cursor-pointer hover:bg-muted/30">
-                                    <td className="px-2 py-1 text-slate-500 align-top">{index + 1}</td>
-                                    <td className="px-2 py-1 align-top">
-                                      <span className="font-semibold text-slate-800 leading-snug">{ann.label}</span>
+                                    <td className="px-1.5 py-1 text-slate-500 align-middle">{index + 1}</td>
+                                    <td className="px-1.5 py-1 align-middle min-w-0">
+                                      <span className="font-semibold text-slate-800 block truncate">{ann.label}</span>
                                     </td>
-                                    <td className="px-2 py-1 align-top text-slate-700 break-words">{ann.content}</td>
-                                    <td className="px-2 py-1 text-right align-top text-[10px] text-muted-foreground">—</td>
+                                    <td className="px-1.5 py-1 align-middle max-w-0 min-w-0">
+                                      <span className="block truncate text-slate-700" title={ann.content}>{ann.content}</span>
+                                    </td>
+                                    <td className="px-1.5 py-1 text-right align-middle text-[10px] text-muted-foreground">—</td>
                                   </tr>
                                 );
                               }
@@ -1285,6 +1295,7 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                               const isPrePrimary = row.kind === "pre-primary";
                               const isPreNer = row.kind === "pre-ner";
                               const sd = row.sampleId;
+                              const preNerShowActions = !isPreNer || row.showActions;
 
                               let contentHint = "";
                               if (isPrePrimary) contentHint = "主候选标注";
@@ -1299,53 +1310,53 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                                   onClick={() => setCurrentIndex(sd - 1)}
                                   className="border-b last:border-b-0 cursor-pointer bg-red-50/90 dark:bg-red-950/15 hover:bg-red-50 dark:hover:bg-red-950/25"
                                 >
-                                  <td className="px-2 py-1 text-slate-500 align-top">{index + 1}</td>
-                                  <td className="px-2 py-1 align-top">
-                                    <div className="space-y-0.5">
-                                      <span className="font-semibold text-slate-800 leading-snug">{row.label}</span>
-                                      <div className="flex flex-wrap items-center gap-x-1 gap-y-0 text-primary">
-                                        <Brain className="w-3 h-3 shrink-0 opacity-80" />
-                                        <span className="text-[10px] font-mono tabular-nums">{(metaConf * 100).toFixed(1)}%</span>
-                                        <span className="text-[10px] text-muted-foreground">AI 预标注</span>
+                                  <td className="px-1.5 py-1 text-slate-500 align-middle">{index + 1}</td>
+                                  <td className="px-1.5 py-1 align-middle min-w-0">
+                                    <div className="flex items-center gap-1 min-w-0" title={`${row.label} ${(metaConf * 100).toFixed(1)}%`}>
+                                      <span className="font-semibold text-slate-800 truncate flex-1 min-w-0">{row.label}</span>
+                                      <span className="text-[9px] font-mono tabular-nums text-primary shrink-0">{(metaConf * 100).toFixed(0)}%</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-1.5 py-1 align-middle max-w-0 min-w-0">
+                                    <span className="block truncate text-slate-700" title={contentHint}>{contentHint}</span>
+                                  </td>
+                                  <td className="px-1.5 py-1 text-right align-middle whitespace-nowrap">
+                                    {preNerShowActions ? (
+                                      <div className="inline-flex items-center gap-0.5">
+                                        <button
+                                          type="button"
+                                          title={isPreAlt ? `接受备选：${row.label}` : "接受预标注"}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (isPreAlt) {
+                                              acceptPreAnnotation(sd, row.label, row.confidence);
+                                            } else {
+                                              acceptPreAnnotation(sd);
+                                            }
+                                          }}
+                                          className="h-6 w-6 inline-flex items-center justify-center rounded border border-primary/40 bg-white text-primary hover:bg-primary/10"
+                                        >
+                                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title={isPreAlt ? "移除此备选" : "拒绝预标注"}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (isPreAlt) {
+                                              rejectPreAnnotationAlternative(sd, row.altId);
+                                            } else {
+                                              rejectPreAnnotation(sd);
+                                            }
+                                          }}
+                                          className="h-6 w-6 inline-flex items-center justify-center rounded border border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
+                                        >
+                                          <X className="w-3.5 h-3.5 stroke-[2.5]" />
+                                        </button>
                                       </div>
-                                    </div>
-                                  </td>
-                                  <td className="px-2 py-1 align-top">
-                                    <span className="text-slate-700 break-words leading-snug">{contentHint}</span>
-                                  </td>
-                                  <td className="px-2 py-1 text-right align-top whitespace-nowrap">
-                                    <div className="inline-flex items-center gap-0.5">
-                                      <button
-                                        type="button"
-                                        title={isPreAlt ? `接受备选：${row.label}` : "接受预标注"}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (isPreAlt) {
-                                            acceptPreAnnotation(sd, row.label, row.confidence);
-                                          } else {
-                                            acceptPreAnnotation(sd);
-                                          }
-                                        }}
-                                        className="h-6 w-6 inline-flex items-center justify-center rounded border border-primary/40 bg-white text-primary hover:bg-primary/10"
-                                      >
-                                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        title={isPreAlt ? "移除此备选" : "拒绝预标注"}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (isPreAlt) {
-                                            rejectPreAnnotationAlternative(sd, row.altId);
-                                          } else {
-                                            rejectPreAnnotation(sd);
-                                          }
-                                        }}
-                                        className="h-6 w-6 inline-flex items-center justify-center rounded border border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
-                                      >
-                                        <X className="w-3.5 h-3.5 stroke-[2.5]" />
-                                      </button>
-                                    </div>
+                                    ) : (
+                                      <span className="text-[10px] text-muted-foreground"> </span>
+                                    )}
                                   </td>
                                 </tr>
                               );
