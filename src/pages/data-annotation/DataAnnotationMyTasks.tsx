@@ -92,6 +92,9 @@ const mockMyTasks: MyTask[] = [
       { operator: "系统", action: "创建批次", time: "2026-03-15 09:00" },
       { operator: "孙伟", action: "开始标注", time: "2026-03-15 13:00" }
     ]
+  },
+  {
+    id: "BT-018", taskName: "法律文书NER识别", authorizedTo: "任务池", progress: 0, total: 200, done: 0, status: "进行中", projectType: "文本类", taskType: "标注", currentStage: "标注", source: "任务大厅",
     currentStatus: "标注中", latestOperator: "刘洋", creator: "赵敏", createdAt: "2026-03-18",
     history: [
       { operator: "刘洋", action: "从大厅领取", time: "2026-03-18 10:20" }

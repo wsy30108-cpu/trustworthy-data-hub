@@ -6,7 +6,6 @@ import {
   Brain,
   CheckCircle2,
   Clock,
-  Cpu,
   Edit3,
   Image as ImageIcon,
   Mic,
@@ -83,7 +82,7 @@ const emptyForm: ConnectFormState = {
 
 const DataAnnotationModels = () => {
   const navigate = useNavigate();
-  const { models, addModel, updateModel, removeModel, testConnection } = useMLModelStore();
+  const { models, addModel, updateModel, removeModel } = useMLModelStore();
   const [search, setSearch] = useState("");
   const [modalityFilter, setModalityFilter] = useState<"全部" | ModelModality>("全部");
   const [showConnect, setShowConnect] = useState(false);
@@ -186,12 +185,6 @@ const DataAnnotationModels = () => {
     setShowConnect(false);
   };
 
-  const handleTest = (m: MLModel) => {
-    const result = testConnection(m.id);
-    if (result.ok) toast.success(result.message);
-    else toast.error(result.message);
-  };
-
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="page-header">
@@ -248,6 +241,16 @@ const DataAnnotationModels = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filtered.map((m) => {
           const Icon = modalityIcons[m.modality] ?? Type;
+          const versionTotal = m.versions.length;
+          const healthyVersionCount = m.versions.filter((v) => v.health === "健康").length;
+          const healthPillClass =
+            versionTotal === 0
+              ? healthColors["未检测"]
+              : healthyVersionCount === versionTotal
+                ? healthColors["健康"]
+                : healthyVersionCount === 0
+                  ? healthColors["异常"]
+                  : "bg-amber-50 text-amber-800 border-amber-200";
           return (
             <div
               key={m.id}
@@ -256,14 +259,19 @@ const DataAnnotationModels = () => {
               onClick={() => navigate(`/data-annotation/models/versions?modelId=${m.id}`)}
             >
               <div className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${modalityColors[m.modality]}`}>
+                <div className={`w-10 h-10 shrink-0 rounded-lg flex items-center justify-center border ${modalityColors[m.modality]}`}>
                   <Icon className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-foreground truncate">{m.name}</h3>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-foreground truncate">{m.name}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5 font-mono truncate">{m.id}</p>
+                    </div>
+                    <span className="text-[11px] font-medium tabular-nums text-muted-foreground shrink-0 pt-0.5">
+                      {versionTotal} 版本
+                    </span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5 font-mono">{m.id}</p>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 min-h-[32px]">{m.description}</p>
@@ -271,11 +279,17 @@ const DataAnnotationModels = () => {
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${modalityColors[m.modality]}`}>
                   {m.modality}
                 </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${healthColors[m.health]}`}>
-                  {m.health === "健康" && <CheckCircle2 className="w-3 h-3 inline mr-0.5" />}
-                  {m.health === "异常" && <AlertTriangle className="w-3 h-3 inline mr-0.5" />}
-                  {m.health === "未检测" && <Clock className="w-3 h-3 inline mr-0.5" />}
-                  {m.health}
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${healthPillClass}`}>
+                  {versionTotal === 0 ? (
+                    <>
+                      <Clock className="w-3 h-3 inline mr-0.5 align-text-bottom opacity-80" /> 暂无版本
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3 h-3 inline mr-0.5 align-text-bottom" />
+                      健康 {healthyVersionCount}/{versionTotal}
+                    </>
+                  )}
                 </span>
               </div>
               {m.taskTypes.length > 0 && (
@@ -306,18 +320,16 @@ const DataAnnotationModels = () => {
                   </span>
                 </p>
               </div>
-              <div className="flex items-center gap-1.5 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2 justify-end pt-2 border-t" onClick={(e) => e.stopPropagation()}>
                 <button
                   type="button"
-                  onClick={() => handleTest(m)}
-                  className="flex-1 px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50 flex items-center justify-center gap-1"
+                  onClick={() => openEdit(m)}
+                  className="px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50 inline-flex items-center justify-center gap-1"
+                  title="编辑模型"
                 >
-                  <Cpu className="w-3.5 h-3.5" /> 连接测试
-                </button>
-                <button type="button" onClick={() => openEdit(m)} className="px-2 py-1.5 text-xs border rounded-lg hover:bg-muted/50">
                   <Edit3 className="w-3.5 h-3.5" />
                 </button>
-                <button type="button" onClick={() => setDeleteTarget(m)} className="px-2 py-1.5 text-xs border rounded-lg hover:bg-destructive/10 text-destructive">
+                <button type="button" onClick={() => setDeleteTarget(m)} className="px-2 py-1.5 text-xs border rounded-lg hover:bg-destructive/10 text-destructive" title="删除模型">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -326,7 +338,7 @@ const DataAnnotationModels = () => {
         })}
         {filtered.length === 0 && (
           <div className="col-span-full text-center py-16 text-muted-foreground">
-            <Cpu className="w-12 h-12 mx-auto mb-3 opacity-20" />
+            <Brain className="w-12 h-12 mx-auto mb-3 opacity-20" />
             <p className="text-sm">暂无符合条件的模型</p>
           </div>
         )}
