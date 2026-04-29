@@ -1,0 +1,4 @@
+#!/bin/sh
+# Push only the branch you just committed on (same as running `git push` on this branch).
+# Requires upstream once: git push -u origin <branch>
+exec git push

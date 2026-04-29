@@ -1,14 +1,24 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ArrowLeft, Undo2, Redo2, BookOpen, Keyboard, Ban, Send,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Tag, Clock, List, Link2,
   X, AlertTriangle, Plus, Filter, SortAsc, Search, PanelRightClose, PanelRightOpen,
-  Play, Pause, RotateCcw, Maximize, Type, Image as ImageIcon, Video
+  Play, Pause, RotateCcw, Maximize, Type, Image as ImageIcon, Video,
+  Brain, Check
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTaskPreannotationStore } from "@/stores/useTaskPreannotationStore";
+import { usePreannotationProgress } from "@/hooks/usePreannotationProgress";
 
 interface Props {
-  task: { id: string; taskName: string; total: number; done: number; projectType: string };
+  task: {
+    id: string;
+    taskName: string;
+    total: number;
+    done: number;
+    projectType: string;
+    annotationMode?: "classification" | "ner";
+  };
   onBack: () => void;
   initialResourceId?: number;
 }
@@ -49,17 +59,102 @@ interface AnnotationLogEntry {
   target: string;
 }
 
-const labels = [
+const classificationLabels = [
   { value: "正面", color: "#22c55e", shortcut: "1" },
   { value: "负面", color: "#ef4444", shortcut: "2" },
   { value: "中性", color: "#6b7280", shortcut: "3" },
 ];
 
+const nerEntityLabels = [
+  { value: "人名", color: "#3b82f6", shortcut: "1" },
+  { value: "地名", color: "#a855f7", shortcut: "2" },
+  { value: "动物", color: "#f97316", shortcut: "3" },
+];
+
 const relationTypes = ["属于", "等同", "并列", "由于", "涉及", "冲突"];
 
+type PreannotationReviewStatus = "pending" | "accepted" | "rejected";
+
+interface PreannotationAlternative {
+  id: string;
+  label: string;
+  confidence: number;
+  reviewStatus: PreannotationReviewStatus;
+}
+
+interface PreannotationSuggestion {
+  sampleId: number;
+  label: string;
+  confidence: number;
+  reviewStatus: PreannotationReviewStatus;
+  nerEntities?: Array<{ entityType: string; mention: string; confidence: number }>;
+  alternatives?: PreannotationAlternative[];
+}
+
+function buildClassificationAlternatives(sampleId: number, primaryLabel: string, primaryConf: number): PreannotationAlternative[] {
+  const pool = classificationLabels.map((l) => l.value).filter((v) => v !== primaryLabel);
+  if (pool.length < 2) return [];
+  const c1 = pool[sampleId % pool.length];
+  const c2 = pool[(sampleId + 1) % pool.length];
+  const raw1 = primaryConf - 0.08 - ((sampleId * 17) % 10) / 100;
+  const raw2 = Math.max(0.05, Math.min(0.42, 1 - primaryConf - 0.1));
+  return [
+    { id: `${sampleId}-alt-1`, label: c1, confidence: Math.round(Math.max(0.05, Math.min(0.9, raw1)) * 100) / 100, reviewStatus: "pending" },
+    { id: `${sampleId}-alt-2`, label: c2, confidence: Math.round(Math.max(0.05, Math.min(0.88, raw2)) * 100) / 100, reviewStatus: "pending" },
+  ];
+}
+
+type ImageSegSlotKey = "neutral" | "vehicle" | "ped";
+
+type ImageSegReviewStatus = "pending" | "accepted" | "rejected";
+
+interface ImageSegSlotRow {
+  slotKey: ImageSegSlotKey;
+  label: string;
+  confidence: number;
+  content: string;
+  reviewStatus: ImageSegReviewStatus;
+}
+
+function mkBt005SegSlots(sampleId: number): ImageSegSlotRow[] {
+  const j = sampleId % 7;
+  const c1 = Math.round((0.72 + j * 0.012) * 1000) / 1000;
+  const c2 = Math.round((0.88 + (j % 4) * 0.01) * 1000) / 1000;
+  const c3 = Math.round((0.81 + (j % 5) * 0.01) * 1000) / 1000;
+  return [
+    {
+      slotKey: "neutral",
+      label: "中性",
+      confidence: Math.min(0.95, c1),
+      content: `场景类型：中性路况；光照与天气条件正常，未见明显异常事件（样本 #${sampleId}）`,
+      reviewStatus: "pending",
+    },
+    {
+      slotKey: "vehicle",
+      label: "车辆",
+      confidence: Math.min(0.96, c2),
+      content: `候选检测框：左上角约 30%×20%，框宽 15%、框高 20%；车型提示：小型机动车`,
+      reviewStatus: "pending",
+    },
+    {
+      slotKey: "ped",
+      label: "行人",
+      confidence: Math.min(0.95, c3),
+      content: `候选检测框：居中偏右下方；宽 10%、高 15%；提示可能为过街行人，请与车流关系核对`,
+      reviewStatus: "pending",
+    },
+  ];
+}
+
 const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => {
-  const [samples] = useState<Sample[]>(() =>
-    Array.from({ length: task.total }, (_, i) => {
+  usePreannotationProgress();
+  const preannotationConfig = useTaskPreannotationStore((s) => s.configs[task.id]);
+  const labels = task.annotationMode === "ner" ? nerEntityLabels : classificationLabels;
+
+  const [samples] = useState<Sample[]>(() => {
+    const ner = task.annotationMode === "ner";
+    const labList = ner ? nerEntityLabels : classificationLabels;
+    return Array.from({ length: task.total }, (_, i) => {
       let content = "";
       if (task.projectType === "音频类") {
         content = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
@@ -67,6 +162,13 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
         content = `https://picsum.photos/seed/${i + 1}/800/600`;
       } else if (task.projectType === "视频类") {
         content = "https://www.w3schools.com/html/mov_bbb.mp4";
+      } else if (ner) {
+        const corpus = [
+          "国务院总理李克强在北京大熊猫基地会见德国嘉宾，双方就滇金丝猴与藏羚羊保护交换意见。",
+          "记者王芳在深圳湾记录到金丝猴与白鹭同框，生态学家张明称这一现象极为罕见。",
+          "成都在建湿地公园引进一批大熊猫与梅花鹿混养实验，动物学家质疑其长期可行性。",
+        ];
+        content = corpus[i % corpus.length];
       } else {
         content = i % 3 === 0
           ? "央行今日公布最新货币政策，维持基准利率不变。市场分析人士认为，这一决定符合预期，有助于稳定当前经济形势。"
@@ -78,11 +180,11 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
         id: i + 1,
         content,
         status: i < task.done ? "已标注" : "未标注",
-        label: i < task.done ? labels[i % 3].value : null,
+        label: i < task.done ? labList[i % labList.length].value : null,
         metadata: {},
       };
-    })
-  );
+    });
+  });
 
   const [currentIndex, setCurrentIndex] = useState(() => {
     if (initialResourceId !== undefined) {
@@ -130,28 +232,41 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
   const [labelSearch, setLabelSearch] = useState("");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const renderTextContent = () => (
-    <section>
-      <h2 className="text-xl font-bold text-slate-800 mb-2">请阅读标注内容</h2>
-      <div className="text-sm text-slate-500 mb-4">Sample: #{current.id} · {currentState.status}</div>
-      <div className="rounded-xl border border-slate-200 bg-card overflow-hidden shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
-        <div className="flex divide-x divide-slate-100">
-          <div className="bg-slate-50/50 py-8 px-4 flex flex-col items-end select-none text-slate-300 font-mono text-xs gap-[1.6em]">
-            {current.content.split("\n").map((_, i) => (
-              <span key={i}>{i + 1} |</span>
-            ))}
-          </div>
-          <div className="flex-1 p-8 text-[17px] leading-[1.6] text-slate-700 select-text cursor-text whitespace-pre-wrap font-medium">
-            {current.content.split("\n").map((line, i) => (
-              <div key={i} className="min-h-[1.6em]">
-                {line || " "}
-              </div>
-            ))}
+  const isBt005ImageSeg = task.id === "BT-005" && task.projectType === "图像类";
+
+  const [imageSegSlotsBySample, setImageSegSlotsBySample] = useState<Map<number, ImageSegSlotRow[]>>(() => {
+    if (!(task.id === "BT-005" && task.projectType === "图像类")) return new Map();
+    const m = new Map<number, ImageSegSlotRow[]>();
+    for (let sid = 1; sid <= task.total; sid++) {
+      m.set(sid, mkBt005SegSlots(sid));
+    }
+    return m;
+  });
+
+  const renderTextContent = () => {
+    return (
+      <section>
+        <h2 className="text-xl font-bold text-slate-800 mb-2">请阅读标注内容</h2>
+        <div className="text-sm text-slate-500 mb-4">Sample: #{current.id} · {currentState.status}</div>
+        <div className="rounded-xl border border-slate-200 bg-card overflow-hidden shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
+          <div className="flex divide-x divide-slate-100">
+            <div className="bg-slate-50/50 py-6 px-4 flex flex-col items-end select-none text-slate-300 font-mono text-xs gap-[1.4em]">
+              {current.content.split("\n").map((_, i) => (
+                <span key={i}>{i + 1} |</span>
+              ))}
+            </div>
+            <div className="flex-1 p-6 md:p-8 text-[17px] leading-[1.6] text-slate-700 select-text cursor-text whitespace-pre-wrap font-medium">
+              {current.content.split("\n").map((line, i) => (
+                <div key={i} className="min-h-[1.5em]">
+                  {line || " "}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
-    </section>
-  );
+      </section>
+    );
+  };
 
   const renderAudioContent = () => (
     <section className="space-y-6">
@@ -224,12 +339,29 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
           alt="Annotation"
           className="w-full h-full object-contain opacity-90 group-hover:opacity-100 transition-opacity"
         />
-        <div className="absolute top-[20%] left-[30%] w-[15%] h-[20%] border-2 border-primary bg-primary/10 rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.5)]">
-          <span className="absolute -top-6 left-0 bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-t-sm font-bold shadow-sm">车辆</span>
-        </div>
-        <div className="absolute top-[45%] left-[55%] w-[10%] h-[15%] border-2 border-emerald-500 bg-emerald-500/10 rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.5)]">
-          <span className="absolute -top-6 left-0 bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-t-sm font-bold shadow-sm">行人</span>
-        </div>
+        {(() => {
+          const slots = imageSegSlotsBySample.get(current.id);
+          const vehRejected =
+            isBt005ImageSeg && slots?.find((s) => s.slotKey === "vehicle")?.reviewStatus === "rejected";
+          const pedRejected =
+            isBt005ImageSeg && slots?.find((s) => s.slotKey === "ped")?.reviewStatus === "rejected";
+          const showVehicle = !(isBt005ImageSeg && vehRejected);
+          const showPed = !(isBt005ImageSeg && pedRejected);
+          return (
+            <>
+              {showVehicle && (
+                <div className="absolute top-[20%] left-[30%] w-[15%] h-[20%] border-2 border-primary bg-primary/10 rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.5)]">
+                  <span className="absolute -top-6 left-0 bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-t-sm font-bold shadow-sm">车辆</span>
+                </div>
+              )}
+              {showPed && (
+                <div className="absolute top-[45%] left-[55%] w-[10%] h-[15%] border-2 border-emerald-500 bg-emerald-500/10 rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.5)]">
+                  <span className="absolute -top-6 left-0 bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-t-sm font-bold shadow-sm">行人</span>
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-[10px] text-white flex items-center gap-3 border border-white/10 uppercase tracking-widest font-mono">
           <span>X: 1024</span>
@@ -323,6 +455,245 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
     new Set(annotations.filter(a => a.sampleId === current.id).map(a => a.label))
   );
 
+  const [preAnnotations, setPreAnnotations] = useState<Map<number, PreannotationSuggestion>>(() => {
+    const m = new Map<number, PreannotationSuggestion>();
+    if (task.id === "BT-005" && task.projectType === "图像类") return m;
+    if (!preannotationConfig?.batchEnabled) return m;
+    const covered = Math.min(preannotationConfig.preannotated, task.total);
+    const labList = task.annotationMode === "ner" ? nerEntityLabels : classificationLabels;
+    const ner = task.annotationMode === "ner";
+    const names = ["李克强", "张明", "王芳", "刘洋"];
+    const places = ["北京", "深圳", "成都", "上海"];
+    const animals = ["大熊猫", "金丝猴", "白鹭", "藏羚羊"];
+    for (let i = 0; i < covered; i++) {
+      const sampleId = i + 1;
+      if (ner) {
+        const nerEntities = [
+          { entityType: "人名", mention: names[i % names.length], confidence: 0.91 },
+          { entityType: "地名", mention: places[(i + 1) % places.length], confidence: 0.86 },
+          { entityType: "动物", mention: animals[(i + 2) % animals.length], confidence: 0.79 },
+        ];
+        const avgConf = Math.round(((nerEntities.reduce((s, x) => s + x.confidence, 0) / nerEntities.length) * 100)) / 100;
+        m.set(sampleId, {
+          sampleId,
+          label: nerEntities.map((e) => `${e.entityType}:${e.mention}`).join(" · "),
+          confidence: avgConf,
+          reviewStatus: "pending",
+          nerEntities,
+        });
+      } else {
+        const labelIdx = (sampleId * 7) % labList.length;
+        const baseConf = 0.55 + ((sampleId * 13) % 45) / 100;
+        const primaryConf = Math.round(baseConf * 100) / 100;
+        const primaryLab = labList[labelIdx].value;
+        m.set(sampleId, {
+          sampleId,
+          label: primaryLab,
+          confidence: primaryConf,
+          reviewStatus: "pending",
+          alternatives: buildClassificationAlternatives(sampleId, primaryLab, primaryConf),
+        });
+      }
+    }
+    return m;
+  });
+
+  useEffect(() => {
+    if (task.id === "BT-005" && task.projectType === "图像类") return;
+    if (!preannotationConfig?.batchEnabled) return;
+    setPreAnnotations((prev) => {
+      const covered = Math.min(preannotationConfig.preannotated, task.total);
+      if (prev.size >= covered) return prev;
+      const next = new Map(prev);
+      const labList = task.annotationMode === "ner" ? nerEntityLabels : classificationLabels;
+      const ner = task.annotationMode === "ner";
+      const names = ["李克强", "张明", "王芳", "刘洋"];
+      const places = ["北京", "深圳", "成都", "上海"];
+      const animals = ["大熊猫", "金丝猴", "白鹭", "藏羚羊"];
+      for (let i = prev.size; i < covered; i++) {
+        const sampleId = i + 1;
+        if (next.has(sampleId)) continue;
+        if (ner) {
+          const nerEntities = [
+            { entityType: "人名", mention: names[i % names.length], confidence: 0.91 },
+            { entityType: "地名", mention: places[(i + 1) % places.length], confidence: 0.86 },
+            { entityType: "动物", mention: animals[(i + 2) % animals.length], confidence: 0.79 },
+          ];
+          const avgConf = Math.round(((nerEntities.reduce((s, x) => s + x.confidence, 0) / nerEntities.length) * 100)) / 100;
+          next.set(sampleId, {
+            sampleId,
+            label: nerEntities.map((e) => `${e.entityType}:${e.mention}`).join(" · "),
+            confidence: avgConf,
+            reviewStatus: "pending",
+            nerEntities,
+          });
+        } else {
+          const labelIdx = (sampleId * 7) % labList.length;
+          const baseConf = 0.55 + ((sampleId * 13) % 45) / 100;
+          const primaryConf = Math.round(baseConf * 100) / 100;
+          const primaryLab = labList[labelIdx].value;
+          next.set(sampleId, {
+            sampleId,
+            label: primaryLab,
+            confidence: primaryConf,
+            reviewStatus: "pending",
+            alternatives: buildClassificationAlternatives(sampleId, primaryLab, primaryConf),
+          });
+        }
+      }
+      return next;
+    });
+  }, [preannotationConfig?.preannotated, preannotationConfig?.batchEnabled, task.total, task.annotationMode]);
+
+  const preAnnotationStats = useMemo(() => {
+    const suggestions = Array.from(preAnnotations.values());
+    const pending = suggestions.filter((p) => p.reviewStatus === "pending").length;
+    const accepted = suggestions.filter((p) => p.reviewStatus === "accepted").length;
+    const rejected = suggestions.filter((p) => p.reviewStatus === "rejected").length;
+    const threshold = preannotationConfig?.confidenceThreshold || 0.6;
+    const highConfidencePending = suggestions.filter(
+      (p) => p.reviewStatus === "pending" && p.confidence >= threshold
+    ).length;
+    return { total: suggestions.length, pending, accepted, rejected, highConfidencePending };
+  }, [preAnnotations, preannotationConfig?.confidenceThreshold]);
+
+  const currentPreAnnotation = preAnnotations.get(current.id);
+
+  const labelPreConfidence = useMemo(() => {
+    const m = new Map<string, number>();
+    if (currentState.status !== "未标注") return m;
+    const pre = preAnnotations.get(current.id);
+    if (!pre || pre.reviewStatus !== "pending") return m;
+    const mode = task.annotationMode ?? "classification";
+    if (mode === "ner") {
+      pre.nerEntities?.forEach((e) => {
+        m.set(e.entityType, e.confidence);
+      });
+      return m;
+    }
+    m.set(pre.label, pre.confidence);
+    pre.alternatives?.forEach((a) => {
+      m.set(a.label, a.confidence);
+    });
+    return m;
+  }, [current.id, currentState.status, preAnnotations, task.annotationMode]);
+
+  type AnnotationTableRow =
+    | { kind: "ann"; key: string; ann: Annotation }
+    | {
+        kind: "split-pre";
+        key: string;
+        sampleId: number;
+        slotKey: ImageSegSlotKey;
+        label: string;
+        content: string;
+        confidence: number;
+        reviewStatus: ImageSegReviewStatus;
+      }
+    | {
+        kind: "pre-primary";
+        key: string;
+        sampleId: number;
+        label: string;
+        confidence: number;
+      }
+    | {
+        kind: "pre-alt";
+        key: string;
+        sampleId: number;
+        altId: string;
+        label: string;
+        confidence: number;
+      }
+    | {
+        kind: "pre-ner";
+        key: string;
+        sampleId: number;
+        label: string;
+        content: string;
+        confidence: number;
+        showActions: boolean;
+      };
+
+  const annotationTableRows = useMemo((): AnnotationTableRow[] => {
+    const anns = annotations
+      .filter((a) => a.sampleId === current.id)
+      .filter((a) => listSearch === "" || a.label.includes(listSearch) || a.content.includes(listSearch));
+    const pre = preAnnotations.get(current.id);
+    const rows: AnnotationTableRow[] = [];
+
+    if (task.id === "BT-005" && task.projectType === "图像类") {
+      const slots = imageSegSlotsBySample.get(current.id) ?? [];
+      slots
+        .filter(
+          (slot) =>
+            listSearch === "" ||
+            slot.label.includes(listSearch) ||
+            slot.content.includes(listSearch),
+        )
+        .forEach((slot) =>
+          rows.push({
+            kind: "split-pre",
+            key: `split-${current.id}-${slot.slotKey}`,
+            sampleId: current.id,
+            slotKey: slot.slotKey,
+            label: slot.label,
+            content: slot.content,
+            confidence: slot.confidence,
+            reviewStatus: slot.reviewStatus,
+          }),
+        );
+    } else if (pre && pre.reviewStatus === "pending") {
+      if (task.annotationMode === "ner") {
+        const ents = pre.nerEntities ?? [];
+        if (ents.length > 0) {
+          ents.forEach((e, ei) => {
+            rows.push({
+              kind: "pre-ner",
+              key: `pre-ner-${current.id}-${ei}`,
+              sampleId: current.id,
+              label: e.entityType,
+              content: `「${e.mention}」`,
+              confidence: e.confidence,
+              showActions: ei === 0,
+            });
+          });
+        } else {
+          rows.push({
+            kind: "pre-ner",
+            key: `pre-ner-${current.id}`,
+            sampleId: current.id,
+            label: "—",
+            content: pre.label,
+            confidence: pre.confidence,
+            showActions: true,
+          });
+        }
+      } else {
+        rows.push({
+          kind: "pre-primary",
+          key: `pre-p-${current.id}`,
+          sampleId: current.id,
+          label: pre.label,
+          confidence: pre.confidence,
+        });
+        (pre.alternatives || []).forEach((a) =>
+          rows.push({
+            kind: "pre-alt",
+            key: a.id,
+            sampleId: current.id,
+            altId: a.id,
+            label: a.label,
+            confidence: a.confidence,
+          })
+        );
+      }
+    }
+
+    anns.forEach((ann) => rows.push({ kind: "ann", key: ann.id, ann }));
+    return rows;
+  }, [annotations, current.id, imageSegSlotsBySample, listSearch, preAnnotations, task.annotationMode, task.id, task.projectType]);
+
   // Initialize mock logs
   useEffect(() => {
     if (logs.length === 0 && annotations.length > 0) {
@@ -381,6 +752,188 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
       setTimeout(() => setCurrentIndex(i => i + 1), 300);
     }
   }, [current, currentIndex, samples.length, sampleStates]);
+
+  const acceptPreAnnotation = useCallback(
+    (sampleId: number, chosenLabel?: string, chosenConfidence?: number) => {
+      if (task.id === "BT-005" && task.projectType === "图像类") return;
+      const pre = preAnnotations.get(sampleId);
+      if (!pre) return;
+      const applyLabel = chosenLabel ?? pre.label;
+      const applyConf = chosenConfidence ?? pre.confidence;
+      const state = sampleStates.get(sampleId);
+      setUndoStack((s) => [...s, { id: sampleId, prev: { ...(state || { status: "未标注", label: null }) } }]);
+      setRedoStack([]);
+      setSampleStates((prev) => {
+        const next = new Map(prev);
+        next.set(sampleId, { status: "已标注", label: applyLabel });
+        return next;
+      });
+      setPreAnnotations((prev) => {
+        const next = new Map(prev);
+        next.delete(sampleId);
+        return next;
+      });
+      setAnnotations((prev) => {
+        const existing = prev.findIndex((a) => a.sampleId === sampleId);
+        const sample = samples.find((s) => s.id === sampleId);
+        const payload: Annotation = {
+          id: `ann-${sampleId}`,
+          sampleId,
+          label: applyLabel,
+          content: (sample?.content || "").slice(0, 30) + "...",
+          group: "AI 预标注",
+          tool:
+            task.annotationMode === "ner"
+              ? `NER · ${preannotationConfig?.modelName || "预标注"}`
+              : `模型 · ${preannotationConfig?.modelName || "预标注"}`,
+          createdAt: new Date().toLocaleString(),
+          score: Math.round(applyConf * 100),
+        };
+        if (existing !== -1) {
+          const updated = [...prev];
+          updated[existing] = payload;
+          return updated;
+        }
+        return [...prev, payload];
+      });
+      setLogs((l) => [
+        {
+          id: `log-accept-${sampleId}-${Date.now()}`,
+          timestamp: new Date().toLocaleTimeString(),
+          operator: "标注员A",
+          action: `接受预标注:${applyLabel} (${Math.round(applyConf * 100)}%)`,
+          target: `SAMPLE #${sampleId}`,
+        },
+        ...l,
+      ]);
+    },
+    [preAnnotations, sampleStates, samples, preannotationConfig, task.annotationMode, task.id, task.projectType]
+  );
+
+  const rejectPreAnnotation = useCallback((sampleId: number) => {
+    if (task.id === "BT-005" && task.projectType === "图像类") return;
+    const pre = preAnnotations.get(sampleId);
+    setPreAnnotations((prev) => {
+      const next = new Map(prev);
+      next.delete(sampleId);
+      return next;
+    });
+    setAnnotations((prev) =>
+      prev.filter(
+        (a) =>
+          a.sampleId !== sampleId ||
+          (!a.tool.includes("模型 ·") && !a.tool.includes("NER ·"))
+      )
+    );
+    setSampleStates((prev) => {
+      const currentState = prev.get(sampleId);
+      if (!currentState || currentState.status !== "已标注") return prev;
+      if (pre && (currentState.label === pre.label || (pre.alternatives || []).some((a) => a.label === currentState.label))) {
+        const next = new Map(prev);
+        next.set(sampleId, { status: "未标注", label: null });
+        return next;
+      }
+      return prev;
+    });
+    setLogs((l) => [
+      {
+        id: `log-reject-${sampleId}-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString(),
+        operator: "标注员A",
+        action: `拒绝预标注`,
+        target: `SAMPLE #${sampleId}`,
+      },
+      ...l,
+    ]);
+    toast.info(`已拒绝并删除样本 #${sampleId} 的预标注`, { duration: 1200 });
+  }, [preAnnotations, task]);
+
+  const rejectPreAnnotationAlternative = useCallback(
+    (sampleId: number, altId: string) => {
+      setPreAnnotations((prev) => {
+        const pre = prev.get(sampleId);
+        if (!pre?.alternatives?.length) return prev;
+        const filtered = pre.alternatives.filter((a) => a.id !== altId);
+        const next = new Map(prev);
+        next.set(sampleId, { ...pre, alternatives: filtered });
+        return next;
+      });
+    },
+    []
+  );
+
+  const acceptImageSegSlot = useCallback((sampleId: number, slotKey: ImageSegSlotKey) => {
+    setImageSegSlotsBySample((prev) => {
+      const next = new Map(prev);
+      const rows = [...(next.get(sampleId) ?? [])];
+      next.set(
+        sampleId,
+        rows.map((r) => (r.slotKey === slotKey ? { ...r, reviewStatus: "accepted" as const } : r)),
+      );
+      return next;
+    });
+    toast.success("已接受该条预标注");
+  }, []);
+
+  const rejectImageSegSlot = useCallback((sampleId: number, slotKey: ImageSegSlotKey) => {
+    setImageSegSlotsBySample((prev) => {
+      const next = new Map(prev);
+      const rows = [...(next.get(sampleId) ?? [])];
+      next.set(
+        sampleId,
+        rows.map((r) => (r.slotKey === slotKey ? { ...r, reviewStatus: "rejected" as const } : r)),
+      );
+      return next;
+    });
+    toast.info("已取消该条预标注");
+  }, []);
+
+  const deletePreAnnotation = useCallback((sampleId: number) => {
+    setPreAnnotations((prev) => {
+      const next = new Map(prev);
+      next.delete(sampleId);
+      return next;
+    });
+    toast.info(`已删除样本 #${sampleId} 的预标注结果`);
+  }, []);
+
+  const acceptAllPreAnnotationsInCurrentSample = useCallback(() => {
+    if (task.id === "BT-005" && task.projectType === "图像类") {
+      setImageSegSlotsBySample((prev) => {
+        const next = new Map(prev);
+        const rows = [...(next.get(current.id) ?? [])];
+        next.set(
+          current.id,
+          rows.map((r) => ({ ...r, reviewStatus: "accepted" as const })),
+        );
+        return next;
+      });
+      toast.success("三条预标注已全部接受（列表仍可查看）");
+      return;
+    }
+    const pre = preAnnotations.get(current.id);
+    if (!pre) return toast.info("当前样本无预标注数据");
+    acceptPreAnnotation(current.id);
+  }, [preAnnotations, current.id, acceptPreAnnotation, task.id, task.projectType]);
+
+  const rejectAllPreAnnotationsInCurrentSample = useCallback(() => {
+    if (task.id === "BT-005" && task.projectType === "图像类") {
+      setImageSegSlotsBySample((prev) => {
+        const next = new Map(prev);
+        const rows = [...(next.get(current.id) ?? [])];
+        next.set(
+          current.id,
+          rows.map((r) => ({ ...r, reviewStatus: "rejected" as const })),
+        );
+        return next;
+      });
+      toast.info("三条预标注已全部取消（画布检测框随之隐藏）");
+      return;
+    }
+    const pre = preAnnotations.get(current.id);
+    if (!pre) return toast.info("当前样本无预标注数据");
+    rejectPreAnnotation(current.id);
+  }, [preAnnotations, current.id, rejectPreAnnotation, task.id, task.projectType]);
 
   const markInvalid = useCallback(() => {
     const prev = sampleStates.get(current.id)!;
@@ -486,6 +1039,27 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
       return matchesSearch;
     });
 
+    const pre = preAnnotations.get(current.id);
+    if (pre && pre.reviewStatus === "pending" && !filteredAnnotations.some((x) => x.id === `pre-${current.id}`)) {
+      const nerContent =
+        task.annotationMode === "ner" && pre.nerEntities?.length
+          ? pre.nerEntities.map((e) => `${e.entityType}: ${e.mention}`).join("；")
+          : "来自预标注结果";
+      filteredAnnotations.push({
+        id: `pre-${current.id}`,
+        sampleId: current.id,
+        label: pre.label,
+        content: nerContent,
+        group: "AI 预标注",
+        tool:
+          task.annotationMode === "ner"
+            ? `NER · ${preannotationConfig?.modelName || "预标注"}`
+            : `模型 · ${preannotationConfig?.modelName || "预标注"}`,
+        createdAt: new Date().toLocaleString(),
+        score: Math.round(pre.confidence * 100),
+      });
+    }
+
     filteredAnnotations.sort((a, b) => {
       if (listSortMode === "score") return b.score - a.score;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -515,11 +1089,21 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
       if (e.key === "z" && (e.ctrlKey || e.metaKey) && e.shiftKey) { e.preventDefault(); redo(); }
       if (e.key === "ArrowLeft") setCurrentIndex(i => Math.max(0, i - 1));
       if (e.key === "ArrowRight") setCurrentIndex(i => Math.min(samples.length - 1, i + 1));
+      if ((e.key === "y" || e.key === "Y") && currentPreAnnotation && currentPreAnnotation.reviewStatus === "pending") {
+        e.preventDefault();
+        acceptPreAnnotation(current.id);
+        return;
+      }
+      if ((e.key === "n" || e.key === "N") && currentPreAnnotation && currentPreAnnotation.reviewStatus === "pending") {
+        e.preventDefault();
+        rejectPreAnnotation(current.id);
+        return;
+      }
       labels.forEach(l => { if (e.key === l.shortcut) setLabel(l.value); });
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [undo, redo, setLabel, samples.length]);
+  }, [undo, redo, setLabel, samples.length, currentPreAnnotation, current.id, acceptPreAnnotation, rejectPreAnnotation]);
 
   // Handle active sample scroll centering
   useEffect(() => {
@@ -580,17 +1164,23 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
               {labels.filter(l => l.value.includes(labelSearch)).map(l => {
                 const isSelected = currentState.label === l.value;
                 const count = Array.from(sampleStates.values()).filter(s => s.label === l.value).length;
+                const pconf = labelPreConfidence.get(l.value);
                 return (
                   <button
                     key={l.value}
                     onClick={() => setLabel(l.value)}
-                    className={`flex items-center rounded-sm overflow-hidden border transition-all hover:shadow-sm h-8 ${isSelected ? "ring-1 ring-primary ring-offset-0 border-primary bg-primary/5 shadow-sm" : "border-border hover:border-muted-foreground/30 bg-card"}`}
+                    className={`flex items-center rounded-sm overflow-hidden border transition-all hover:shadow-sm min-h-8 max-w-full ${isSelected ? "ring-1 ring-primary ring-offset-0 border-primary bg-primary/5 shadow-sm" : "border-border hover:border-muted-foreground/30 bg-card"}`}
                   >
-                    <div className="w-1 h-full shrink-0" style={{ backgroundColor: l.color }} />
-                    <div className="px-3 py-1 flex items-center gap-2">
-                      <span className="text-xs font-semibold" style={{ color: isSelected ? "inherit" : "#374151" }}>{l.value}</span>
-                      <span className="text-[10px] text-muted-foreground/60 font-mono bg-muted/30 px-1 rounded">{l.shortcut}</span>
-                      {count > 0 && <span className="text-[10px] text-muted-foreground">({count})</span>}
+                    <div className="w-1 h-full shrink-0 self-stretch min-h-[32px]" style={{ backgroundColor: l.color }} />
+                    <div className="px-2.5 py-1 flex items-center gap-1.5 flex-wrap min-w-0">
+                      <span className="text-xs font-semibold truncate" style={{ color: isSelected ? "inherit" : "#374151" }}>{l.value}</span>
+                      <span className="text-[10px] text-muted-foreground/60 font-mono bg-muted/30 px-1 rounded shrink-0">{l.shortcut}</span>
+                      {count > 0 && <span className="text-[10px] text-muted-foreground shrink-0">({count})</span>}
+                      {pconf !== undefined && (
+                        <span className="text-[10px] font-mono font-semibold text-primary shrink-0 tabular-nums">
+                          {(pconf * 100).toFixed(1)}%
+                        </span>
+                      )}
                     </div>
                   </button>
                 );
@@ -599,8 +1189,8 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
           </div>
 
           {/* Content area - annotation canvas */}
-          <div className="flex-1 p-12 overflow-y-auto flex items-start justify-center bg-[#f8fafc] dark:bg-slate-900/10">
-            <div className="max-w-4xl w-full space-y-8">
+          <div className="flex-1 p-8 overflow-y-auto flex items-start justify-center bg-[#f8fafc] dark:bg-slate-900/10">
+            <div className="max-w-4xl w-full space-y-6">
               {renderContent()}
 
               <section>
@@ -789,13 +1379,12 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
               <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                 {rightLowerTab === "list" && (
                   <div className="space-y-4">
-                    {/* List Search */}
                     <div className="relative group/search">
                       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 group-focus-within/search:text-primary transition-colors" />
                       <input
                         value={listSearch}
                         onChange={e => setListSearch(e.target.value)}
-                        placeholder="搜索标注标签或内容..."
+                        placeholder="搜索标签或内容..."
                         className="w-full pl-8 pr-3 py-1.5 text-[10px] border rounded bg-slate-50 focus:outline-none focus:ring-1 focus:ring-primary/20 transition-all"
                       />
                       {listSearch && (
@@ -805,101 +1394,202 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                       )}
                     </div>
 
-                    {/* Sort & Group controls */}
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 relative">
-                        <Filter className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
-                        <select
-                          value={listGroupMode}
-                          onChange={e => setListGroupMode(e.target.value as any)}
-                          className="w-full text-[10px] border rounded-md pl-6 pr-1 py-1 bg-slate-50 focus:ring-1 focus:ring-primary/20 outline-none appearance-none cursor-pointer hover:bg-slate-100 transition-colors"
-                        >
-                          <option value="none">不分组</option>
-                          <option value="tool">按工具分组</option>
-                          <option value="label">按标签分组</option>
-                        </select>
-                      </div>
-                      <div className="flex-1 relative">
-                        <SortAsc className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
-                        <select
-                          value={listSortMode}
-                          onChange={e => setListSortMode(e.target.value as any)}
-                          className="w-full text-[10px] border rounded-md pl-6 pr-1 py-1 bg-slate-50 focus:ring-1 focus:ring-primary/20 outline-none appearance-none cursor-pointer hover:bg-slate-100 transition-colors"
-                        >
-                          <option value="time">按时间</option>
-                          <option value="score">按分数</option>
-                        </select>
-                      </div>
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={acceptAllPreAnnotationsInCurrentSample}
+                        className="px-2 py-1 text-[10px] rounded bg-primary text-primary-foreground font-bold shadow-sm hover:bg-primary/90"
+                      >
+                        一键接受
+                      </button>
+                      <button
+                        onClick={rejectAllPreAnnotationsInCurrentSample}
+                        className="px-2 py-1 text-[10px] rounded border border-slate-200 font-bold hover:bg-muted/50"
+                      >
+                        一键拒绝
+                      </button>
                     </div>
 
-                    <div className="space-y-3">
-                      {Object.entries(getGroupedAnnotations()).map(([group, anns]) => {
-                        const isCollapsed = collapsedGroups.has(group);
-                        return (
-                          <div key={group} className="space-y-1.5">
-                            {listGroupMode !== "none" && (
-                              <div
-                                onClick={() => {
-                                  const next = new Set(collapsedGroups);
-                                  if (next.has(group)) next.delete(group);
-                                  else next.add(group);
-                                  setCollapsedGroups(next);
-                                }}
-                                className="flex items-center gap-2 px-1 cursor-pointer group/header hover:opacity-80 transition-opacity"
-                              >
-                                <div className="h-px flex-1 bg-slate-100" />
-                                <div className="flex items-center gap-1.5 bg-white px-2">
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{group}</span>
-                                  <ChevronDown className={`w-3 h-3 text-slate-300 transition-transform duration-200 ${isCollapsed ? "-rotate-90" : ""}`} />
-                                </div>
-                                <div className="h-px flex-1 bg-slate-100" />
-                              </div>
-                            )}
-                            {!isCollapsed && (
-                              <div className="space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                                {anns.slice(0, 30).map(ann => (
-                                  <div
-                                    key={ann.id}
-                                    onClick={() => setCurrentIndex(ann.sampleId - 1)}
-                                    className="group flex flex-col gap-1.5 p-3 rounded-xl border border-slate-100 bg-white hover:border-primary/30 hover:shadow-md transition-all cursor-pointer relative overflow-hidden"
+                    <div className="overflow-hidden border rounded-lg">
+                      <table className="table-fixed w-full text-[11px] leading-tight">
+                        <colgroup>
+                          <col className="w-8" />
+                          <col className="w-[92px]" />
+                          <col />
+                          <col className="w-[68px]" />
+                        </colgroup>
+                        <thead className="bg-muted/20 border-b">
+                          <tr>
+                            <th className="text-left px-1.5 py-1.5">序号</th>
+                            <th className="text-left px-1.5 py-1.5">标签</th>
+                            <th className="text-left px-1.5 py-1.5">内容</th>
+                            <th className="text-right px-1.5 py-1.5">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {annotationTableRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="py-6 text-center text-slate-400">当前样本暂无标注</td>
+                            </tr>
+                          ) : (
+                            annotationTableRows.map((row, index) => {
+                              if (row.kind === "split-pre") {
+                                const rs = row.reviewStatus;
+                                const tone =
+                                  rs === "pending"
+                                    ? "bg-red-50/90 dark:bg-red-950/15 hover:bg-red-50 dark:hover:bg-red-950/25"
+                                    : rs === "accepted"
+                                      ? "bg-emerald-50/80 dark:bg-emerald-950/20 hover:bg-emerald-50/90"
+                                      : "bg-slate-100/70 dark:bg-slate-900/35";
+                                return (
+                                  <tr
+                                    key={row.key}
+                                    onClick={() => setCurrentIndex(row.sampleId - 1)}
+                                    className={`border-b last:border-b-0 cursor-pointer ${tone}`}
                                   >
-                                    <div className="absolute top-0 right-0 px-2 py-0.5 bg-slate-50 border-l border-b border-slate-100 rounded-bl-lg text-[9px] font-bold text-slate-400">
-                                      {ann.id}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <span
-                                        className="px-2 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-tight"
-                                        style={{
-                                          color: labels.find(l => l.value === ann.label)?.color,
-                                          backgroundColor: (labels.find(l => l.value === ann.label)?.color || "#666") + "10",
-                                          borderLeft: `2px solid ${labels.find(l => l.value === ann.label)?.color || "#666"}`
-                                        }}
-                                      >
-                                        {ann.label}
+                                    <td className="px-1.5 py-1.5 align-top text-slate-500">{index + 1}</td>
+                                    <td className="px-1.5 py-1 align-top min-w-0">
+                                      <div className="font-semibold text-slate-800 leading-tight truncate" title={row.label}>
+                                        {row.label}
+                                      </div>
+                                      <div className="flex items-center gap-1 mt-0.5 text-primary">
+                                        <Brain className="w-3 h-3 shrink-0 opacity-85" />
+                                        <span className="text-[10px] font-mono tabular-nums font-semibold">{row.confidence.toFixed(4)}</span>
+                                      </div>
+                                      {rs !== "pending" && (
+                                        <span className="text-[9px] mt-0.5 block text-muted-foreground">
+                                          {rs === "accepted" ? "已确认" : "已取消"}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-1.5 py-1 align-top max-w-0 min-w-0">
+                                      <span className="line-clamp-2 break-words text-slate-700 leading-snug" title={row.content}>
+                                        {row.content}
                                       </span>
-                                      <span className="text-[9px] text-slate-400 font-medium">来自 {ann.tool}</span>
-                                      <span className={`ml-auto text-[10px] font-bold ${ann.score >= 90 ? "text-emerald-500" : "text-amber-500"}`}>
-                                        {ann.score}分
-                                      </span>
+                                    </td>
+                                    <td className="px-1.5 py-1 text-right align-top whitespace-nowrap">
+                                      {rs === "pending" ? (
+                                        <div className="inline-flex items-center gap-0.5">
+                                          <button
+                                            type="button"
+                                            title="接受"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              acceptImageSegSlot(row.sampleId, row.slotKey);
+                                            }}
+                                            className="h-6 w-6 inline-flex items-center justify-center rounded border border-primary/40 bg-white text-primary hover:bg-primary/10"
+                                          >
+                                            <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            title={row.slotKey === "vehicle" || row.slotKey === "ped" ? "取消预标注（隐藏画布框）" : "取消"}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              rejectImageSegSlot(row.sampleId, row.slotKey);
+                                            }}
+                                            className="h-6 w-6 inline-flex items-center justify-center rounded border border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
+                                          >
+                                            <X className="w-3.5 h-3.5 stroke-[2.5]" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <span className="text-[10px] text-muted-foreground">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              }
+
+                              if (row.kind === "ann") {
+                                const ann = row.ann;
+                                return (
+                                  <tr key={row.key} onClick={() => setCurrentIndex(ann.sampleId - 1)} className="border-b last:border-b-0 cursor-pointer hover:bg-muted/30">
+                                    <td className="px-1.5 py-1 text-slate-500 align-middle">{index + 1}</td>
+                                    <td className="px-1.5 py-1 align-middle min-w-0">
+                                      <span className="font-semibold text-slate-800 block truncate">{ann.label}</span>
+                                    </td>
+                                    <td className="px-1.5 py-1 align-middle max-w-0 min-w-0">
+                                      <span className="block line-clamp-2 break-words text-slate-700" title={ann.content}>{ann.content}</span>
+                                    </td>
+                                    <td className="px-1.5 py-1 text-right align-middle text-[10px] text-muted-foreground">—</td>
+                                  </tr>
+                                );
+                              }
+
+                              const isPreAlt = row.kind === "pre-alt";
+                              const isPrePrimary = row.kind === "pre-primary";
+                              const isPreNer = row.kind === "pre-ner";
+                              const sd = row.sampleId;
+                              const preNerShowActions = !isPreNer || row.showActions;
+
+                              let contentHint = "";
+                              if (isPrePrimary) contentHint = "主候选标注";
+                              else if (isPreAlt) contentHint = "备选标注候选";
+                              else if (isPreNer) contentHint = row.content;
+
+                              const metaConf = row.confidence;
+
+                              return (
+                                <tr
+                                  key={row.key}
+                                  onClick={() => setCurrentIndex(sd - 1)}
+                                  className="border-b last:border-b-0 cursor-pointer bg-red-50/90 dark:bg-red-950/15 hover:bg-red-50 dark:hover:bg-red-950/25"
+                                >
+                                  <td className="px-1.5 py-1 text-slate-500 align-middle">{index + 1}</td>
+                                  <td className="px-1.5 py-1 align-top min-w-0">
+                                    <div className="font-semibold text-slate-800 leading-tight truncate">{row.label}</div>
+                                    <div className="flex items-center gap-1 mt-0.5 text-primary">
+                                      <Brain className="w-3 h-3 shrink-0 opacity-85" />
+                                      <span className="text-[10px] font-mono tabular-nums font-semibold">{metaConf.toFixed(4)}</span>
                                     </div>
-                                    <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">{ann.content}</p>
-                                    <div className="flex items-center justify-between text-[9px] text-slate-400 mt-0.5">
-                                      <span className="font-mono">SAMPLE #{ann.sampleId}</span>
-                                      <span>{ann.createdAt}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {Object.keys(getGroupedAnnotations()).length === 0 && (
-                        <div className="text-center py-10 opacity-40">
-                          <List className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                          <p className="text-xs text-slate-400">当前样本暂无标注</p>
-                        </div>
-                      )}
+                                  </td>
+                                  <td className="px-1.5 py-1 align-top max-w-0 min-w-0">
+                                    <span className="block line-clamp-2 break-words text-slate-700 leading-snug" title={contentHint}>{contentHint}</span>
+                                  </td>
+                                  <td className="px-1.5 py-1 text-right align-middle whitespace-nowrap">
+                                    {preNerShowActions ? (
+                                      <div className="inline-flex items-center gap-0.5">
+                                        <button
+                                          type="button"
+                                          title={isPreAlt ? `接受备选：${row.label}` : "接受预标注"}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (isPreAlt) {
+                                              acceptPreAnnotation(sd, row.label, row.confidence);
+                                            } else {
+                                              acceptPreAnnotation(sd);
+                                            }
+                                          }}
+                                          className="h-6 w-6 inline-flex items-center justify-center rounded border border-primary/40 bg-white text-primary hover:bg-primary/10"
+                                        >
+                                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title={isPreAlt ? "移除此备选" : "拒绝预标注"}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (isPreAlt) {
+                                              rejectPreAnnotationAlternative(sd, row.altId);
+                                            } else {
+                                              rejectPreAnnotation(sd);
+                                            }
+                                          }}
+                                          className="h-6 w-6 inline-flex items-center justify-center rounded border border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
+                                        >
+                                          <X className="w-3.5 h-3.5 stroke-[2.5]" />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[10px] text-muted-foreground"> </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}
@@ -1030,15 +1720,30 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
           {samples.map((s, i) => {
             const state = sampleStates.get(s.id);
             const isActive = i === currentIndex;
+            const pre = preAnnotations.get(s.id);
             return (
               <button
                 key={s.id}
                 data-sample-index={i}
                 onClick={() => setCurrentIndex(i)}
-                className={`w-7 h-7 rounded text-[10px] font-bold flex items-center justify-center shrink-0 transition-all duration-200 ${isActive ? "ring-2 ring-primary ring-offset-2 scale-110 shadow-md" : "hover:scale-105 opacity-80 hover:opacity-100"
+                className={`relative w-7 h-7 rounded text-[10px] font-bold flex items-center justify-center shrink-0 transition-all duration-200 ${isActive ? "ring-2 ring-primary ring-offset-2 scale-110 shadow-md" : "hover:scale-105 opacity-80 hover:opacity-100"
                   } ${getStatusColor(state?.status || "未标注")} text-white`}
+                title={pre ? `预标注: ${pre.label} (${(pre.confidence * 100).toFixed(0)}%) ${pre.reviewStatus === "pending" ? "待审" : pre.reviewStatus === "accepted" ? "已接受" : "已拒绝"}` : `样本 #${s.id}`}
               >
                 {s.id}
+                {pre && pre.reviewStatus === "pending" && (
+                  <span
+                    className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-white shadow-sm"
+                    aria-label="待审预标注"
+                  />
+                )}
+                {pre && pre.reviewStatus === "accepted" && (
+                  <span
+                    className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white shadow-sm flex items-center justify-center"
+                  >
+                    <Check className="w-1.5 h-1.5 text-white" strokeWidth={4} />
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1061,6 +1766,9 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
             <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> 已标注 <span className="font-bold text-foreground">{annotatedCount}</span></span>
             <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-destructive" /> 无效 <span className="font-bold text-foreground">{invalidCount}</span></span>
             <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30" /> 未标注 <span className="font-bold text-foreground">{unannotatedCount}</span></span>
+            {preannotationConfig?.batchEnabled && (
+              <span className="flex items-center gap-1.5"><Brain className="w-2.5 h-2.5 text-primary" /> 预标注 <span className="font-bold text-foreground">{preAnnotationStats.total}</span></span>
+            )}
             <span className="ml-2 font-mono text-[11px] bg-muted px-2 py-0.5 rounded">共 {samples.length}</span>
           </div>
         </div>
@@ -1104,6 +1812,11 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                 <div className="flex justify-between"><span>下一题</span><kbd className="px-2 py-0.5 bg-muted rounded text-xs">→</kbd></div>
                 <div className="flex justify-between"><span>撤销</span><kbd className="px-2 py-0.5 bg-muted rounded text-xs">Ctrl+Z</kbd></div>
                 <div className="flex justify-between"><span>恢复</span><kbd className="px-2 py-0.5 bg-muted rounded text-xs">Ctrl+Shift+Z</kbd></div>
+              </div>
+              <div className="border-t pt-2 mt-2 space-y-2">
+                <p className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1">智能预标注</p>
+                <div className="flex justify-between"><span>接受预标注</span><kbd className="px-2 py-0.5 bg-muted rounded text-xs">Y</kbd></div>
+                <div className="flex justify-between"><span>拒绝预标注</span><kbd className="px-2 py-0.5 bg-muted rounded text-xs">N</kbd></div>
               </div>
             </div>
           </div>

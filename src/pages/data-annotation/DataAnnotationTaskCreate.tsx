@@ -3,10 +3,18 @@ import { marked } from "marked";
 import {
   ArrowLeft, Check, ChevronRight, Plus, X, Trash2, Upload, Eye, Info, Search,
   AlertTriangle, FileText, Settings, Users, Shield, BookOpen, Zap, ChevronDown, ChevronUp,
-  Database, Type, Image, Mic, Video, Table2, Layers, Loader2, Save
+  Database, Type, Image, Mic, Video, Table2, Layers, Loader2, Save,
+  Brain, MousePointer2, Sparkles
 } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
+import {
+  useMLModelStore,
+  type MLModel,
+  type ModelModality,
+} from "@/stores/useMLModelStore";
+import { useTaskPreannotationStore } from "@/stores/useTaskPreannotationStore";
+import { ANNOTATION_TASK_TYPES } from "@/constants/annotationTaskTypes";
 
 /* ─── Project types ─── */
 const projectTypes = [
@@ -45,14 +53,16 @@ const mockToolsMap: Record<string, string> = {
   "跨模态类": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&h=225&fit=crop"
 };
 
+const [tt0, tt1, tt2, tt3, tt4, tt5, tt6] = ANNOTATION_TASK_TYPES;
+
 const mockTools = [
-  { id: "TL-001", name: "通用文本分类器", type: "文本类", isPreset: true, desc: "支持对纯文本、超文本内容进行多标签分类标注，适用于舆情分析与内容审核。", image: "https://images.unsplash.com/photo-1517842645767-c639042777db?w=400&h=225&fit=crop", objects: [{ name: "文本", methods: ["标签"] }] },
-  { id: "TL-002", name: "复杂文档分析工具", type: "文本类", isPreset: true, desc: "针对段落、对话等复杂文本结构进行实体挖掘与关系标注。支持多级标签组联动。", image: "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=400&h=225&fit=crop", objects: [{ name: "段落", methods: ["标签"] }, { name: "对话", methods: ["标签"] }] },
-  { id: "TL-003", name: "图像目标检测插件", type: "图像类", isPreset: true, desc: "支持矩形框、多边形标注。内置智能回归算法，提升目标定位精准度。", image: "https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?w=400&h=225&fit=crop", objects: [{ name: "图像", methods: ["矩形框", "标签"] }] },
-  { id: "TL-004", name: "PDF版面分析高级版", type: "图像类", isPreset: true, desc: "提供PDF像素级的超高精度标注能力，支持对PDF内的文本块、图片块独立进行属性定义。", image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&h=225&fit=crop", objects: [{ name: "PDF", methods: ["多边形", "标签"] }] },
-  { id: "TL-005", name: "ASR语音转写工具", type: "音频类", isPreset: true, desc: "专为长语音和大规模私有化部署设计，支持中英文混说，解析音频文件的内容、角色及情感。", image: "https://images.unsplash.com/photo-1558317374-067fb5f30001?w=400&h=225&fit=crop", objects: [{ name: "音频", methods: ["转写", "标签"] }] },
-  { id: "TL-006", name: "视频对象追踪系统", type: "视频类", isPreset: true, desc: "在连续视频帧流中实现目标位置追踪与关键帧属性插值，支持复杂运动轨迹修正。", image: "https://images.unsplash.com/photo-1492691523567-6170c3af93db?w=400&h=225&fit=crop", objects: [{ name: "视频", methods: ["矩形框", "标签"] }] },
-  { id: "TL-007", name: "金融指标提取助理", type: "表格类", isPreset: true, desc: "专注于对结构化表格及动态时间序列数据进行精细化属性标注，确保事实正确性。", image: "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=400&h=225&fit=crop", objects: [{ name: "表格", methods: ["标签"] }, { name: "时间序列", methods: ["标签"] }] },
+  { id: "TL-001", name: "通用文本分类器", type: "文本类", isPreset: true, desc: "支持对纯文本、超文本内容进行多标签分类标注，适用于舆情分析与内容审核。", image: "https://images.unsplash.com/photo-1517842645767-c639042777db?w=400&h=225&fit=crop", objects: [{ name: tt0, methods: ["标签"] }] },
+  { id: "TL-002", name: "复杂文档与实体挖掘工具", type: "文本类", isPreset: true, desc: "针对段落、对话等复杂文本结构进行实体挖掘与关系标注。支持多级标签组联动。", image: "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=400&h=225&fit=crop", objects: [{ name: tt1, methods: ["标签"] }, { name: tt2, methods: ["标签"] }] },
+  { id: "TL-003", name: "图像目标检测插件", type: "图像类", isPreset: true, desc: "支持矩形框、多边形标注。内置智能回归算法，提升目标定位精准度。", image: "https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?w=400&h=225&fit=crop", objects: [{ name: tt3, methods: ["矩形框", "标签"] }] },
+  { id: "TL-004", name: "PDF版面分析高级版", type: "图像类", isPreset: true, desc: "提供PDF像素级的超高精度标注能力，支持对PDF内的文本块、图片块独立进行属性定义。", image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&h=225&fit=crop", objects: [{ name: tt4, methods: ["多边形", "标签"] }] },
+  { id: "TL-005", name: "ASR语音转写工具", type: "音频类", isPreset: true, desc: "专为长语音和大规模私有化部署设计，支持中英文混说，解析音频文件的内容、角色及情感。", image: "https://images.unsplash.com/photo-1558317374-067fb5f30001?w=400&h=225&fit=crop", objects: [{ name: tt5, methods: ["转写", "标签"] }] },
+  { id: "TL-006", name: "视频对象追踪系统", type: "视频类", isPreset: true, desc: "在连续视频帧流中实现目标位置追踪与关键帧属性插值，支持复杂运动轨迹修正。", image: "https://images.unsplash.com/photo-1492691523567-6170c3af93db?w=400&h=225&fit=crop", objects: [{ name: tt6, methods: ["矩形框", "标签"] }] },
+  { id: "TL-007", name: "金融指标提取助理", type: "表格类", isPreset: true, desc: "专注于对结构化表格及动态时间序列数据进行精细化属性标注，确保事实正确性。", image: "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=400&h=225&fit=crop", objects: [{ name: tt0, methods: ["标签"] }, { name: tt1, methods: ["标签"] }] },
 ];
 
 const mockUsers = [
@@ -70,6 +80,34 @@ const mockUsers = [
 
 interface User { name: string; account: string; }
 interface PersonGroup { id: string; name: string; persons: User[]; batchLimit: number; }
+interface TaskTypeModelBinding {
+  taskType: string;
+  modelId: string;
+  versionId: string;
+}
+
+const mockVocabularyByTaskType: Record<string, string[]> = {
+  [tt0]: ["positive", "negative", "neutral", "question"],
+  [tt1]: ["summary", "risk", "fact", "opinion"],
+  [tt2]: ["PER", "LOC", "ORG", "MISC"],
+  [tt3]: ["car", "person", "traffic-light", "lane"],
+  [tt4]: ["title", "table", "figure", "paragraph"],
+  [tt5]: ["speech", "music", "noise", "silence"],
+  [tt6]: ["vehicle", "pedestrian", "event", "background"],
+};
+
+/** 无任务标签时词汇映射表里用于演示展示的默认行 */
+const VOCABULARY_MODAL_FALLBACK_TASK_LABELS = ["正面", "负面", "中性"];
+
+/** 词汇映射弹窗中回填的演示数据（与模型输出标签对齐） */
+const VOCABULARY_MAPPING_DEMOS: Record<string, string> = {
+  正面: "positive",
+  负面: "negative",
+  中性: "neutral",
+  人名: "PER",
+  地名: "LOC",
+  动物: "ANIMAL_ORG",
+};
 
 interface Props { onBack: () => void; }
 
@@ -121,6 +159,156 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   }[]>([{ persons: ["李芳"], method: "batch", batchRatio: 100, dataRatio: 20 }]);
   const [managers, setManagers] = useState<string[]>([]);
   const [maxSkip, setMaxSkip] = useState(20);
+
+  const allModels = useMLModelStore((s) => s.models);
+  const dispatchPreannotation = useTaskPreannotationStore((s) => s.dispatch);
+
+  const categoryModality: ModelModality | undefined = selectedCategory as ModelModality | undefined;
+  const availableModels = useMemo<MLModel[]>(() => {
+    if (!categoryModality) return [];
+    return allModels.filter(
+      (m) => m.modality === categoryModality || m.modality === "跨模态类"
+    );
+  }, [allModels, categoryModality]);
+
+  const defaultModelForCategory = useMemo<MLModel | undefined>(() => {
+    return availableModels[0];
+  }, [availableModels]);
+
+  const [preannotationEnabled, setPreannotationEnabled] = useState(true);
+  const [interactiveEnabled, setInteractiveEnabled] = useState(false);
+  const [selectedModelId, setSelectedModelId] = useState<string>("");
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0.6);
+  const [autoAccept, setAutoAccept] = useState(false);
+  const [taskTypeBindings, setTaskTypeBindings] = useState<TaskTypeModelBinding[]>([]);
+  const [showVocabularyModal, setShowVocabularyModal] = useState(false);
+  const [sourceLabelSearch, setSourceLabelSearch] = useState("");
+  const [taskLabelMappings, setTaskLabelMappings] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!selectedCategory) return;
+    if (!availableModels.length) {
+      setSelectedModelId("");
+      setPreannotationEnabled(false);
+      setInteractiveEnabled(false);
+      return;
+    }
+    const current = availableModels.find((m) => m.id === selectedModelId);
+    if (!current && defaultModelForCategory) {
+      setSelectedModelId(defaultModelForCategory.id);
+      setConfidenceThreshold(0.6);
+      if (!defaultModelForCategory.supportsBatch) setPreannotationEnabled(false);
+      if (!defaultModelForCategory.supportsInteractive) setInteractiveEnabled(false);
+    }
+  }, [selectedCategory, availableModels, defaultModelForCategory, selectedModelId]);
+
+  const selectedToolData = useMemo(() => mockTools.find((t) => t.id === selectedTool), [selectedTool]);
+  const selectedToolTaskTypes = useMemo(
+    () => Array.from(new Set((selectedToolData?.objects || []).map((obj) => obj.name))),
+    [selectedToolData]
+  );
+
+  const taskLabels = useMemo(() => {
+    return Object.values(objectLabels)
+      .flat()
+      .map((x) => x.value)
+      .filter(Boolean);
+  }, [objectLabels]);
+
+  const bindingCandidates = useMemo(() => {
+    return availableModels.flatMap((m) =>
+      m.versions.map((v) => ({
+        key: `${m.id}:${v.id}`,
+        modelId: m.id,
+        modelName: m.name,
+        versionId: v.id,
+        version: v.version,
+        taskTypes: m.taskTypes,
+        modality: m.modality,
+        labelScope: m.labelScope,
+        vocabularyMappings: v.vocabularyMappings,
+      }))
+    );
+  }, [availableModels]);
+
+  const sourceLabels = useMemo(() => {
+    const labels = new Set<string>();
+    taskTypeBindings.forEach((binding) => {
+      const candidate = bindingCandidates.find(
+        (x) => x.modelId === binding.modelId && x.versionId === binding.versionId
+      );
+      candidate?.vocabularyMappings.forEach((item) => labels.add(item.sourceLabel));
+      if (candidate && candidate.vocabularyMappings.length === 0) {
+        (mockVocabularyByTaskType[binding.taskType] || []).forEach((x) => labels.add(x));
+      }
+    });
+    if (labels.size === 0 && taskTypeBindings.length > 0) {
+      taskTypeBindings.forEach((binding) => {
+        (mockVocabularyByTaskType[binding.taskType] || []).forEach((x) => labels.add(x));
+      });
+    }
+    if (labels.size === 0) {
+      ["positive", "negative", "neutral"].forEach((x) => labels.add(x));
+    }
+    return Array.from(labels);
+  }, [taskTypeBindings, bindingCandidates]);
+
+  /** 新建任务未完成标签配置时词汇映射仍可展示演示行 */
+  const vocabularyModalTaskLabels =
+    taskLabels.length > 0 ? taskLabels : VOCABULARY_MODAL_FALLBACK_TASK_LABELS;
+
+  useEffect(() => {
+    if (!showVocabularyModal || sourceLabels.length === 0) return;
+    setTaskLabelMappings((prev) => {
+      const next = { ...prev };
+      vocabularyModalTaskLabels.forEach((label, idx) => {
+        if (!next[label]?.trim()) {
+          next[label] =
+            VOCABULARY_MAPPING_DEMOS[label] ||
+            sourceLabels[idx % sourceLabels.length] ||
+            "";
+        }
+      });
+      return next;
+    });
+  }, [showVocabularyModal, sourceLabels, vocabularyModalTaskLabels]);
+
+  useEffect(() => {
+    if (!preannotationEnabled) {
+      setTaskTypeBindings([]);
+      return;
+    }
+    const allTaskTypes = selectedToolTaskTypes;
+    setTaskTypeBindings((prev) => {
+      const next = allTaskTypes.map((taskType) => {
+        const existed = prev.find((x) => x.taskType === taskType);
+        if (existed) return existed;
+        const candidate = bindingCandidates.find((x) => x.taskTypes.includes(taskType));
+        return {
+          taskType,
+          modelId: candidate?.modelId || "",
+          versionId: candidate?.versionId || "",
+        };
+      });
+      return next;
+    });
+  }, [preannotationEnabled, selectedToolTaskTypes, bindingCandidates]);
+
+  const preAnnotationTotal = useMemo(() => {
+    const allMockDatasets = [...myMockDatasets, ...subscribedMockDatasets, ...sharedMockDatasets];
+    return selectedDatasets.reduce((s, d) => {
+      const ds = allMockDatasets.find((dd) => dd.id === d.id);
+      return s + (ds?.files || 0);
+    }, 0);
+  }, [selectedDatasets]);
+
+  const estimatedMinutes = useMemo(() => {
+    const firstBinding = taskTypeBindings.find((x) => x.modelId);
+    const selected = firstBinding ? availableModels.find((x) => x.id === firstBinding.modelId) : undefined;
+    if (!selected || preAnnotationTotal === 0) return 0;
+    return Math.max(1, Math.round((preAnnotationTotal * selected.avgInferenceMs) / 1000 / 60));
+  }, [taskTypeBindings, availableModels, preAnnotationTotal]);
+
   const [timeoutEnabled, setTimeoutEnabled] = useState(false);
   const [timeoutHours, setTimeoutHours] = useState(48);
   const [allowRelease, setAllowRelease] = useState(true);
@@ -253,7 +441,35 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   };
 
   const handlePublish = () => {
-    toast.success("任务发布成功！系统已自动拆分标注批次并放置在任务池中");
+    const firstBinding = taskTypeBindings.find((x) => x.modelId && x.versionId);
+    const bindingCandidate = firstBinding
+      ? bindingCandidates.find(
+          (x) => x.modelId === firstBinding.modelId && x.versionId === firstBinding.versionId
+        )
+      : undefined;
+    if ((preannotationEnabled || interactiveEnabled) && bindingCandidate && generatedBatches.length > 0) {
+      generatedBatches.forEach((batch) => {
+        dispatchPreannotation({
+          taskId: batch.id,
+          batchEnabled: preannotationEnabled,
+          interactiveEnabled,
+          modelId: bindingCandidate.modelId,
+          modelName: bindingCandidate.modelName,
+          modelVersionId: bindingCandidate.versionId,
+          modelVersion: bindingCandidate.version,
+          taskType: firstBinding?.taskType,
+          modality: bindingCandidate.modality,
+          confidenceThreshold,
+          autoAccept,
+          total: batch.size,
+        });
+      });
+      toast.success(
+        `任务发布成功！${generatedBatches.length} 个批次已进入${preannotationEnabled ? "批量预标注" : "交互式预标注"}队列`
+      );
+    } else {
+      toast.success("任务发布成功！系统已自动拆分标注批次并放置在任务池中");
+    }
     onBack();
   };
 
@@ -620,6 +836,15 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                               <div>
                                 <h3 className="font-bold text-xl">{mockTools.find(t => t.id === selectedTool)?.name}</h3>
                                 <p className="text-xs text-muted-foreground">工具 ID: {selectedTool} · 分类: {mockTools.find(t => t.id === selectedTool)?.type}</p>
+                                {selectedToolTaskTypes.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {selectedToolTaskTypes.map((taskType) => (
+                                      <span key={taskType} className="text-[10px] px-2 py-0.5 rounded bg-primary/10 text-primary font-semibold">
+                                        任务类型：{taskType}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -859,6 +1084,69 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                             ))}
                           </div>
                         </div>
+                      )}
+                    </div>
+
+                    {/* Smart preannotation config */}
+                    <div className="rounded-lg border bg-card p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-medium flex items-center gap-2">
+                          <Brain className="w-4 h-4 text-primary" /> 智能预标注
+                        </h3>
+                        <Switch checked={preannotationEnabled} onCheckedChange={setPreannotationEnabled} />
+                      </div>
+                      {!preannotationEnabled ? (
+                        <p className="text-xs text-muted-foreground">未开启</p>
+                      ) : (
+                        <>
+                          {taskTypeBindings.length === 0 ? (
+                            <div className="p-4 rounded-lg border border-dashed bg-amber-50/30 text-xs text-amber-800">
+                              当前模态未找到可用于预标注的模型版本
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {taskTypeBindings.map((binding, idx) => {
+                                const options = bindingCandidates.filter((x) => x.taskTypes.includes(binding.taskType));
+                                const selected = options.find(
+                                  (x) => x.modelId === binding.modelId && x.versionId === binding.versionId
+                                );
+                                const mappedCount = taskLabels.filter((label) => !!taskLabelMappings[label]).length;
+                                const unmappedCount = Math.max(0, taskLabels.length - mappedCount);
+                                return (
+                                  <div key={binding.taskType} className="rounded-lg border p-3 space-y-2">
+                                    <div className="text-xs text-muted-foreground">任务类型：{binding.taskType}</div>
+                                    <select
+                                      value={selected ? `${selected.modelId}:${selected.versionId}` : ""}
+                                      onChange={(e) => {
+                                        const [modelId, versionId] = e.target.value.split(":");
+                                        setTaskTypeBindings((prev) =>
+                                          prev.map((item, i) => (i === idx ? { ...item, modelId, versionId } : item))
+                                        );
+                                      }}
+                                      className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                                    >
+                                      <option value="">请选择预处理模型版本</option>
+                                      {options.map((x) => (
+                                        <option key={x.key} value={`${x.modelId}:${x.versionId}`}>
+                                          {x.modelName} / {x.version}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {selected?.labelScope === "固定标签集" && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowVocabularyModal(true)}
+                                        className="text-xs text-primary hover:underline"
+                                      >
+                                        词汇映射表（已映射 {mappedCount}、未映射 {unmappedCount}）
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
 
@@ -1811,6 +2099,37 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                             <p className="text-xs text-muted-foreground">验收</p>
                             <p className="text-sm font-medium">{acceptEnabled ? `${acceptNodes.length} 个验收节点` : "未开启"}</p>
                           </div>
+                          <div className="p-3 rounded bg-muted/30 col-span-2">
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Brain className="w-3 h-3" /> 智能预标注
+                            </p>
+                            {preannotationEnabled && taskTypeBindings.length > 0 ? (
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-medium">已配置 {taskTypeBindings.length} 条任务类型映射</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">
+                                  批量
+                                </span>
+                                {interactiveEnabled && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-bold">
+                                    交互
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-muted-foreground">
+                                  · 阈值 {confidenceThreshold.toFixed(2)}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  · {autoAccept ? "自动接受" : "人工确认"}
+                                </span>
+                                {preannotationEnabled && estimatedMinutes > 0 && (
+                                  <span className="text-[10px] text-amber-700 font-bold">
+                                    预计 ≈ {estimatedMinutes} 分钟完成预标注
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm font-medium text-muted-foreground">未开启</p>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-start gap-2">
@@ -1992,6 +2311,63 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
       </footer>
 
       {/* Publish confirmation dialog */}
+      {showVocabularyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card rounded-lg border shadow-xl p-6 max-w-3xl w-full mx-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold">词汇映射表</h3>
+              <button onClick={() => setShowVocabularyModal(false)} className="px-2 py-1 text-xs border rounded">关闭</button>
+            </div>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
+              本模型能预标注的标签范围有限，无对应源标签的数据模型无法预测。
+            </p>
+            <div className="mb-2">
+              <input
+                value={sourceLabelSearch}
+                onChange={(e) => setSourceLabelSearch(e.target.value)}
+                placeholder="搜索源标签"
+                className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+              />
+            </div>
+            <div className="max-h-80 overflow-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="py-2 text-left">当前任务标签</th>
+                    <th className="py-2 text-left">源标签</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vocabularyModalTaskLabels.map((label) => (
+                    <tr key={label} className="border-b">
+                      <td className="py-2 pr-2">{label}</td>
+                      <td className="py-2">
+                        <select
+                          value={taskLabelMappings[label] || ""}
+                          onChange={(e) =>
+                            setTaskLabelMappings((prev) => ({ ...prev, [label]: e.target.value }))
+                          }
+                          className="w-full px-2 py-1 border rounded"
+                        >
+                          <option value="">请选择源标签</option>
+                          {sourceLabels
+                            .filter((x) => x.toLowerCase().includes(sourceLabelSearch.toLowerCase()))
+                            .map((x) => (
+                              <option key={x} value={x}>
+                                {x}
+                              </option>
+                            ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {publishConfirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-card rounded-lg border shadow-xl p-6 max-w-md w-full mx-4">

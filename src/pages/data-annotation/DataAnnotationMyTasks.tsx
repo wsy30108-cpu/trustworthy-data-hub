@@ -2,11 +2,14 @@ import { useState } from "react";
 import {
   Search, Play, Eye, ArrowRightLeft, Unlock,
   ClipboardList, CheckCircle, Clock, X, Send, AlertTriangle,
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown,
+  Brain, Loader2, Sparkles, Zap, MousePointer2
 } from "lucide-react";
 import { toast } from "sonner";
 import DataAnnotationWorkbench from "./DataAnnotationWorkbench";
 import BatchExecutionDetail from "./BatchExecutionDetail";
+import { useTaskPreannotationStore } from "@/stores/useTaskPreannotationStore";
+import { usePreannotationProgress } from "@/hooks/usePreannotationProgress";
 
 interface MyTask {
   id: string;
@@ -17,6 +20,8 @@ interface MyTask {
   done: number;
   status: "进行中" | "已完成";
   projectType: string;
+  /** 文本类细分：默认识别为标签分类；NER 为人名/地名/动物等多类型实体 */
+  annotationMode?: "classification" | "ner";
   taskType: "标注" | "标注-质检" | "标注-质检-验收" | "标注-验收";
   currentStage: string;
   source: "任务大厅" | "质检驳回" | "验收驳回" | "转派";
@@ -28,11 +33,6 @@ interface MyTask {
 }
 
 const mockMyTasks: MyTask[] = [
-  {
-    id: "BT-001", taskName: "金融文本情感标注", authorizedTo: "任务池", progress: 65, total: 200, done: 130, status: "进行中", projectType: "文本类", taskType: "标注-质检-验收", currentStage: "标注", source: "任务大厅",
-    currentStatus: "标注中", latestOperator: "张明", creator: "张明", createdAt: "2026-02-20",
-    history: [{ operator: "系统", action: "创建批次", time: "2026-02-20 09:00" }, { operator: "张明", action: "领取任务", time: "2026-02-20 10:30" }]
-  },
   {
     id: "BT-005", taskName: "无人驾驶路测图像分割", authorizedTo: "AI数据团队", progress: 12, total: 1000, done: 120, status: "进行中", projectType: "图像类", taskType: "标注-质检", currentStage: "标注", source: "质检驳回",
     currentStatus: "标注中", latestOperator: "李芳", creator: "孙伟", createdAt: "2026-03-05",
@@ -190,6 +190,9 @@ const sourceColors: Record<string, string> = {
 };
 
 const DataAnnotationMyTasks = () => {
+  usePreannotationProgress();
+  const preannotationConfigs = useTaskPreannotationStore((s) => s.configs);
+
   const [tab, setTab] = useState<"active" | "done">("active");
   const [searchText, setSearchText] = useState("");
   const [typeFilter, setTypeFilter] = useState("全部类型");
@@ -321,7 +324,36 @@ const DataAnnotationMyTasks = () => {
             {paginated.map(t => (
               <tr key={t.id} className="border-b last:border-0 hover:bg-muted/20">
                 <td className="py-3 px-4 font-medium">{t.id}</td>
-                <td className="py-3 px-4 text-foreground">{t.taskName}</td>
+                <td className="py-3 px-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-foreground">{t.taskName}</span>
+                    {(() => {
+                      const pc = preannotationConfigs[t.id];
+                      if (!pc || !pc.batchEnabled) return null;
+                      const percent = Math.round((pc.preannotated / pc.total) * 100);
+                      return (
+                        <div className="flex items-center gap-1">
+                          {pc.status === "已完成" ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-bold">
+                              <Sparkles className="w-2.5 h-2.5" />
+                              已预标注 100%
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-700 text-[9px] font-bold">
+                              <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                              预标注中 {percent}%
+                            </span>
+                          )}
+                          {pc.interactiveEnabled && (
+                            <span className="inline-flex items-center px-1 py-0.5 rounded bg-purple-50 border border-purple-200 text-purple-700 text-[9px] font-bold">
+                              <Brain className="w-2.5 h-2.5 mr-0.5" />交互
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </td>
                 <td className="py-3 px-4"><span className="px-2 py-0.5 bg-muted rounded text-xs">{t.authorizedTo}</span></td>
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-2">
