@@ -34,33 +34,6 @@ interface MyTask {
 
 const mockMyTasks: MyTask[] = [
   {
-    id: "BT-NER-001",
-    taskName: "新闻多命名体识别（人名·地名·动物）",
-    authorizedTo: "任务池",
-    progress: 0,
-    total: 180,
-    done: 0,
-    status: "进行中",
-    projectType: "文本类",
-    annotationMode: "ner",
-    taskType: "标注",
-    currentStage: "标注",
-    source: "任务大厅",
-    currentStatus: "标注中",
-    latestOperator: "张明",
-    creator: "平台",
-    createdAt: "2026-04-29",
-    history: [
-      { operator: "系统", action: "下发 NER 标注批次", time: "2026-04-29 09:00" },
-      { operator: "张明", action: "领取任务", time: "2026-04-29 09:15" },
-    ],
-  },
-  {
-    id: "BT-001", taskName: "金融文本情感标注", authorizedTo: "任务池", progress: 65, total: 200, done: 130, status: "进行中", projectType: "文本类", taskType: "标注-质检-验收", currentStage: "标注", source: "任务大厅",
-    currentStatus: "标注中", latestOperator: "张明", creator: "张明", createdAt: "2026-02-20",
-    history: [{ operator: "系统", action: "创建批次", time: "2026-02-20 09:00" }, { operator: "张明", action: "领取任务", time: "2026-02-20 10:30" }]
-  },
-  {
     id: "BT-005", taskName: "无人驾驶路测图像分割", authorizedTo: "AI数据团队", progress: 12, total: 1000, done: 120, status: "进行中", projectType: "图像类", taskType: "标注-质检", currentStage: "标注", source: "质检驳回",
     currentStatus: "标注中", latestOperator: "李芳", creator: "孙伟", createdAt: "2026-03-05",
     history: [

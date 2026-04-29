@@ -313,12 +313,16 @@ const DataAnnotationModels = () => {
                 </p>
               </div>
               <div className="flex flex-wrap items-end justify-between gap-3 pt-2 mt-auto border-t text-[10px] text-muted-foreground" onClick={(e) => e.stopPropagation()}>
-                <div className="space-y-1 min-w-0 text-left">
-                  <p>
-                    处理任务：<span className="text-foreground font-mono tabular-nums">{m.processingTasks ?? 0}</span>
-                  </p>
-                  <p>
-                    标注员接受：<span className="text-foreground font-mono tabular-nums">{m.annotatorAccepted ?? 0}</span>
+                <div className="space-y-0.5 min-w-0 text-left">
+                  <p className="tabular-nums">
+                    已处理 <span className="text-foreground font-mono font-semibold">{m.processingTasks ?? 0}</span>
+                    <span className="mx-1 text-muted-foreground/70">/</span>
+                    接受度{" "}
+                    <span className="text-foreground font-mono font-semibold">
+                      {m.processingTasks
+                        ? `${Math.round(((m.annotatorAccepted ?? 0) / m.processingTasks) * 100)}%`
+                        : "0%"}
+                    </span>
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-auto">

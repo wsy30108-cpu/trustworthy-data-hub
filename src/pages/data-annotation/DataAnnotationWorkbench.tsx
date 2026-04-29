@@ -104,6 +104,48 @@ function buildClassificationAlternatives(sampleId: number, primaryLabel: string,
   ];
 }
 
+type ImageSegSlotKey = "neutral" | "vehicle" | "ped";
+
+type ImageSegReviewStatus = "pending" | "accepted" | "rejected";
+
+interface ImageSegSlotRow {
+  slotKey: ImageSegSlotKey;
+  label: string;
+  confidence: number;
+  content: string;
+  reviewStatus: ImageSegReviewStatus;
+}
+
+function mkBt005SegSlots(sampleId: number): ImageSegSlotRow[] {
+  const j = sampleId % 7;
+  const c1 = Math.round((0.72 + j * 0.012) * 1000) / 1000;
+  const c2 = Math.round((0.88 + (j % 4) * 0.01) * 1000) / 1000;
+  const c3 = Math.round((0.81 + (j % 5) * 0.01) * 1000) / 1000;
+  return [
+    {
+      slotKey: "neutral",
+      label: "中性",
+      confidence: Math.min(0.95, c1),
+      content: `场景类型：中性路况；光照与天气条件正常，未见明显异常事件（样本 #${sampleId}）`,
+      reviewStatus: "pending",
+    },
+    {
+      slotKey: "vehicle",
+      label: "车辆",
+      confidence: Math.min(0.96, c2),
+      content: `候选检测框：左上角约 30%×20%，框宽 15%、框高 20%；车型提示：小型机动车`,
+      reviewStatus: "pending",
+    },
+    {
+      slotKey: "ped",
+      label: "行人",
+      confidence: Math.min(0.95, c3),
+      content: `候选检测框：居中偏右下方；宽 10%、高 15%；提示可能为过街行人，请与车流关系核对`,
+      reviewStatus: "pending",
+    },
+  ];
+}
+
 const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => {
   usePreannotationProgress();
   const preannotationConfig = useTaskPreannotationStore((s) => s.configs[task.id]);
@@ -189,6 +231,17 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
   const [newRelType, setNewRelType] = useState(relationTypes[0]);
   const [labelSearch, setLabelSearch] = useState("");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const isBt005ImageSeg = task.id === "BT-005" && task.projectType === "图像类";
+
+  const [imageSegSlotsBySample, setImageSegSlotsBySample] = useState<Map<number, ImageSegSlotRow[]>>(() => {
+    if (!(task.id === "BT-005" && task.projectType === "图像类")) return new Map();
+    const m = new Map<number, ImageSegSlotRow[]>();
+    for (let sid = 1; sid <= task.total; sid++) {
+      m.set(sid, mkBt005SegSlots(sid));
+    }
+    return m;
+  });
 
   const renderTextContent = () => {
     return (
@@ -286,12 +339,29 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
           alt="Annotation"
           className="w-full h-full object-contain opacity-90 group-hover:opacity-100 transition-opacity"
         />
-        <div className="absolute top-[20%] left-[30%] w-[15%] h-[20%] border-2 border-primary bg-primary/10 rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.5)]">
-          <span className="absolute -top-6 left-0 bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-t-sm font-bold shadow-sm">车辆</span>
-        </div>
-        <div className="absolute top-[45%] left-[55%] w-[10%] h-[15%] border-2 border-emerald-500 bg-emerald-500/10 rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.5)]">
-          <span className="absolute -top-6 left-0 bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-t-sm font-bold shadow-sm">行人</span>
-        </div>
+        {(() => {
+          const slots = imageSegSlotsBySample.get(current.id);
+          const vehRejected =
+            isBt005ImageSeg && slots?.find((s) => s.slotKey === "vehicle")?.reviewStatus === "rejected";
+          const pedRejected =
+            isBt005ImageSeg && slots?.find((s) => s.slotKey === "ped")?.reviewStatus === "rejected";
+          const showVehicle = !(isBt005ImageSeg && vehRejected);
+          const showPed = !(isBt005ImageSeg && pedRejected);
+          return (
+            <>
+              {showVehicle && (
+                <div className="absolute top-[20%] left-[30%] w-[15%] h-[20%] border-2 border-primary bg-primary/10 rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.5)]">
+                  <span className="absolute -top-6 left-0 bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-t-sm font-bold shadow-sm">车辆</span>
+                </div>
+              )}
+              {showPed && (
+                <div className="absolute top-[45%] left-[55%] w-[10%] h-[15%] border-2 border-emerald-500 bg-emerald-500/10 rounded-sm shadow-[0_0_0_1px_rgba(255,255,255,0.5)]">
+                  <span className="absolute -top-6 left-0 bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-t-sm font-bold shadow-sm">行人</span>
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-[10px] text-white flex items-center gap-3 border border-white/10 uppercase tracking-widest font-mono">
           <span>X: 1024</span>
@@ -387,6 +457,7 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
 
   const [preAnnotations, setPreAnnotations] = useState<Map<number, PreannotationSuggestion>>(() => {
     const m = new Map<number, PreannotationSuggestion>();
+    if (task.id === "BT-005" && task.projectType === "图像类") return m;
     if (!preannotationConfig?.batchEnabled) return m;
     const covered = Math.min(preannotationConfig.preannotated, task.total);
     const labList = task.annotationMode === "ner" ? nerEntityLabels : classificationLabels;
@@ -428,6 +499,7 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
   });
 
   useEffect(() => {
+    if (task.id === "BT-005" && task.projectType === "图像类") return;
     if (!preannotationConfig?.batchEnabled) return;
     setPreAnnotations((prev) => {
       const covered = Math.min(preannotationConfig.preannotated, task.total);
@@ -509,6 +581,16 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
   type AnnotationTableRow =
     | { kind: "ann"; key: string; ann: Annotation }
     | {
+        kind: "split-pre";
+        key: string;
+        sampleId: number;
+        slotKey: ImageSegSlotKey;
+        label: string;
+        content: string;
+        confidence: number;
+        reviewStatus: ImageSegReviewStatus;
+      }
+    | {
         kind: "pre-primary";
         key: string;
         sampleId: number;
@@ -540,7 +622,28 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
     const pre = preAnnotations.get(current.id);
     const rows: AnnotationTableRow[] = [];
 
-    if (pre && pre.reviewStatus === "pending") {
+    if (task.id === "BT-005" && task.projectType === "图像类") {
+      const slots = imageSegSlotsBySample.get(current.id) ?? [];
+      slots
+        .filter(
+          (slot) =>
+            listSearch === "" ||
+            slot.label.includes(listSearch) ||
+            slot.content.includes(listSearch),
+        )
+        .forEach((slot) =>
+          rows.push({
+            kind: "split-pre",
+            key: `split-${current.id}-${slot.slotKey}`,
+            sampleId: current.id,
+            slotKey: slot.slotKey,
+            label: slot.label,
+            content: slot.content,
+            confidence: slot.confidence,
+            reviewStatus: slot.reviewStatus,
+          }),
+        );
+    } else if (pre && pre.reviewStatus === "pending") {
       if (task.annotationMode === "ner") {
         const ents = pre.nerEntities ?? [];
         if (ents.length > 0) {
@@ -589,7 +692,7 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
 
     anns.forEach((ann) => rows.push({ kind: "ann", key: ann.id, ann }));
     return rows;
-  }, [annotations, current.id, listSearch, preAnnotations, task.annotationMode]);
+  }, [annotations, current.id, imageSegSlotsBySample, listSearch, preAnnotations, task.annotationMode, task.id, task.projectType]);
 
   // Initialize mock logs
   useEffect(() => {
@@ -652,6 +755,7 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
 
   const acceptPreAnnotation = useCallback(
     (sampleId: number, chosenLabel?: string, chosenConfidence?: number) => {
+      if (task.id === "BT-005" && task.projectType === "图像类") return;
       const pre = preAnnotations.get(sampleId);
       if (!pre) return;
       const applyLabel = chosenLabel ?? pre.label;
@@ -703,10 +807,11 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
         ...l,
       ]);
     },
-    [preAnnotations, sampleStates, samples, preannotationConfig, task.annotationMode]
+    [preAnnotations, sampleStates, samples, preannotationConfig, task.annotationMode, task.id, task.projectType]
   );
 
   const rejectPreAnnotation = useCallback((sampleId: number) => {
+    if (task.id === "BT-005" && task.projectType === "图像类") return;
     const pre = preAnnotations.get(sampleId);
     setPreAnnotations((prev) => {
       const next = new Map(prev);
@@ -741,7 +846,7 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
       ...l,
     ]);
     toast.info(`已拒绝并删除样本 #${sampleId} 的预标注`, { duration: 1200 });
-  }, [preAnnotations]);
+  }, [preAnnotations, task]);
 
   const rejectPreAnnotationAlternative = useCallback(
     (sampleId: number, altId: string) => {
@@ -757,6 +862,32 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
     []
   );
 
+  const acceptImageSegSlot = useCallback((sampleId: number, slotKey: ImageSegSlotKey) => {
+    setImageSegSlotsBySample((prev) => {
+      const next = new Map(prev);
+      const rows = [...(next.get(sampleId) ?? [])];
+      next.set(
+        sampleId,
+        rows.map((r) => (r.slotKey === slotKey ? { ...r, reviewStatus: "accepted" as const } : r)),
+      );
+      return next;
+    });
+    toast.success("已接受该条预标注");
+  }, []);
+
+  const rejectImageSegSlot = useCallback((sampleId: number, slotKey: ImageSegSlotKey) => {
+    setImageSegSlotsBySample((prev) => {
+      const next = new Map(prev);
+      const rows = [...(next.get(sampleId) ?? [])];
+      next.set(
+        sampleId,
+        rows.map((r) => (r.slotKey === slotKey ? { ...r, reviewStatus: "rejected" as const } : r)),
+      );
+      return next;
+    });
+    toast.info("已取消该条预标注");
+  }, []);
+
   const deletePreAnnotation = useCallback((sampleId: number) => {
     setPreAnnotations((prev) => {
       const next = new Map(prev);
@@ -767,16 +898,42 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
   }, []);
 
   const acceptAllPreAnnotationsInCurrentSample = useCallback(() => {
+    if (task.id === "BT-005" && task.projectType === "图像类") {
+      setImageSegSlotsBySample((prev) => {
+        const next = new Map(prev);
+        const rows = [...(next.get(current.id) ?? [])];
+        next.set(
+          current.id,
+          rows.map((r) => ({ ...r, reviewStatus: "accepted" as const })),
+        );
+        return next;
+      });
+      toast.success("三条预标注已全部接受（列表仍可查看）");
+      return;
+    }
     const pre = preAnnotations.get(current.id);
     if (!pre) return toast.info("当前样本无预标注数据");
     acceptPreAnnotation(current.id);
-  }, [preAnnotations, current.id, acceptPreAnnotation]);
+  }, [preAnnotations, current.id, acceptPreAnnotation, task.id, task.projectType]);
 
   const rejectAllPreAnnotationsInCurrentSample = useCallback(() => {
+    if (task.id === "BT-005" && task.projectType === "图像类") {
+      setImageSegSlotsBySample((prev) => {
+        const next = new Map(prev);
+        const rows = [...(next.get(current.id) ?? [])];
+        next.set(
+          current.id,
+          rows.map((r) => ({ ...r, reviewStatus: "rejected" as const })),
+        );
+        return next;
+      });
+      toast.info("三条预标注已全部取消（画布检测框随之隐藏）");
+      return;
+    }
     const pre = preAnnotations.get(current.id);
     if (!pre) return toast.info("当前样本无预标注数据");
     rejectPreAnnotation(current.id);
-  }, [preAnnotations, current.id, rejectPreAnnotation]);
+  }, [preAnnotations, current.id, rejectPreAnnotation, task.id, task.projectType]);
 
   const markInvalid = useCallback(() => {
     const prev = sampleStates.get(current.id)!;
@@ -1275,6 +1432,74 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                             </tr>
                           ) : (
                             annotationTableRows.map((row, index) => {
+                              if (row.kind === "split-pre") {
+                                const rs = row.reviewStatus;
+                                const tone =
+                                  rs === "pending"
+                                    ? "bg-red-50/90 dark:bg-red-950/15 hover:bg-red-50 dark:hover:bg-red-950/25"
+                                    : rs === "accepted"
+                                      ? "bg-emerald-50/80 dark:bg-emerald-950/20 hover:bg-emerald-50/90"
+                                      : "bg-slate-100/70 dark:bg-slate-900/35";
+                                return (
+                                  <tr
+                                    key={row.key}
+                                    onClick={() => setCurrentIndex(row.sampleId - 1)}
+                                    className={`border-b last:border-b-0 cursor-pointer ${tone}`}
+                                  >
+                                    <td className="px-1.5 py-1.5 align-top text-slate-500">{index + 1}</td>
+                                    <td className="px-1.5 py-1 align-top min-w-0">
+                                      <div className="font-semibold text-slate-800 leading-tight truncate" title={row.label}>
+                                        {row.label}
+                                      </div>
+                                      <div className="flex items-center gap-1 mt-0.5 text-primary">
+                                        <Brain className="w-3 h-3 shrink-0 opacity-85" />
+                                        <span className="text-[10px] font-mono tabular-nums font-semibold">{(row.confidence * 100).toFixed(0)}%</span>
+                                      </div>
+                                      {rs !== "pending" && (
+                                        <span className="text-[9px] mt-0.5 block text-muted-foreground">
+                                          {rs === "accepted" ? "已确认" : "已取消"}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-1.5 py-1 align-top max-w-0 min-w-0">
+                                      <span className="line-clamp-2 break-words text-slate-700 leading-snug" title={row.content}>
+                                        {row.content}
+                                      </span>
+                                    </td>
+                                    <td className="px-1.5 py-1 text-right align-top whitespace-nowrap">
+                                      {rs === "pending" ? (
+                                        <div className="inline-flex items-center gap-0.5">
+                                          <button
+                                            type="button"
+                                            title="接受"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              acceptImageSegSlot(row.sampleId, row.slotKey);
+                                            }}
+                                            className="h-6 w-6 inline-flex items-center justify-center rounded border border-primary/40 bg-white text-primary hover:bg-primary/10"
+                                          >
+                                            <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            title={row.slotKey === "vehicle" || row.slotKey === "ped" ? "取消预标注（隐藏画布框）" : "取消"}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              rejectImageSegSlot(row.sampleId, row.slotKey);
+                                            }}
+                                            className="h-6 w-6 inline-flex items-center justify-center rounded border border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
+                                          >
+                                            <X className="w-3.5 h-3.5 stroke-[2.5]" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <span className="text-[10px] text-muted-foreground">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              }
+
                               if (row.kind === "ann") {
                                 const ann = row.ann;
                                 return (
@@ -1284,7 +1509,7 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                                       <span className="font-semibold text-slate-800 block truncate">{ann.label}</span>
                                     </td>
                                     <td className="px-1.5 py-1 align-middle max-w-0 min-w-0">
-                                      <span className="block truncate text-slate-700" title={ann.content}>{ann.content}</span>
+                                      <span className="block line-clamp-2 break-words text-slate-700" title={ann.content}>{ann.content}</span>
                                     </td>
                                     <td className="px-1.5 py-1 text-right align-middle text-[10px] text-muted-foreground">—</td>
                                   </tr>
@@ -1311,14 +1536,15 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
                                   className="border-b last:border-b-0 cursor-pointer bg-red-50/90 dark:bg-red-950/15 hover:bg-red-50 dark:hover:bg-red-950/25"
                                 >
                                   <td className="px-1.5 py-1 text-slate-500 align-middle">{index + 1}</td>
-                                  <td className="px-1.5 py-1 align-middle min-w-0">
-                                    <div className="flex items-center gap-1 min-w-0" title={`${row.label} ${(metaConf * 100).toFixed(1)}%`}>
-                                      <span className="font-semibold text-slate-800 truncate flex-1 min-w-0">{row.label}</span>
-                                      <span className="text-[9px] font-mono tabular-nums text-primary shrink-0">{(metaConf * 100).toFixed(0)}%</span>
+                                  <td className="px-1.5 py-1 align-top min-w-0">
+                                    <div className="font-semibold text-slate-800 leading-tight truncate">{row.label}</div>
+                                    <div className="flex items-center gap-1 mt-0.5 text-primary">
+                                      <Brain className="w-3 h-3 shrink-0 opacity-85" />
+                                      <span className="text-[10px] font-mono tabular-nums font-semibold">{(metaConf * 100).toFixed(0)}%</span>
                                     </div>
                                   </td>
-                                  <td className="px-1.5 py-1 align-middle max-w-0 min-w-0">
-                                    <span className="block truncate text-slate-700" title={contentHint}>{contentHint}</span>
+                                  <td className="px-1.5 py-1 align-top max-w-0 min-w-0">
+                                    <span className="block line-clamp-2 break-words text-slate-700 leading-snug" title={contentHint}>{contentHint}</span>
                                   </td>
                                   <td className="px-1.5 py-1 text-right align-middle whitespace-nowrap">
                                     {preNerShowActions ? (

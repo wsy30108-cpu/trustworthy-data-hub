@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ArrowLeft, Edit3, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Edit3, Plus, Trash2, Wifi } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { useMLModelStore, type MLModel } from "@/stores/useMLModelStore";
 
 const DataAnnotationModelVersionManage = () => {
   const navigate = useNavigate();
-  const { models, removeVersion } = useMLModelStore();
+  const { models, removeVersion, testConnection } = useMLModelStore();
   const [searchParams] = useSearchParams();
   const queryModelId = searchParams.get("modelId") || "";
 
@@ -116,6 +116,21 @@ const DataAnnotationModelVersionManage = () => {
                             title="编辑版本"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const result = testConnection(selectedModel!.id);
+                              if (result.ok) {
+                                toast.success(`${result.message}（${result.latency} ms）`);
+                              } else {
+                                toast.error(result.message);
+                              }
+                            }}
+                            className="px-2 py-1 text-xs border rounded hover:bg-muted/50 inline-flex items-center gap-1"
+                            title="测试连接（使用该模型配置的推理入口）"
+                          >
+                            <Wifi className="w-3.5 h-3.5" />
                           </button>
                           <button
                             type="button"
