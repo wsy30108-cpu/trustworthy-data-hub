@@ -40,6 +40,8 @@ export interface TaskPreannotationConfig {
   estimatedFinishAt?: string;
   /** 真实完成时间 */
   finishedAt?: string;
+  /** 任务侧开启主动学习训练时填写目标训练副本名称 */
+  trainingReplicaName?: string;
 }
 
 interface TaskPreannotationState {

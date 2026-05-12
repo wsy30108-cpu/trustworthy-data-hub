@@ -111,6 +111,11 @@ const VOCABULARY_MAPPING_DEMOS: Record<string, string> = {
 
 interface Props { onBack: () => void; }
 
+/** 界面展示用语：固定标签集对应「封闭」 */
+function labelScopeDisplay(ls: MLModel["labelScope"]) {
+  return ls === "开放标签集" ? "开放标签集" : "封闭标签集";
+}
+
 const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   const [step, setStep] = useState(0);
   const steps = ["基础信息", "数据集配置", "标注工具", "任务配置", "标注规范", "发布确认"];
@@ -171,13 +176,13 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
     );
   }, [allModels, categoryModality]);
 
-  const defaultModelForCategory = useMemo<MLModel | undefined>(() => {
-    return availableModels[0];
-  }, [availableModels]);
-
   const [preannotationEnabled, setPreannotationEnabled] = useState(true);
-  const [interactiveEnabled, setInteractiveEnabled] = useState(false);
-  const [selectedModelId, setSelectedModelId] = useState<string>("");
+  const [paModelId, setPaModelId] = useState("");
+  const [paVersionId, setPaVersionId] = useState("");
+  const [taskBatchPreOn, setTaskBatchPreOn] = useState(true);
+  const [taskInteractivePreOn, setTaskInteractivePreOn] = useState(true);
+  const [activeLearningTrainingOn, setActiveLearningTrainingOn] = useState(false);
+  const [trainingReplicaName, setTrainingReplicaName] = useState("");
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.6);
   const [autoAccept, setAutoAccept] = useState(false);
   const [taskTypeBindings, setTaskTypeBindings] = useState<TaskTypeModelBinding[]>([]);
@@ -186,21 +191,37 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   const [taskLabelMappings, setTaskLabelMappings] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!selectedCategory) return;
-    if (!availableModels.length) {
-      setSelectedModelId("");
-      setPreannotationEnabled(false);
-      setInteractiveEnabled(false);
+    if (!selectedCategory || !availableModels.length) {
+      setPaModelId("");
+      setPaVersionId("");
       return;
     }
-    const current = availableModels.find((m) => m.id === selectedModelId);
-    if (!current && defaultModelForCategory) {
-      setSelectedModelId(defaultModelForCategory.id);
-      setConfidenceThreshold(0.6);
-      if (!defaultModelForCategory.supportsBatch) setPreannotationEnabled(false);
-      if (!defaultModelForCategory.supportsInteractive) setInteractiveEnabled(false);
+    setPaModelId((mid) => (mid && availableModels.some((m) => m.id === mid) ? mid : availableModels[0].id));
+  }, [selectedCategory, availableModels]);
+
+  useEffect(() => {
+    const m = availableModels.find((x) => x.id === paModelId);
+    if (!m?.versions?.length) {
+      setPaVersionId("");
+      return;
     }
-  }, [selectedCategory, availableModels, defaultModelForCategory, selectedModelId]);
+    const pool = m.versions.filter((v) => (v.source ?? "manual") !== "active_learning");
+    const sorted = [...(pool.length ? pool : m.versions)].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    const preferred = sorted[0];
+    if (!preferred) return;
+    setPaVersionId((vid) => (vid && m.versions.some((x) => x.id === vid) ? vid : preferred.id));
+  }, [availableModels, paModelId]);
+
+  useEffect(() => {
+    const m = availableModels.find((x) => x.id === paModelId);
+    if (!m || !preannotationEnabled) return;
+    setTaskBatchPreOn(Boolean(m.supportsBatch));
+    setTaskInteractivePreOn(Boolean(m.supportsInteractive));
+    if (!m.supportsActiveLearning) {
+      setActiveLearningTrainingOn(false);
+      setTrainingReplicaName("");
+    }
+  }, [paModelId, availableModels, preannotationEnabled]);
 
   const selectedToolData = useMemo(() => mockTools.find((t) => t.id === selectedTool), [selectedTool]);
   const selectedToolTaskTypes = useMemo(
@@ -227,6 +248,8 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
         modality: m.modality,
         labelScope: m.labelScope,
         vocabularyMappings: v.vocabularyMappings,
+        processingTasks: v.processingTasks ?? m.processingTasks ?? 0,
+        annotatorAccepted: v.annotatorAccepted ?? m.annotatorAccepted ?? 0,
       }))
     );
   }, [availableModels]);
@@ -278,21 +301,19 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
       setTaskTypeBindings([]);
       return;
     }
+    if (!paModelId || !paVersionId) {
+      setTaskTypeBindings([]);
+      return;
+    }
     const allTaskTypes = selectedToolTaskTypes;
-    setTaskTypeBindings((prev) => {
-      const next = allTaskTypes.map((taskType) => {
-        const existed = prev.find((x) => x.taskType === taskType);
-        if (existed) return existed;
-        const candidate = bindingCandidates.find((x) => x.taskTypes.includes(taskType));
-        return {
-          taskType,
-          modelId: candidate?.modelId || "",
-          versionId: candidate?.versionId || "",
-        };
-      });
-      return next;
-    });
-  }, [preannotationEnabled, selectedToolTaskTypes, bindingCandidates]);
+    setTaskTypeBindings(
+      allTaskTypes.map((taskType) => ({
+        taskType,
+        modelId: paModelId,
+        versionId: paVersionId,
+      }))
+    );
+  }, [preannotationEnabled, paModelId, paVersionId, selectedToolTaskTypes]);
 
   const preAnnotationTotal = useMemo(() => {
     const allMockDatasets = [...myMockDatasets, ...subscribedMockDatasets, ...sharedMockDatasets];
@@ -303,11 +324,10 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   }, [selectedDatasets]);
 
   const estimatedMinutes = useMemo(() => {
-    const firstBinding = taskTypeBindings.find((x) => x.modelId);
-    const selected = firstBinding ? availableModels.find((x) => x.id === firstBinding.modelId) : undefined;
+    const selected = paModelId ? availableModels.find((x) => x.id === paModelId) : undefined;
     if (!selected || preAnnotationTotal === 0) return 0;
     return Math.max(1, Math.round((preAnnotationTotal * selected.avgInferenceMs) / 1000 / 60));
-  }, [taskTypeBindings, availableModels, preAnnotationTotal]);
+  }, [paModelId, availableModels, preAnnotationTotal]);
 
   const [timeoutEnabled, setTimeoutEnabled] = useState(false);
   const [timeoutHours, setTimeoutHours] = useState(48);
@@ -441,18 +461,49 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   };
 
   const handlePublish = () => {
+    const paSel = availableModels.find((m) => m.id === paModelId);
+    const paCopy = paSel?.versions.find((v) => v.id === paVersionId);
+    const batchOn = Boolean(preannotationEnabled && taskBatchPreOn && paSel?.supportsBatch);
+    const interOn = Boolean(preannotationEnabled && taskInteractivePreOn && paSel?.supportsInteractive);
+    const bindingCandidate =
+      paModelId && paVersionId
+        ? bindingCandidates.find((x) => x.modelId === paModelId && x.versionId === paVersionId)
+        : undefined;
+
+    if (preannotationEnabled && (!paSel || !paCopy || !bindingCandidate)) {
+      toast.error("请为智能预标注选择模型与副本");
+      return;
+    }
+
+    if (preannotationEnabled && paSel && !paSel.supportsBatch && !paSel.supportsInteractive) {
+      toast.error("所选模型未开启批量或交互式预标注能力");
+      return;
+    }
+    if (preannotationEnabled && paSel && !batchOn && !interOn) {
+      toast.error("请在模型已支持的能力中至少开启批量预标注或交互式预标注之一");
+      return;
+    }
+    if (
+      preannotationEnabled &&
+      paSel?.supportsActiveLearning &&
+      activeLearningTrainingOn &&
+      !trainingReplicaName.trim()
+    ) {
+      toast.error("已开启主动学习训练，请填写训练副本名称");
+      return;
+    }
+
     const firstBinding = taskTypeBindings.find((x) => x.modelId && x.versionId);
-    const bindingCandidate = firstBinding
-      ? bindingCandidates.find(
-          (x) => x.modelId === firstBinding.modelId && x.versionId === firstBinding.versionId
-        )
-      : undefined;
-    if ((preannotationEnabled || interactiveEnabled) && bindingCandidate && generatedBatches.length > 0) {
+    if ((batchOn || interOn) && bindingCandidate && generatedBatches.length > 0) {
+      const trainingReplica =
+        paSel?.supportsActiveLearning && activeLearningTrainingOn && trainingReplicaName.trim()
+          ? trainingReplicaName.trim()
+          : undefined;
       generatedBatches.forEach((batch) => {
         dispatchPreannotation({
           taskId: batch.id,
-          batchEnabled: preannotationEnabled,
-          interactiveEnabled,
+          batchEnabled: batchOn,
+          interactiveEnabled: interOn,
           modelId: bindingCandidate.modelId,
           modelName: bindingCandidate.modelName,
           modelVersionId: bindingCandidate.versionId,
@@ -462,11 +513,11 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
           confidenceThreshold,
           autoAccept,
           total: batch.size,
+          trainingReplicaName: trainingReplica,
         });
       });
-      toast.success(
-        `任务发布成功！${generatedBatches.length} 个批次已进入${preannotationEnabled ? "批量预标注" : "交互式预标注"}队列`
-      );
+      const modeLabel = batchOn && interOn ? "批量+交互式预标注" : batchOn ? "批量预标注" : "交互式预标注";
+      toast.success(`任务发布成功！${generatedBatches.length} 个批次已进入${modeLabel}队列`);
     } else {
       toast.success("任务发布成功！系统已自动拆分标注批次并放置在任务池中");
     }
@@ -1099,51 +1150,182 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                         <p className="text-xs text-muted-foreground">未开启</p>
                       ) : (
                         <>
-                          {taskTypeBindings.length === 0 ? (
+                          {!availableModels.length ? (
                             <div className="p-4 rounded-lg border border-dashed bg-amber-50/30 text-xs text-amber-800">
-                              当前模态未找到可用于预标注的模型版本
+                              当前任务模态下暂无可选模型
                             </div>
                           ) : (
-                            <div className="space-y-3">
-                              {taskTypeBindings.map((binding, idx) => {
-                                const options = bindingCandidates.filter((x) => x.taskTypes.includes(binding.taskType));
-                                const selected = options.find(
-                                  (x) => x.modelId === binding.modelId && x.versionId === binding.versionId
-                                );
-                                const mappedCount = taskLabels.filter((label) => !!taskLabelMappings[label]).length;
-                                const unmappedCount = Math.max(0, taskLabels.length - mappedCount);
-                                return (
-                                  <div key={binding.taskType} className="rounded-lg border p-3 space-y-2">
-                                    <div className="text-xs text-muted-foreground">任务类型：{binding.taskType}</div>
-                                    <select
-                                      value={selected ? `${selected.modelId}:${selected.versionId}` : ""}
-                                      onChange={(e) => {
-                                        const [modelId, versionId] = e.target.value.split(":");
-                                        setTaskTypeBindings((prev) =>
-                                          prev.map((item, i) => (i === idx ? { ...item, modelId, versionId } : item))
-                                        );
-                                      }}
-                                      className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                                    >
-                                      <option value="">请选择预处理模型版本</option>
-                                      {options.map((x) => (
-                                        <option key={x.key} value={`${x.modelId}:${x.versionId}`}>
-                                          {x.modelName} / {x.version}
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-xs text-muted-foreground mb-1 block">选择模型</label>
+                                  <select
+                                    value={paModelId}
+                                    onChange={(e) => setPaModelId(e.target.value)}
+                                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                                  >
+                                    {availableModels.map((m) => (
+                                      <option key={m.id} value={m.id}>
+                                        {m.name} / {labelScopeDisplay(m.labelScope)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="text-xs text-muted-foreground mb-1 block">选择模型副本</label>
+                                  <select
+                                    value={paVersionId}
+                                    onChange={(e) => setPaVersionId(e.target.value)}
+                                    className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                                    disabled={!paModelId}
+                                  >
+                                    {(availableModels.find((m) => m.id === paModelId)?.versions || []).map((v) => {
+                                      const pt = v.processingTasks ?? 0;
+                                      const aa = v.annotatorAccepted ?? 0;
+                                      const pct = pt > 0 ? Math.round((aa / pt) * 100) : 0;
+                                      return (
+                                        <option key={v.id} value={v.id}>
+                                          {v.version}（已处理 {pt}，接受度 {aa}/{pt}
+                                          {pt ? ` · ${pct}%` : ""}）
                                         </option>
-                                      ))}
-                                    </select>
-                                    {selected?.labelScope === "固定标签集" && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setShowVocabularyModal(true)}
-                                        className="text-xs text-primary hover:underline"
-                                      >
-                                        词汇映射表（已映射 {mappedCount}、未映射 {unmappedCount}）
-                                      </button>
+                                      );
+                                    })}
+                                  </select>
+                                </div>
+                              </div>
+
+                              {paModelId && paVersionId && (() => {
+                                const mSel = availableModels.find((m) => m.id === paModelId);
+                                const canBatch = !!mSel?.supportsBatch;
+                                const canInteract = !!mSel?.supportsInteractive;
+                                if (!canBatch && !canInteract) {
+                                  return (
+                                    <p className="text-xs text-amber-800 bg-amber-50/50 border border-amber-100 rounded-md p-2">
+                                      该模型未在管理中开启批量或交互式预标注，请重新选择模型。
+                                    </p>
+                                  );
+                                }
+                                const onBatchChange = (on: boolean) => {
+                                  if (!canBatch) return;
+                                  if (!on && canInteract && !taskInteractivePreOn) {
+                                    setTaskInteractivePreOn(true);
+                                  }
+                                  setTaskBatchPreOn(on);
+                                };
+                                const onInteractiveChange = (on: boolean) => {
+                                  if (!canInteract) return;
+                                  if (!on && canBatch && !taskBatchPreOn) {
+                                    setTaskBatchPreOn(true);
+                                  }
+                                  setTaskInteractivePreOn(on);
+                                };
+                                return (
+                                  <>
+                                    <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+                                      <p className="text-xs font-medium text-muted-foreground">预标注方式（仅展示模型管理中已开启的能力）</p>
+                                      <div className="flex flex-wrap gap-6">
+                                        {canBatch && (
+                                          <div className="flex items-center gap-2">
+                                            <Switch
+                                              checked={taskBatchPreOn}
+                                              onCheckedChange={onBatchChange}
+                                              disabled={canBatch && !canInteract}
+                                            />
+                                            <span className="text-sm">批量预标注</span>
+                                          </div>
+                                        )}
+                                        {canInteract && (
+                                          <div className="flex items-center gap-2">
+                                            <Switch
+                                              checked={taskInteractivePreOn}
+                                              onCheckedChange={onInteractiveChange}
+                                              disabled={canInteract && !canBatch}
+                                            />
+                                            <span className="text-sm">交互式预标注</span>
+                                          </div>
+                                        )}
+                                        {canBatch && canInteract && (
+                                          <p className="text-[11px] text-muted-foreground w-full">至少需开启其中一种预标注方式。</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-3 text-xs">
+                                      <span className="text-muted-foreground whitespace-nowrap">置信度阈值</span>
+                                      <input
+                                        type="range"
+                                        min={0.1}
+                                        max={1}
+                                        step={0.05}
+                                        value={confidenceThreshold}
+                                        onChange={(e) => setConfidenceThreshold(Number(e.target.value))}
+                                        className="flex-1 min-w-[140px]"
+                                      />
+                                      <span className="tabular-nums font-mono">{confidenceThreshold.toFixed(2)}</span>
+                                      <label className="flex items-center gap-1.5 ml-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={autoAccept}
+                                          onChange={(e) => setAutoAccept(e.target.checked)}
+                                        />
+                                        自动接受结果
+                                      </label>
+                                    </div>
+                                    {mSel?.supportsActiveLearning && (
+                                      <div className="rounded-lg border p-3 space-y-2 bg-amber-50/20">
+                                        <div className="flex items-center gap-2">
+                                          <Switch
+                                            checked={activeLearningTrainingOn}
+                                            onCheckedChange={setActiveLearningTrainingOn}
+                                          />
+                                          <span className="text-sm">主动学习与训练配置</span>
+                                        </div>
+                                        {activeLearningTrainingOn && (
+                                          <div>
+                                            <label className="text-xs text-muted-foreground mb-1 block">训练副本名称</label>
+                                            <input
+                                              value={trainingReplicaName}
+                                              onChange={(e) => setTrainingReplicaName(e.target.value)}
+                                              className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                                              placeholder="请输入训练产出使用的副本名称"
+                                            />
+                                          </div>
+                                        )}
+                                      </div>
                                     )}
-                                  </div>
+                                  </>
                                 );
-                              })}
+                              })()}
+
+                              {selectedToolTaskTypes.length > 0 && paModelId && paVersionId ? (
+                                <div className="space-y-2">
+                                  {selectedToolTaskTypes.map((taskType) => {
+                                    const binding = taskTypeBindings.find((x) => x.taskType === taskType);
+                                    const selected = binding
+                                      ? bindingCandidates.find(
+                                          (x) => x.modelId === binding.modelId && x.versionId === binding.versionId
+                                        )
+                                      : undefined;
+                                    const mappedCount = taskLabels.filter((label) => !!taskLabelMappings[label]).length;
+                                    const unmappedCount = Math.max(0, taskLabels.length - mappedCount);
+                                    return (
+                                      <div key={taskType} className="rounded-lg border p-3 space-y-2">
+                                        <div className="text-xs text-muted-foreground">任务类型：{taskType}</div>
+                                        {selected?.labelScope === "固定标签集" ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => setShowVocabularyModal(true)}
+                                            className="text-xs text-primary hover:underline"
+                                          >
+                                            词汇映射表（已映射 {mappedCount}、未映射 {unmappedCount}）
+                                          </button>
+                                        ) : (
+                                          <p className="text-[11px] text-muted-foreground">开放标签集：与所选模型副本中的 Prompt 绑定一致</p>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : null}
                             </div>
                           )}
                         </>
@@ -2103,23 +2285,44 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               <Brain className="w-3 h-3" /> 智能预标注
                             </p>
-                            {preannotationEnabled && taskTypeBindings.length > 0 ? (
+                            {preannotationEnabled && paModelId && paVersionId && taskTypeBindings.length > 0 ? (
                               <div className="mt-1 flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-medium">已配置 {taskTypeBindings.length} 条任务类型映射</span>
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">
-                                  批量
+                                <span className="text-sm font-medium">
+                                  {availableModels.find((m) => m.id === paModelId)?.name ?? "—"} ·{" "}
+                                  {availableModels
+                                    .find((m) => m.id === paModelId)
+                                    ?.versions.find((v) => v.id === paVersionId)?.version ?? "—"}
                                 </span>
-                                {interactiveEnabled && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-bold">
-                                    交互
-                                  </span>
-                                )}
+                                {(() => {
+                                  const m = availableModels.find((x) => x.id === paModelId);
+                                  const b = Boolean(m?.supportsBatch && taskBatchPreOn);
+                                  const i = Boolean(m?.supportsInteractive && taskInteractivePreOn);
+                                  return (
+                                    <>
+                                      {b && (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">
+                                          批量
+                                        </span>
+                                      )}
+                                      {i && (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-bold">
+                                          交互
+                                        </span>
+                                      )}
+                                    </>
+                                  );
+                                })()}
                                 <span className="text-[10px] text-muted-foreground">
                                   · 阈值 {confidenceThreshold.toFixed(2)}
                                 </span>
                                 <span className="text-[10px] text-muted-foreground">
                                   · {autoAccept ? "自动接受" : "人工确认"}
                                 </span>
+                                {activeLearningTrainingOn && trainingReplicaName.trim() ? (
+                                  <span className="text-[10px] text-amber-800 font-medium">
+                                    · 训练副本 {trainingReplicaName.trim()}
+                                  </span>
+                                ) : null}
                                 {preannotationEnabled && estimatedMinutes > 0 && (
                                   <span className="text-[10px] text-amber-700 font-bold">
                                     预计 ≈ {estimatedMinutes} 分钟完成预标注

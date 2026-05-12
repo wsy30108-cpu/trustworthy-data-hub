@@ -62,7 +62,6 @@ interface ConnectFormState {
   avgInferenceMs: number;
   labelScope: "固定标签集" | "开放标签集";
   supportsActiveLearning: boolean;
-  activeLearningTriggerCondition: string;
 }
 
 const emptyForm: ConnectFormState = {
@@ -76,7 +75,6 @@ const emptyForm: ConnectFormState = {
   avgInferenceMs: 200,
   labelScope: "固定标签集",
   supportsActiveLearning: false,
-  activeLearningTriggerCondition: "100",
 };
 
 const DataAnnotationModels = () => {
@@ -136,7 +134,6 @@ const DataAnnotationModels = () => {
       avgInferenceMs: m.avgInferenceMs,
       labelScope: m.labelScope,
       supportsActiveLearning: m.supportsActiveLearning,
-      activeLearningTriggerCondition: m.activeLearningTriggerCondition || "",
     });
     setShowConnect(true);
   };
@@ -144,10 +141,6 @@ const DataAnnotationModels = () => {
   const handleSubmit = () => {
     if (!form.name.trim()) return toast.error("请填写模型名称");
     if (form.taskTypes.length === 0) return toast.error("请至少选择一个任务类型");
-    if (form.supportsActiveLearning && !form.activeLearningTriggerCondition.trim()) {
-      return toast.error("支持主动学习时请填写主动学习触发条件");
-    }
-
     const payload = {
       name: form.name.trim(),
       description: form.description.trim(),
@@ -161,9 +154,7 @@ const DataAnnotationModels = () => {
       avgInferenceMs: form.avgInferenceMs,
       labelScope: form.labelScope,
       supportsActiveLearning: form.supportsActiveLearning,
-      activeLearningTriggerCondition: form.supportsActiveLearning
-        ? form.activeLearningTriggerCondition.trim()
-        : undefined,
+      activeLearningTriggerCondition: undefined,
       creator: "当前用户",
     };
 
@@ -182,7 +173,7 @@ const DataAnnotationModels = () => {
       <div className="page-header">
         <div>
           <h1 className="page-title">模型管理</h1>
-          <p className="page-description">维护模型基本信息，点击模型卡片进入版本管理</p>
+          <p className="page-description">维护模型基本信息，点击模型卡片进入副本管理</p>
         </div>
         <button
           onClick={openCreate}
@@ -261,7 +252,7 @@ const DataAnnotationModels = () => {
                       <p className="text-xs text-muted-foreground mt-0.5 font-mono truncate">{m.id}</p>
                     </div>
                     <span className="text-[11px] font-medium tabular-nums text-muted-foreground shrink-0 pt-0.5">
-                      {versionTotal} 版本
+                      {versionTotal} 副本
                     </span>
                   </div>
                 </div>
@@ -274,7 +265,7 @@ const DataAnnotationModels = () => {
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${healthPillClass}`}>
                   {versionTotal === 0 ? (
                     <>
-                      <Clock className="w-3 h-3 inline mr-0.5 align-text-bottom opacity-80" /> 暂无版本
+                      <Clock className="w-3 h-3 inline mr-0.5 align-text-bottom opacity-80" /> 暂无副本
                     </>
                   ) : (
                     <>
@@ -306,25 +297,19 @@ const DataAnnotationModels = () => {
                   标签范围：<span className="text-foreground">{m.labelScope}</span>
                 </p>
                 <p>
+                  批量预标注：
+                  <span className="text-foreground">{m.supportsBatch ? "支持" : "不支持"}</span>
+                </p>
+                <p>
+                  交互式预标注：
+                  <span className="text-foreground">{m.supportsInteractive ? "支持" : "不支持"}</span>
+                </p>
+                <p>
                   主动学习：
-                  <span className="text-foreground">
-                    {m.supportsActiveLearning ? m.activeLearningTriggerCondition || "已开启" : "不支持"}
-                  </span>
+                  <span className="text-foreground">{m.supportsActiveLearning ? "已开启" : "不支持"}</span>
                 </p>
               </div>
-              <div className="flex flex-wrap items-end justify-between gap-3 pt-2 mt-auto border-t text-[10px] text-muted-foreground" onClick={(e) => e.stopPropagation()}>
-                <div className="space-y-0.5 min-w-0 text-left">
-                  <p className="tabular-nums">
-                    已处理 <span className="text-foreground font-mono font-semibold">{m.processingTasks ?? 0}</span>
-                    <span className="mx-1 text-muted-foreground/70">/</span>
-                    接受度{" "}
-                    <span className="text-foreground font-mono font-semibold">
-                      {m.processingTasks
-                        ? `${Math.round(((m.annotatorAccepted ?? 0) / m.processingTasks) * 100)}%`
-                        : "0%"}
-                    </span>
-                  </p>
-                </div>
+              <div className="flex flex-wrap items-end justify-end gap-3 pt-2 mt-auto border-t text-[10px] text-muted-foreground" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-2 shrink-0 ml-auto">
                   <button
                     type="button"
@@ -472,43 +457,34 @@ const DataAnnotationModels = () => {
                 </div>
               </div>
 
-              <div className="rounded-lg border p-3 bg-muted/20">
+              <div className="rounded-lg border p-3 bg-muted/20 space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">预标注能力</p>
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={form.supportsActiveLearning}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        supportsActiveLearning: e.target.checked,
-                        activeLearningTriggerCondition: e.target.checked ? form.activeLearningTriggerCondition : "",
-                      })
-                    }
+                    checked={form.supportsBatch}
+                    onChange={(e) => setForm({ ...form, supportsBatch: e.target.checked })}
                   />
-                  是否支持主动学习
+                  批量预标注
                 </label>
-                {form.supportsActiveLearning && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <input
-                      value={form.activeLearningTriggerCondition}
-                      onChange={(e) => setForm({ ...form, activeLearningTriggerCondition: e.target.value })}
-                      type="number"
-                      min={1}
-                      className="w-24 px-3 py-2 text-sm border rounded-lg bg-background"
-                    />
-                    <span className="text-sm text-muted-foreground">条</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-lg border p-3 bg-muted/20">
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
                     checked={form.supportsInteractive}
                     onChange={(e) => setForm({ ...form, supportsInteractive: e.target.checked })}
                   />
-                  是否支持交互式预标注
+                  交互式预标注
+                </label>
+              </div>
+
+              <div className="rounded-lg border p-3 bg-muted/20">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.supportsActiveLearning}
+                    onChange={(e) => setForm({ ...form, supportsActiveLearning: e.target.checked })}
+                  />
+                  是否支持主动学习
                 </label>
               </div>
             </div>

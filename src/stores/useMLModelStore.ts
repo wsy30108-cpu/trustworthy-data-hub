@@ -46,6 +46,10 @@ export interface MLModelVersion {
   activeLearningTriggerReached?: boolean;
   /** 来源为主动学习时：训练状态 */
   trainingStatus?: "未训练" | "训练中" | "已完成";
+  /** 该副本维度：累计处理任务条数（展示） */
+  processingTasks?: number;
+  /** 该副本维度：标注员累计接受条数（展示） */
+  annotatorAccepted?: number;
 }
 
 export interface MLModel {
@@ -163,6 +167,8 @@ function ensureActiveLearningVersionRow(m: MLModel): MLModel {
     normalizeTaskPromptBinding(row as TaskPromptBinding & { taskType?: string })
   );
   const verStem = /^v\d/i.test(base.version) ? `${base.version}-al` : `${base.version}-active-learning`;
+  const basePt = base.processingTasks ?? 0;
+  const baseAa = base.annotatorAccepted ?? 0;
   const al: MLModelVersion = {
     id: mkVersionId(),
     version: verStem.slice(0, 64),
@@ -173,6 +179,8 @@ function ensureActiveLearningVersionRow(m: MLModel): MLModel {
     health: "未检测",
     creator: "主动学习任务",
     createdAt: base.createdAt,
+    processingTasks: basePt > 0 ? Math.max(1, Math.floor(basePt * 0.35)) : 0,
+    annotatorAccepted: baseAa > 0 ? Math.max(0, Math.floor(baseAa * 0.32)) : 0,
     prompts:
       normalizedPrompts.length > 0
         ? normalizedPrompts
@@ -203,17 +211,14 @@ const initialModels: MLModel[] = mapModelsEnsuringActiveLearning([
     supportsInteractive: false,
     supportsTraining: true,
     supportsActiveLearning: true,
-    activeLearningTriggerCondition: "100条",
     health: "健康",
     creator: "系统",
     createdAt: "2026-01-10 10:00",
     avgInferenceMs: 120,
-    processingTasks: 12800,
-    annotatorAccepted: 9620,
     versions: [
       {
         id: "VER-001-1",
-        version: "v2.1.0",
+        version: "生产主副本",
         endpointUrl: "http://ml-backend.internal:9090/text-sentiment",
         authType: "none",
         health: "健康",
@@ -225,10 +230,12 @@ const initialModels: MLModel[] = mapModelsEnsuringActiveLearning([
           { sourceLabel: "negative", commonMappedLabel: "负面" },
         ],
         source: "manual",
+        processingTasks: 8200,
+        annotatorAccepted: 6150,
       },
       {
         id: "VER-001-AL",
-        version: "v2.2.0-al",
+        version: "主动学习训练副本",
         endpointUrl: "http://ml-backend.internal:9090/text-sentiment/active",
         authType: "none",
         health: "健康",
@@ -242,6 +249,8 @@ const initialModels: MLModel[] = mapModelsEnsuringActiveLearning([
         source: "active_learning",
         activeLearningTriggerReached: true,
         trainingStatus: "已完成",
+        processingTasks: 4600,
+        annotatorAccepted: 3470,
       },
     ],
   } as MLModel),
@@ -256,17 +265,14 @@ const initialModels: MLModel[] = mapModelsEnsuringActiveLearning([
     supportsInteractive: true,
     supportsTraining: false,
     supportsActiveLearning: true,
-    activeLearningTriggerCondition: "200条",
     health: "健康",
     creator: "系统",
     createdAt: "2026-01-15 09:00",
     avgInferenceMs: 250,
-    processingTasks: 6420,
-    annotatorAccepted: 5100,
     versions: [
       {
         id: "VER-003-1",
-        version: "v8.0.1",
+        version: "推理主副本",
         endpointUrl: "http://ml-backend.internal:9092/yolo",
         authType: "none",
         health: "健康",
@@ -278,10 +284,12 @@ const initialModels: MLModel[] = mapModelsEnsuringActiveLearning([
           { sourceLabel: "person", commonMappedLabel: "person" },
         ],
         source: "manual",
+        processingTasks: 4100,
+        annotatorAccepted: 3288,
       },
       {
         id: "VER-003-AL",
-        version: "v8.0.2-al",
+        version: "主动学习微调副本",
         endpointUrl: "http://ml-backend.internal:9092/yolo/active",
         authType: "none",
         health: "健康",
@@ -295,6 +303,110 @@ const initialModels: MLModel[] = mapModelsEnsuringActiveLearning([
         source: "active_learning",
         activeLearningTriggerReached: false,
         trainingStatus: "训练中",
+        processingTasks: 2320,
+        annotatorAccepted: 1812,
+      },
+    ],
+  } as MLModel),
+  syncModelRuntimeFromLatestVersion({
+    id: "MDL-004",
+    name: "多任务指令理解（开放标签集）",
+    description: "基于 Prompt 的开放词汇文本理解，可多任务绑定",
+    modality: "文本类",
+    taskTypes: ["文本分类", "信息抽取"],
+    labelScope: "开放标签集",
+    supportsBatch: true,
+    supportsInteractive: true,
+    supportsTraining: true,
+    supportsActiveLearning: false,
+    health: "健康",
+    creator: "系统",
+    createdAt: "2026-01-20 11:00",
+    avgInferenceMs: 180,
+    versions: [
+      {
+        id: "VER-004-1",
+        version: "联调演示副本-A",
+        endpointUrl: "http://ml-backend.internal:9095/open-llm",
+        authType: "none",
+        health: "健康",
+        creator: "系统",
+        createdAt: "2026-01-20 11:00",
+        prompts: [
+          { taskTypes: ["文本分类"], prompt: "对下列文本输出情感类别（正面/负面/中性）。" },
+          { taskTypes: ["信息抽取"], prompt: "抽取文本中的人名与机构名实体。" },
+        ],
+        vocabularyMappings: [],
+        source: "manual",
+        processingTasks: 5600,
+        annotatorAccepted: 4230,
+      },
+    ],
+  } as MLModel),
+  syncModelRuntimeFromLatestVersion({
+    id: "MDL-005",
+    name: "表格单元格语义分类（封闭标签集）",
+    description: "针对表格类数据的固定标签集分类模型",
+    modality: "表格类",
+    taskTypes: ["文本分类"],
+    labelScope: "固定标签集",
+    supportsBatch: true,
+    supportsInteractive: false,
+    supportsTraining: false,
+    supportsActiveLearning: true,
+    health: "未检测",
+    creator: "系统",
+    createdAt: "2026-02-01 09:30",
+    avgInferenceMs: 95,
+    versions: [
+      {
+        id: "VER-005-1",
+        version: "内测冻结副本",
+        endpointUrl: "http://ml-backend.internal:9096/table-slot",
+        authType: "none",
+        health: "未检测",
+        creator: "系统",
+        createdAt: "2026-02-01 09:30",
+        prompts: [],
+        vocabularyMappings: [
+          { sourceLabel: "HEADER", commonMappedLabel: "表头" },
+          { sourceLabel: "DATA", commonMappedLabel: "数据单元格" },
+        ],
+        source: "manual",
+        processingTasks: 1280,
+        annotatorAccepted: 990,
+      },
+    ],
+  } as MLModel),
+  syncModelRuntimeFromLatestVersion({
+    id: "MDL-006",
+    name: "轻量多模态占位模型",
+    description: "跨模态占位与路由演示",
+    modality: "跨模态类",
+    taskTypes: ["文本分类", "目标检测"],
+    labelScope: "开放标签集",
+    supportsBatch: false,
+    supportsInteractive: true,
+    supportsTraining: false,
+    supportsActiveLearning: false,
+    health: "健康",
+    creator: "系统",
+    createdAt: "2026-02-05 14:00",
+    avgInferenceMs: 300,
+    versions: [
+      {
+        id: "VER-006-1",
+        version: "仅交互副本",
+        endpointUrl: "http://ml-backend.internal:9097/mm-router",
+        authType: "none",
+        health: "健康",
+        creator: "系统",
+        createdAt: "2026-02-05 14:00",
+        prompts: [{ taskTypes: ["文本分类", "目标检测"], prompt: "根据输入模态选择合适的工具链。" }],
+        vocabularyMappings: [],
+        source: "manual",
+        processingTasks: 900,
+        annotatorAccepted: 720,
       },
     ],
   } as MLModel),
@@ -307,7 +419,7 @@ export const useMLModelStore = create<MLModelState>()(
         const id = mkModelId();
         const initialVersion: MLModelVersion = {
           id: mkVersionId(),
-          version: "v1.0.0",
+          version: "初始副本",
           endpointUrl: "",
           authType: "none",
           health: "未检测",
@@ -320,6 +432,8 @@ export const useMLModelStore = create<MLModelState>()(
           vocabularyMappings:
             m.labelScope === "固定标签集" ? [{ sourceLabel: "", commonMappedLabel: "" }] : [],
           source: "manual",
+          processingTasks: 0,
+          annotatorAccepted: 0,
         };
         const model = ensureActiveLearningVersionRow(
           withVersion(
@@ -359,7 +473,7 @@ export const useMLModelStore = create<MLModelState>()(
         return {
           ok,
           latency,
-          message: ok ? `模型连接正常，响应 ${latency}ms` : "模型连接异常，请检查版本配置",
+          message: ok ? `模型连接正常，响应 ${latency}ms` : "模型连接异常，请检查副本配置",
         };
       },
       getModelsByModality: (modality) =>

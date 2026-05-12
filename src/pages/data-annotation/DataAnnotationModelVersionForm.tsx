@@ -31,7 +31,7 @@ interface VersionFormState {
 }
 
 const emptyVersionForm: VersionFormState = {
-  version: "v1.0.0",
+  version: "初始副本",
   endpointUrl: "",
   authType: "none",
   authUsername: "",
@@ -87,7 +87,7 @@ const DataAnnotationModelVersionForm = () => {
 
     const version = selectedModel.versions.find((v) => v.id === versionId);
     if (!version) {
-      toast.error("未找到该版本");
+      toast.error("未找到该副本");
       navigate(`/data-annotation/models/versions?modelId=${encodeURIComponent(modelId)}`);
       return;
     }
@@ -111,11 +111,11 @@ const DataAnnotationModelVersionForm = () => {
     const sorted = [...selectedModel.versions].sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
     const latest = sorted[0];
     if (!latest || latest.vocabularyMappings.length === 0) {
-      toast.info("上一版本没有可引入的词汇表映射");
+      toast.info("上一副本没有可引入的词汇表映射");
       return;
     }
     setForm((prev) => ({ ...prev, vocabularyMappings: latest.vocabularyMappings.map((x) => ({ ...x })) }));
-    toast.success(`已从版本 ${latest.version} 引入 ${latest.vocabularyMappings.length} 条映射`);
+    toast.success(`已从副本 ${latest.version} 引入 ${latest.vocabularyMappings.length} 条映射`);
   };
 
   const importVocabularyByText = () => {
@@ -167,7 +167,7 @@ const DataAnnotationModelVersionForm = () => {
 
   const handleSubmit = () => {
     if (!selectedModel) return;
-    if (!form.version.trim()) return toast.error("请填写版本号");
+    if (!form.version.trim()) return toast.error("请填写副本名称");
     if (!/^https?:\/\//.test(form.endpointUrl)) return toast.error("模型链接需以 http:// 或 https:// 开头");
     if (form.authType === "api_key" && (!form.authUsername.trim() || !form.authPassword.trim())) {
       return toast.error("请填写 API KEY 用户名和密码");
@@ -205,10 +205,10 @@ const DataAnnotationModelVersionForm = () => {
 
     if (versionId) {
       updateVersion(selectedModel.id, versionId, payload);
-      toast.success("版本配置已更新");
+      toast.success("副本配置已更新");
     } else {
       addVersion(selectedModel.id, { ...payload, source: "manual" });
-      toast.success("版本已新增");
+      toast.success("副本已新增");
     }
     navigate(`/data-annotation/models/versions?modelId=${encodeURIComponent(selectedModel.id)}`);
   };
@@ -238,7 +238,7 @@ const DataAnnotationModelVersionForm = () => {
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-base font-bold tracking-tight">{versionId ? "编辑模型版本" : "新增模型版本"}</h1>
+              <h1 className="text-base font-bold tracking-tight">{versionId ? "编辑模型副本" : "新增模型副本"}</h1>
               <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
                 <span>TrustData Hub</span>
                 <span>/</span>
@@ -253,7 +253,7 @@ const DataAnnotationModelVersionForm = () => {
             onClick={handleSubmit}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90"
           >
-            保存版本
+            保存副本
           </button>
         </div>
       </header>
@@ -263,7 +263,7 @@ const DataAnnotationModelVersionForm = () => {
           <div className="p-5 border-b flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold">{versionId ? <Edit3 className="w-5 h-5" /> : <Plus className="w-5 h-5" />}</div>
             <div>
-              <h2 className="text-lg font-semibold">版本信息与推理配置</h2>
+              <h2 className="text-lg font-semibold">副本信息与推理配置</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
                 模态：{selectedModel.modality} · 标签范围：{selectedModel.labelScope}
               </p>
@@ -272,7 +272,7 @@ const DataAnnotationModelVersionForm = () => {
           <div className="p-5 space-y-4">
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">版本号</label>
+                <label className="text-xs text-muted-foreground mb-1 block">副本名称</label>
                 <input
                   value={form.version}
                   onChange={(e) => setForm({ ...form, version: e.target.value })}
@@ -451,7 +451,7 @@ const DataAnnotationModelVersionForm = () => {
                     </button>
                     <button type="button" onClick={importVocabularyFromLastVersion} className="px-2 py-1 text-xs border rounded hover:bg-muted/50">
                       <ArrowUpDown className="w-3.5 h-3.5 inline mr-1" />
-                      从上一版本引入
+                      从上一副本引入
                     </button>
                     <button
                       type="button"
@@ -535,7 +535,7 @@ const DataAnnotationModelVersionForm = () => {
               取消
             </button>
             <button onClick={handleSubmit} className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90" type="button">
-              保存版本
+              保存副本
             </button>
           </div>
         </div>
