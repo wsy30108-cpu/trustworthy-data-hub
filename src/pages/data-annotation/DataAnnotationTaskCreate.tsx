@@ -84,6 +84,12 @@ interface TaskTypeModelBinding {
   taskType: string;
   modelId: string;
   versionId: string;
+  /** 是否启用该任务类型下的预标注方式（批量/交互） */
+  preannotationWayEnabled: boolean;
+  batchPreOn: boolean;
+  interactivePreOn: boolean;
+  activeLearningOn: boolean;
+  trainingReplicaName: string;
 }
 
 const mockVocabularyByTaskType: Record<string, string[]> = {
@@ -190,11 +196,6 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
   }, [allModels, categoryModality]);
 
   const [preannotationEnabled, setPreannotationEnabled] = useState(true);
-  const [taskBatchPreOn, setTaskBatchPreOn] = useState(true);
-  const [taskInteractivePreOn, setTaskInteractivePreOn] = useState(true);
-  const [activeLearningTrainingOn, setActiveLearningTrainingOn] = useState(false);
-  const [trainingReplicaName, setTrainingReplicaName] = useState("");
-  const [autoAccept, setAutoAccept] = useState(false);
   const [taskTypeBindings, setTaskTypeBindings] = useState<TaskTypeModelBinding[]>([]);
   const [showVocabularyModal, setShowVocabularyModal] = useState(false);
   const [sourceLabelSearch, setSourceLabelSearch] = useState("");
@@ -241,17 +242,6 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
     if (!primaryBinding) return undefined;
     return availableModels.find((m) => m.id === primaryBinding.modelId);
   }, [primaryBinding, availableModels]);
-
-  useEffect(() => {
-    const m = primaryModel;
-    if (!m || !preannotationEnabled) return;
-    setTaskBatchPreOn(Boolean(m.supportsBatch));
-    setTaskInteractivePreOn(Boolean(m.supportsInteractive));
-    if (!m.supportsActiveLearning) {
-      setActiveLearningTrainingOn(false);
-      setTrainingReplicaName("");
-    }
-  }, [primaryModel, preannotationEnabled]);
 
   const sourceLabels = useMemo(() => {
     const labels = new Set<string>();
@@ -302,19 +292,33 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
     }
     const allTaskTypes = selectedToolTaskTypes;
     setTaskTypeBindings((prev) => {
-      const next = allTaskTypes.map((taskType) => {
+      return allTaskTypes.map((taskType) => {
         const existed = prev.find((x) => x.taskType === taskType);
-        if (existed) return existed;
         const candidate = bindingCandidates.find((x) => x.taskTypes.includes(taskType));
+        const model = candidate ? availableModels.find((m) => m.id === candidate.modelId) : undefined;
+        if (existed) {
+          return {
+            ...existed,
+            preannotationWayEnabled: existed.preannotationWayEnabled ?? true,
+            batchPreOn: existed.batchPreOn ?? Boolean(model?.supportsBatch),
+            interactivePreOn: existed.interactivePreOn ?? Boolean(model?.supportsInteractive),
+            activeLearningOn: existed.activeLearningOn ?? false,
+            trainingReplicaName: existed.trainingReplicaName ?? "",
+          };
+        }
         return {
           taskType,
           modelId: candidate?.modelId || "",
           versionId: candidate?.versionId || "",
+          preannotationWayEnabled: true,
+          batchPreOn: Boolean(model?.supportsBatch),
+          interactivePreOn: Boolean(model?.supportsInteractive),
+          activeLearningOn: false,
+          trainingReplicaName: "",
         };
       });
-      return next;
     });
-  }, [preannotationEnabled, selectedToolTaskTypes, bindingCandidates]);
+  }, [preannotationEnabled, selectedToolTaskTypes, bindingCandidates, availableModels]);
 
   const preAnnotationTotal = useMemo(() => {
     const allMockDatasets = [...myMockDatasets, ...subscribedMockDatasets, ...sharedMockDatasets];
@@ -485,8 +489,18 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
       return;
     }
 
-    const batchOn = Boolean(preannotationEnabled && taskBatchPreOn && paSel?.supportsBatch);
-    const interOn = Boolean(preannotationEnabled && taskInteractivePreOn && paSel?.supportsInteractive);
+    const batchOn = Boolean(
+      preannotationEnabled &&
+        firstBinding?.preannotationWayEnabled &&
+        firstBinding.batchPreOn &&
+        paSel?.supportsBatch
+    );
+    const interOn = Boolean(
+      preannotationEnabled &&
+        firstBinding?.preannotationWayEnabled &&
+        firstBinding.interactivePreOn &&
+        paSel?.supportsInteractive
+    );
 
     if (preannotationEnabled && paSel && !paSel.supportsBatch && !paSel.supportsInteractive) {
       toast.error("所选模型未开启批量或交互式预标注能力");
@@ -499,8 +513,8 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
     if (
       preannotationEnabled &&
       paSel?.supportsActiveLearning &&
-      activeLearningTrainingOn &&
-      !trainingReplicaName.trim()
+      firstBinding?.activeLearningOn &&
+      !firstBinding.trainingReplicaName.trim()
     ) {
       toast.error("已开启主动学习训练，请填写训练副本名称");
       return;
@@ -508,8 +522,8 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
 
     if ((batchOn || interOn) && bindingCandidate && generatedBatches.length > 0) {
       const trainingReplica =
-        paSel?.supportsActiveLearning && activeLearningTrainingOn && trainingReplicaName.trim()
-          ? trainingReplicaName.trim()
+        paSel?.supportsActiveLearning && firstBinding?.activeLearningOn && firstBinding.trainingReplicaName.trim()
+          ? firstBinding.trainingReplicaName.trim()
           : undefined;
       generatedBatches.forEach((batch) => {
         dispatchPreannotation({
@@ -523,7 +537,7 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
           taskType: firstBinding?.taskType,
           modality: bindingCandidate.modality,
           confidenceThreshold: 0.6,
-          autoAccept,
+          autoAccept: false,
           total: batch.size,
           trainingReplicaName: trainingReplica,
         });
@@ -1175,32 +1189,82 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                               ) : (
                                 <div className="space-y-3">
                                   {taskTypeBindings.map((binding, idx) => {
-                                    const options = bindingCandidates.filter((x) => x.taskTypes.includes(binding.taskType));
-                                    const selected = options.find(
+                                    const candsForTask = bindingCandidates.filter((x) => x.taskTypes.includes(binding.taskType));
+                                    const modelIds = Array.from(new Set(candsForTask.map((c) => c.modelId)));
+                                    const versionOptions = candsForTask.filter((c) => c.modelId === binding.modelId);
+                                    const selected = candsForTask.find(
                                       (x) => x.modelId === binding.modelId && x.versionId === binding.versionId
                                     );
+                                    const rowModel = availableModels.find((m) => m.id === binding.modelId);
+                                    const canBatch = !!rowModel?.supportsBatch;
+                                    const canInteract = !!rowModel?.supportsInteractive;
                                     const mappedCount = taskLabels.filter((label) => !!taskLabelMappings[label]).length;
                                     const unmappedCount = Math.max(0, taskLabels.length - mappedCount);
                                     return (
-                                      <div key={binding.taskType} className="rounded-lg border p-3 space-y-2">
+                                      <div key={binding.taskType} className="rounded-lg border p-3 space-y-3">
                                         <div className="text-xs text-muted-foreground">任务类型：{binding.taskType}</div>
-                                        <select
-                                          value={selected ? `${selected.modelId}:${selected.versionId}` : ""}
-                                          onChange={(e) => {
-                                            const [modelId, versionId] = e.target.value.split(":");
-                                            setTaskTypeBindings((prev) =>
-                                              prev.map((item, i) => (i === idx ? { ...item, modelId, versionId } : item))
-                                            );
-                                          }}
-                                          className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                                        >
-                                          <option value="">请选择模型与副本</option>
-                                          {options.map((x) => (
-                                            <option key={x.key} value={`${x.modelId}:${x.versionId}`}>
-                                              {replicaOptionCaption(x)}
-                                            </option>
-                                          ))}
-                                        </select>
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                          <div>
+                                            <label className="text-xs text-muted-foreground mb-1 block">选择模型</label>
+                                            <select
+                                              value={binding.modelId}
+                                              onChange={(e) => {
+                                                const modelId = e.target.value;
+                                                const m = availableModels.find((x) => x.id === modelId);
+                                                const firstV = bindingCandidates.find(
+                                                  (c) => c.modelId === modelId && c.taskTypes.includes(binding.taskType)
+                                                );
+                                                setTaskTypeBindings((prev) =>
+                                                  prev.map((item, i) =>
+                                                    i === idx
+                                                      ? {
+                                                          ...item,
+                                                          modelId,
+                                                          versionId: firstV?.versionId || "",
+                                                          batchPreOn: Boolean(m?.supportsBatch),
+                                                          interactivePreOn: Boolean(m?.supportsInteractive),
+                                                          activeLearningOn: m?.supportsActiveLearning ? item.activeLearningOn : false,
+                                                          trainingReplicaName: m?.supportsActiveLearning ? item.trainingReplicaName : "",
+                                                        }
+                                                      : item
+                                                  )
+                                                );
+                                              }}
+                                              className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                                            >
+                                              <option value="">请选择模型</option>
+                                              {modelIds.map((mid) => {
+                                                const m = availableModels.find((x) => x.id === mid);
+                                                return (
+                                                  <option key={mid} value={mid}>
+                                                    {m?.name ?? mid}
+                                                  </option>
+                                                );
+                                              })}
+                                            </select>
+                                          </div>
+                                          <div>
+                                            <label className="text-xs text-muted-foreground mb-1 block">选择副本</label>
+                                            <select
+                                              value={binding.versionId}
+                                              disabled={!binding.modelId}
+                                              onChange={(e) => {
+                                                const versionId = e.target.value;
+                                                setTaskTypeBindings((prev) =>
+                                                  prev.map((item, i) => (i === idx ? { ...item, versionId } : item))
+                                                );
+                                              }}
+                                              className="w-full px-3 py-2 text-sm border rounded-lg bg-background disabled:opacity-50"
+                                            >
+                                              <option value="">请选择副本</option>
+                                              {versionOptions.map((v) => (
+                                                <option key={v.versionId} value={v.versionId}>
+                                                  {replicaOptionCaption(v)}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </div>
+                                        </div>
                                         {selected?.labelScope === "固定标签集" && (
                                           <button
                                             type="button"
@@ -1215,104 +1279,138 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                                             开放标签集：与所选模型副本中的 Prompt 绑定一致
                                           </p>
                                         )}
+
+                                        {rowModel && !canBatch && !canInteract && (
+                                          <p className="text-xs text-amber-800 bg-amber-50/50 border border-amber-100 rounded-md p-2">
+                                            所选模型未在管理中开启批量或交互式预标注，请重新选择。
+                                          </p>
+                                        )}
+
+                                        <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+                                          <div className="flex items-center justify-between gap-2">
+                                            <span className="text-sm font-medium">预标注方式</span>
+                                            <Switch
+                                              checked={binding.preannotationWayEnabled}
+                                              onCheckedChange={(on) => {
+                                                setTaskTypeBindings((prev) =>
+                                                  prev.map((item, i) => {
+                                                    if (i !== idx) return item;
+                                                    if (!on) {
+                                                      return {
+                                                        ...item,
+                                                        preannotationWayEnabled: false,
+                                                        batchPreOn: false,
+                                                        interactivePreOn: false,
+                                                      };
+                                                    }
+                                                    const rm = availableModels.find((x) => x.id === item.modelId);
+                                                    return {
+                                                      ...item,
+                                                      preannotationWayEnabled: true,
+                                                      batchPreOn: Boolean(rm?.supportsBatch),
+                                                      interactivePreOn: Boolean(rm?.supportsInteractive),
+                                                    };
+                                                  })
+                                                );
+                                              }}
+                                            />
+                                          </div>
+                                          {binding.preannotationWayEnabled && (
+                                            <div className="flex flex-wrap gap-6">
+                                              {canBatch && (
+                                                <div className="flex items-center gap-2">
+                                                  <Switch
+                                                    checked={binding.batchPreOn}
+                                                    onCheckedChange={(on) => {
+                                                      if (!canBatch) return;
+                                                      setTaskTypeBindings((prev) =>
+                                                        prev.map((item, i) => {
+                                                          if (i !== idx) return item;
+                                                          if (!on && canInteract && !item.interactivePreOn) {
+                                                            return { ...item, batchPreOn: false, interactivePreOn: true };
+                                                          }
+                                                          return { ...item, batchPreOn: on };
+                                                        })
+                                                      );
+                                                    }}
+                                                    disabled={canBatch && !canInteract}
+                                                  />
+                                                  <span className="text-sm">批量预标注</span>
+                                                </div>
+                                              )}
+                                              {canInteract && (
+                                                <div className="flex items-center gap-2">
+                                                  <Switch
+                                                    checked={binding.interactivePreOn}
+                                                    onCheckedChange={(on) => {
+                                                      if (!canInteract) return;
+                                                      setTaskTypeBindings((prev) =>
+                                                        prev.map((item, i) => {
+                                                          if (i !== idx) return item;
+                                                          if (!on && canBatch && !item.batchPreOn) {
+                                                            return { ...item, interactivePreOn: false, batchPreOn: true };
+                                                          }
+                                                          return { ...item, interactivePreOn: on };
+                                                        })
+                                                      );
+                                                    }}
+                                                    disabled={canInteract && !canBatch}
+                                                  />
+                                                  <span className="text-sm">交互式预标注</span>
+                                                </div>
+                                              )}
+                                              {canBatch && canInteract && (
+                                                <p className="text-[11px] text-muted-foreground w-full">至少需开启其中一种预标注方式。</p>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {rowModel?.supportsActiveLearning && (
+                                          <div className="rounded-lg border p-3 space-y-2 bg-amber-50/20">
+                                            <div className="flex items-center gap-2">
+                                              <Switch
+                                                checked={binding.activeLearningOn}
+                                                onCheckedChange={(on) =>
+                                                  setTaskTypeBindings((prev) =>
+                                                    prev.map((item, i) =>
+                                                      i === idx
+                                                        ? {
+                                                            ...item,
+                                                            activeLearningOn: on,
+                                                            trainingReplicaName: on ? item.trainingReplicaName : "",
+                                                          }
+                                                        : item
+                                                    )
+                                                  )
+                                                }
+                                              />
+                                              <span className="text-sm">主动学习</span>
+                                            </div>
+                                            {binding.activeLearningOn && (
+                                              <div>
+                                                <label className="text-xs text-muted-foreground mb-1 block">训练副本名称</label>
+                                                <input
+                                                  value={binding.trainingReplicaName}
+                                                  onChange={(e) =>
+                                                    setTaskTypeBindings((prev) =>
+                                                      prev.map((item, i) =>
+                                                        i === idx ? { ...item, trainingReplicaName: e.target.value } : item
+                                                      )
+                                                    )
+                                                  }
+                                                  className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
+                                                  placeholder="请输入训练产出使用的副本名称"
+                                                />
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   })}
                                 </div>
                               )}
-
-                              {primaryModel && primaryBinding && (() => {
-                                const mSel = primaryModel;
-                                const canBatch = !!mSel.supportsBatch;
-                                const canInteract = !!mSel.supportsInteractive;
-                                if (!canBatch && !canInteract) {
-                                  return (
-                                    <p className="text-xs text-amber-800 bg-amber-50/50 border border-amber-100 rounded-md p-2">
-                                      首个已选模型未在管理中开启批量或交互式预标注，请重新选择。
-                                    </p>
-                                  );
-                                }
-                                const onBatchChange = (on: boolean) => {
-                                  if (!canBatch) return;
-                                  if (!on && canInteract && !taskInteractivePreOn) {
-                                    setTaskInteractivePreOn(true);
-                                  }
-                                  setTaskBatchPreOn(on);
-                                };
-                                const onInteractiveChange = (on: boolean) => {
-                                  if (!canInteract) return;
-                                  if (!on && canBatch && !taskBatchPreOn) {
-                                    setTaskBatchPreOn(true);
-                                  }
-                                  setTaskInteractivePreOn(on);
-                                };
-                                return (
-                                  <>
-                                    <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
-                                      <p className="text-xs font-medium text-muted-foreground">
-                                        预标注方式（依据首个已选任务类型对应的模型在管理中的能力）
-                                      </p>
-                                      <div className="flex flex-wrap gap-6">
-                                        {canBatch && (
-                                          <div className="flex items-center gap-2">
-                                            <Switch
-                                              checked={taskBatchPreOn}
-                                              onCheckedChange={onBatchChange}
-                                              disabled={canBatch && !canInteract}
-                                            />
-                                            <span className="text-sm">批量预标注</span>
-                                          </div>
-                                        )}
-                                        {canInteract && (
-                                          <div className="flex items-center gap-2">
-                                            <Switch
-                                              checked={taskInteractivePreOn}
-                                              onCheckedChange={onInteractiveChange}
-                                              disabled={canInteract && !canBatch}
-                                            />
-                                            <span className="text-sm">交互式预标注</span>
-                                          </div>
-                                        )}
-                                        {canBatch && canInteract && (
-                                          <p className="text-[11px] text-muted-foreground w-full">至少需开启其中一种预标注方式。</p>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-3 text-xs">
-                                      <label className="flex items-center gap-1.5">
-                                        <input
-                                          type="checkbox"
-                                          checked={autoAccept}
-                                          onChange={(e) => setAutoAccept(e.target.checked)}
-                                        />
-                                        自动接受结果
-                                      </label>
-                                    </div>
-                                    {mSel.supportsActiveLearning && (
-                                      <div className="rounded-lg border p-3 space-y-2 bg-amber-50/20">
-                                        <div className="flex items-center gap-2">
-                                          <Switch
-                                            checked={activeLearningTrainingOn}
-                                            onCheckedChange={setActiveLearningTrainingOn}
-                                          />
-                                          <span className="text-sm">主动学习与训练配置</span>
-                                        </div>
-                                        {activeLearningTrainingOn && (
-                                          <div>
-                                            <label className="text-xs text-muted-foreground mb-1 block">训练副本名称</label>
-                                            <input
-                                              value={trainingReplicaName}
-                                              onChange={(e) => setTrainingReplicaName(e.target.value)}
-                                              className="w-full px-3 py-2 text-sm border rounded-lg bg-background"
-                                              placeholder="请输入训练产出使用的副本名称"
-                                            />
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </>
-                                );
-                              })()}
                             </div>
                           )}
                         </>
@@ -2279,17 +2377,22 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                                 </p>
                                 <div className="flex flex-wrap gap-1">
                                   {(() => {
-                                    const m = primaryModel;
-                                    const b = Boolean(m?.supportsBatch && taskBatchPreOn);
-                                    const i = Boolean(m?.supportsInteractive && taskInteractivePreOn);
+                                    const fb = taskTypeBindings.find((x) => x.modelId && x.versionId);
+                                    const m = fb ? availableModels.find((mm) => mm.id === fb.modelId) : undefined;
+                                    const batchTag = Boolean(
+                                      m?.supportsBatch && fb?.preannotationWayEnabled && fb.batchPreOn
+                                    );
+                                    const interactTag = Boolean(
+                                      m?.supportsInteractive && fb?.preannotationWayEnabled && fb.interactivePreOn
+                                    );
                                     return (
                                       <>
-                                        {b && (
+                                        {batchTag && (
                                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">
                                             批量
                                           </span>
                                         )}
-                                        {i && (
+                                        {interactTag && (
                                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-bold">
                                             交互
                                           </span>
@@ -2298,14 +2401,17 @@ const DataAnnotationTaskCreate = ({ onBack }: Props) => {
                                     );
                                   })()}
                                 </div>
-                                <span className="text-[10px] text-muted-foreground">
-                                  {autoAccept ? "自动接受" : "人工确认"}
-                                </span>
-                                {activeLearningTrainingOn && trainingReplicaName.trim() ? (
-                                  <span className="text-[10px] text-amber-800 font-medium block">
-                                    训练副本 {trainingReplicaName.trim()}
-                                  </span>
-                                ) : null}
+                                {(() => {
+                                  const fb = taskTypeBindings.find((x) => x.modelId && x.versionId);
+                                  if (fb?.activeLearningOn && fb.trainingReplicaName.trim()) {
+                                    return (
+                                      <span className="text-[10px] text-amber-800 font-medium block">
+                                        训练副本 {fb.trainingReplicaName.trim()}
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                                 {preannotationEnabled && estimatedMinutes > 0 && (
                                   <span className="text-[10px] text-amber-700 font-bold block">
                                     预计 ≈ {estimatedMinutes} 分钟完成预标注
