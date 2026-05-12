@@ -341,12 +341,10 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
         />
         {(() => {
           const slots = imageSegSlotsBySample.get(current.id);
-          const vehRejected =
-            isBt005ImageSeg && slots?.find((s) => s.slotKey === "vehicle")?.reviewStatus === "rejected";
-          const pedRejected =
-            isBt005ImageSeg && slots?.find((s) => s.slotKey === "ped")?.reviewStatus === "rejected";
-          const showVehicle = !(isBt005ImageSeg && vehRejected);
-          const showPed = !(isBt005ImageSeg && pedRejected);
+          const veh = slots?.find((s) => s.slotKey === "vehicle");
+          const ped = slots?.find((s) => s.slotKey === "ped");
+          const showVehicle = !isBt005ImageSeg || (!!veh && veh.reviewStatus !== "rejected");
+          const showPed = !isBt005ImageSeg || (!!ped && ped.reviewStatus !== "rejected");
           return (
             <>
               {showVehicle && (
@@ -878,14 +876,11 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
   const rejectImageSegSlot = useCallback((sampleId: number, slotKey: ImageSegSlotKey) => {
     setImageSegSlotsBySample((prev) => {
       const next = new Map(prev);
-      const rows = [...(next.get(sampleId) ?? [])];
-      next.set(
-        sampleId,
-        rows.map((r) => (r.slotKey === slotKey ? { ...r, reviewStatus: "rejected" as const } : r)),
-      );
+      const rows = [...(next.get(sampleId) ?? [])].filter((r) => r.slotKey !== slotKey);
+      next.set(sampleId, rows);
       return next;
     });
-    toast.info("已取消该条预标注");
+    toast.info("已从列表移除该条预标注");
   }, []);
 
   const deletePreAnnotation = useCallback((sampleId: number) => {
@@ -920,14 +915,10 @@ const DataAnnotationWorkbench = ({ task, onBack, initialResourceId }: Props) => 
     if (task.id === "BT-005" && task.projectType === "图像类") {
       setImageSegSlotsBySample((prev) => {
         const next = new Map(prev);
-        const rows = [...(next.get(current.id) ?? [])];
-        next.set(
-          current.id,
-          rows.map((r) => ({ ...r, reviewStatus: "rejected" as const })),
-        );
+        next.set(current.id, []);
         return next;
       });
-      toast.info("三条预标注已全部取消（画布检测框随之隐藏）");
+      toast.info("已清空当前样本的预标注列表");
       return;
     }
     const pre = preAnnotations.get(current.id);
