@@ -13,7 +13,7 @@ function copyProcessedDisplay(m: MLModel, v: MLModelVersion) {
   const pt = v.processingTasks ?? m.processingTasks ?? 0;
   const aa = v.annotatorAccepted ?? m.annotatorAccepted ?? 0;
   const pct = pt > 0 ? Math.round((aa / pt) * 100) : 0;
-  return { pt, aa, pct };
+  return { pt, pct };
 }
 
 const DataAnnotationModelVersionManage = () => {
@@ -105,15 +105,15 @@ const DataAnnotationModelVersionManage = () => {
                     <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">链接</th>
                     <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">认证方式</th>
                     <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">健康状态</th>
-                    <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">已处理</th>
-                    <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">接受度</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">已处理条数</th>
+                    <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">接受比例</th>
                     <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">创建时间</th>
                     <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground whitespace-nowrap">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentVersions.map((v) => {
-                    const { pt, aa, pct } = copyProcessedDisplay(selectedModel, v);
+                    const { pt, pct } = copyProcessedDisplay(selectedModel, v);
                     return (
                       <tr key={v.id} className="border-b last:border-0 hover:bg-muted/20">
                         <td className="py-3 px-3 font-medium">{v.version}</td>
@@ -124,9 +124,7 @@ const DataAnnotationModelVersionManage = () => {
                         <td className="py-3 px-3">{v.authType === "none" ? "无认证" : "API KEY认证"}</td>
                         <td className="py-3 px-3">{v.health}</td>
                         <td className="py-3 px-3 text-xs text-right tabular-nums text-muted-foreground">{pt}</td>
-                        <td className="py-3 px-3 text-xs text-right tabular-nums text-muted-foreground">
-                          {aa}/{pt}（{pct}%）
-                        </td>
+                        <td className="py-3 px-3 text-xs text-right tabular-nums text-muted-foreground">{pct}%</td>
                         <td className="py-3 px-3 text-xs text-muted-foreground whitespace-nowrap">{v.createdAt}</td>
                         <td className="py-3 px-3 whitespace-nowrap">
                           <div className="flex items-center gap-1">
