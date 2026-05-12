@@ -2,9 +2,12 @@ import { useState } from "react";
 import {
   Search, ClipboardList, Users, Clock, Eye, FileText, Filter,
   CheckCircle, AlertTriangle, BookOpen, ChevronDown, X,
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+  Brain, Loader2, Sparkles
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTaskPreannotationStore } from "@/stores/useTaskPreannotationStore";
+import { usePreannotationProgress } from "@/hooks/usePreannotationProgress";
 
 interface HallBatch {
   id: string;
@@ -21,9 +24,15 @@ interface HallBatch {
   description: string;
   labels: string[];
   spec: string;
+  /** 列表中主动学习状态角标（显示在预标注相关标签最前） */
+  activeLearningListTag?: "高优批次" | "未完成" | "已完成";
 }
 
+const alClosedLoopName = "情感分析主动学习闭环";
+
 const mockBatches: HallBatch[] = [
+  { id: "BT-AL-01", taskName: `${alClosedLoopName}（BT-AL-01）`, taskId: "AT-AL-01", projectType: "文本类", taskType: "标注-质检-验收", currentStage: "标注", dataCount: 180, creator: "钱进", createdAt: "2026-05-01", authorizedTo: "任务池", status: "可领取", description: "同一任务下不同批次的主动学习闭环，本批次为高优采样队列", labels: ["正面", "负面", "中性"], spec: "请结合上下文判断情感极性，并优先处理模型高不确定性样本。", activeLearningListTag: "高优批次" },
+  { id: "BT-AL-02", taskName: `${alClosedLoopName}（BT-AL-02）`, taskId: "AT-AL-01", projectType: "文本类", taskType: "标注-质检-验收", currentStage: "标注", dataCount: 220, creator: "钱进", createdAt: "2026-05-02", authorizedTo: "任务池", status: "可领取", description: "与上一批次同名不同批次，主动学习迭代尚未收敛", labels: ["正面", "负面", "中性"], spec: "请结合上下文判断情感极性，注意与 BT-AL-01 批次口径一致。", activeLearningListTag: "未完成" },
   { id: "BT-001", taskName: "金融文本情感标注", taskId: "AT-001", projectType: "文本类", taskType: "标注-质检-验收", currentStage: "标注", dataCount: 200, creator: "张明", createdAt: "2026-02-20", authorizedTo: "任务池", status: "可领取", description: "对金融新闻和研报进行正面/负面/中性情感极性标注", labels: ["正面", "负面", "中性"], spec: "请根据文本整体情感倾向进行标注..." },
   { id: "BT-002", taskName: "医疗图像分类标注", taskId: "AT-002", projectType: "图像类", taskType: "标注-质检", currentStage: "质检", dataCount: 100, creator: "李芳", createdAt: "2026-02-15", authorizedTo: "AI数据团队", status: "可领取", description: "CT/MRI影像分类标注", labels: ["正常", "异常-良性", "异常-恶性"], spec: "请根据影像特征进行分类..." },
   { id: "BT-003", taskName: "客服对话意图标注", taskId: "AT-003", projectType: "文本类", taskType: "标注-质检-验收", currentStage: "标注", dataCount: 500, creator: "王强", createdAt: "2026-01-28", authorizedTo: "任务池", status: "可领取", description: "客服对话文本意图分类", labels: ["咨询", "投诉", "建议", "其他"], spec: "根据对话内容判断用户意图..." },
@@ -38,6 +47,8 @@ const mockBatches: HallBatch[] = [
   { id: "BT-013", taskName: "电商评价关键词提取", taskId: "AT-012", projectType: "文本类", taskType: "标注-质检", currentStage: "标注", dataCount: 600, creator: "林悦", createdAt: "2026-03-16", authorizedTo: "任务池", status: "可领取", description: "提取商品评价中的核心关键词", labels: ["好评", "差评", "物流", "价格"], spec: "提取具有区分性的词汇..." },
   { id: "BT-014", taskName: "道路场景车道线标注", taskId: "AT-013", projectType: "图像类", taskType: "标注-质检-验收", currentStage: "质检", dataCount: 220, creator: "王伟", createdAt: "2026-03-16", authorizedTo: "任务池", status: "可领取", description: "对车载摄像头拍摄的车道线进行像素级标注", labels: ["实线", "虚线", "黄色实线"], spec: "注意连续性..." },
   { id: "BT-015", taskName: "动物行为分类标注", taskId: "AT-014", projectType: "视频类", taskType: "标注-验收", currentStage: "标注", dataCount: 15, creator: "刘敏", createdAt: "2026-03-17", authorizedTo: "任务池", status: "可领取", description: "标注视频中动物的各类行为行为", labels: ["奔跑", "进食", "休息"], spec: "细粒度记录开始结束帧..." },
+  { id: "BT-AL-03", taskName: "道路场景预标注强化（BT-AL-03）", taskId: "AT-AL-02", projectType: "图像类", taskType: "标注-质检-验收", currentStage: "标注", dataCount: 260, creator: "李雷", createdAt: "2026-05-08", authorizedTo: "任务池", status: "可领取", description: "开启批量预标注与主动学习的道路场景分割强化批次", labels: ["行人", "车辆", "障碍物"], spec: "遵循道路安全标注规范，主动学习已完成一轮收敛。", activeLearningListTag: "已完成" },
+  { id: "BT-AL-04", taskName: "道路场景预标注强化（BT-AL-04）", taskId: "AT-AL-02", projectType: "图像类", taskType: "标注-质检-验收", currentStage: "标注", dataCount: 310, creator: "李雷", createdAt: "2026-05-09", authorizedTo: "任务池", status: "可领取", description: "同任务不同批次的补充采样，预标注与主动学习均已跑通", labels: ["行人", "车辆", "障碍物"], spec: "与 BT-AL-03 批次标签体系统一。", activeLearningListTag: "已完成" },
 ];
 
 const typeColors: Record<string, string> = {
@@ -59,7 +70,25 @@ const stageColors: Record<string, string> = {
 
 const PAGE_SIZES = [10, 20, 50];
 
+function ActiveLearningListPill({ tag }: { tag: NonNullable<HallBatch["activeLearningListTag"]> }) {
+  const label = tag === "高优批次" ? "主动学习高优批次" : tag === "未完成" ? "主动学习未完成" : "主动学习已完成";
+  const cls =
+    tag === "高优批次"
+      ? "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-800/50 dark:text-amber-200"
+      : tag === "未完成"
+        ? "bg-orange-50 border-orange-200 text-orange-800 dark:bg-orange-950/30 dark:border-orange-800/50 dark:text-orange-200"
+        : "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-800/50 dark:text-emerald-200";
+  return (
+    <span className={`inline-flex items-center px-1 py-0.5 rounded border text-[9px] font-bold ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
 const DataAnnotationTaskHall = () => {
+  usePreannotationProgress();
+  const preannotationConfigs = useTaskPreannotationStore((s) => s.configs);
+
   const [searchText, setSearchText] = useState("");
   const [typeFilter, setTypeFilter] = useState("全部类型");
   const [workflowFilter, setWorkflowFilter] = useState("全部流程");
@@ -154,9 +183,43 @@ const DataAnnotationTaskHall = () => {
             </tr>
           </thead>
           <tbody>
-            {paginated.map(b => (
+            {paginated.map(b => {
+              const pc = preannotationConfigs[b.id];
+              const preanPercent = pc && pc.batchEnabled
+                ? Math.round((pc.preannotated / pc.total) * 100)
+                : -1;
+              return (
               <tr key={b.id} className="border-b last:border-0 hover:bg-muted/20">
-                <td className="py-3 px-4 font-medium text-foreground">{b.taskName}</td>
+                <td className="py-3 px-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="font-medium text-foreground">{b.taskName}</span>
+                    {(b.activeLearningListTag || (pc && pc.batchEnabled)) && (
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {b.activeLearningListTag && <ActiveLearningListPill tag={b.activeLearningListTag} />}
+                        {pc && pc.batchEnabled && (
+                          <>
+                            {pc.status === "已完成" ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-bold">
+                                <Sparkles className="w-2.5 h-2.5" />
+                                已预标注 100%
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-700 text-[9px] font-bold">
+                                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                预标注中 {preanPercent}%
+                              </span>
+                            )}
+                            {pc.interactiveEnabled && (
+                              <span className="inline-flex items-center px-1 py-0.5 rounded bg-purple-50 border border-purple-200 text-purple-700 text-[9px] font-bold">
+                                <Brain className="w-2.5 h-2.5 mr-0.5" />交互
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </td>
                 <td className="py-3 px-4 text-muted-foreground">{b.id}</td>
                 <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColors[b.projectType] || "bg-muted text-muted-foreground"}`}>{b.projectType}</span></td>
                 <td className="py-3 px-4">
@@ -175,7 +238,7 @@ const DataAnnotationTaskHall = () => {
                   </div>
                 </td>
               </tr>
-            ))}
+            );})}
           </tbody>
         </table>
         {/* Pagination Bar */}
@@ -261,6 +324,33 @@ const DataAnnotationTaskHall = () => {
                   </div>
                 </div>
               )}
+              {(() => {
+                const pc = preannotationConfigs[detailBatch.id];
+                if (!pc || !pc.batchEnabled) return null;
+                const percent = Math.round((pc.preannotated / pc.total) * 100);
+                return (
+                  <div className="p-3 rounded-lg border border-primary/20 bg-primary/5 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Brain className="w-4 h-4 text-primary" />
+                      <span className="text-xs font-bold text-primary">智能预标注</span>
+                      <span className="ml-auto text-[10px] text-muted-foreground">{pc.modelName}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-white rounded-full overflow-hidden">
+                        <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${percent}%` }} />
+                      </div>
+                      <span className="text-xs font-mono font-bold text-primary">
+                        {pc.preannotated}/{pc.total}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      {pc.status === "已完成"
+                        ? "预标注已完成，认领后可直接进入审校模式"
+                        : "预标注进行中，可立即认领，已完成部分在工作台中可见"}
+                    </p>
+                  </div>
+                );
+              })()}
               <div>
                 <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><BookOpen className="w-3 h-3" /> 标注规范</p>
                 <p className="text-sm text-muted-foreground">{detailBatch.spec}</p>

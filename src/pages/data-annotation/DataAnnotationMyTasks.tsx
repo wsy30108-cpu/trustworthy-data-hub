@@ -2,11 +2,14 @@ import { useState } from "react";
 import {
   Search, Play, Eye, ArrowRightLeft, Unlock,
   ClipboardList, CheckCircle, Clock, X, Send, AlertTriangle,
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown,
+  Brain, Loader2, Sparkles, Zap, MousePointer2
 } from "lucide-react";
 import { toast } from "sonner";
 import DataAnnotationWorkbench from "./DataAnnotationWorkbench";
 import BatchExecutionDetail from "./BatchExecutionDetail";
+import { useTaskPreannotationStore } from "@/stores/useTaskPreannotationStore";
+import { usePreannotationProgress } from "@/hooks/usePreannotationProgress";
 
 interface MyTask {
   id: string;
@@ -17,6 +20,8 @@ interface MyTask {
   done: number;
   status: "进行中" | "已完成";
   projectType: string;
+  /** 文本类细分：默认识别为标签分类；NER 为人名/地名/动物等多类型实体 */
+  annotationMode?: "classification" | "ner";
   taskType: "标注" | "标注-质检" | "标注-质检-验收" | "标注-验收";
   currentStage: string;
   source: "任务大厅" | "质检驳回" | "验收驳回" | "转派";
@@ -25,13 +30,70 @@ interface MyTask {
   history: Array<{ operator: string, action: string, time: string, comment?: string }>;
   creator: string;
   createdAt: string;
+  /** 列表中主动学习状态角标（显示在预标注相关标签最前） */
+  activeLearningListTag?: "高优批次" | "未完成" | "已完成";
+}
+
+const alClosedLoopName = "情感分析主动学习闭环";
+
+function ActiveLearningMyTaskPill({ tag }: { tag: NonNullable<MyTask["activeLearningListTag"]> }) {
+  const label = tag === "高优批次" ? "主动学习高优批次" : tag === "未完成" ? "主动学习未完成" : "主动学习已完成";
+  const cls =
+    tag === "高优批次"
+      ? "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-800/50 dark:text-amber-200"
+      : tag === "未完成"
+        ? "bg-orange-50 border-orange-200 text-orange-800 dark:bg-orange-950/30 dark:border-orange-800/50 dark:text-orange-200"
+        : "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-800/50 dark:text-emerald-200";
+  return (
+    <span className={`inline-flex items-center px-1 py-0.5 rounded border text-[9px] font-bold ${cls}`}>
+      {label}
+    </span>
+  );
 }
 
 const mockMyTasks: MyTask[] = [
   {
-    id: "BT-001", taskName: "金融文本情感标注", authorizedTo: "任务池", progress: 65, total: 200, done: 130, status: "进行中", projectType: "文本类", taskType: "标注-质检-验收", currentStage: "标注", source: "任务大厅",
-    currentStatus: "标注中", latestOperator: "张明", creator: "张明", createdAt: "2026-02-20",
-    history: [{ operator: "系统", action: "创建批次", time: "2026-02-20 09:00" }, { operator: "张明", action: "领取任务", time: "2026-02-20 10:30" }]
+    id: "BT-AL-01",
+    taskName: `${alClosedLoopName}（BT-AL-01）`,
+    authorizedTo: "任务池",
+    progress: 20,
+    total: 180,
+    done: 36,
+    status: "进行中",
+    projectType: "文本类",
+    taskType: "标注-质检-验收",
+    currentStage: "标注",
+    source: "任务大厅",
+    currentStatus: "标注中",
+    latestOperator: "刘洋",
+    creator: "钱进",
+    createdAt: "2026-05-01",
+    activeLearningListTag: "高优批次",
+    history: [
+      { operator: "刘洋", action: "从大厅领取", time: "2026-05-01 09:00" },
+      { operator: "刘洋", action: "开始标注", time: "2026-05-01 09:30" },
+    ],
+  },
+  {
+    id: "BT-AL-02",
+    taskName: `${alClosedLoopName}（BT-AL-02）`,
+    authorizedTo: "任务池",
+    progress: 8,
+    total: 220,
+    done: 18,
+    status: "进行中",
+    projectType: "文本类",
+    taskType: "标注-质检-验收",
+    currentStage: "标注",
+    source: "任务大厅",
+    currentStatus: "标注中",
+    latestOperator: "刘洋",
+    creator: "钱进",
+    createdAt: "2026-05-02",
+    activeLearningListTag: "未完成",
+    history: [
+      { operator: "刘洋", action: "从大厅领取", time: "2026-05-02 10:00" },
+    ],
   },
   {
     id: "BT-005", taskName: "无人驾驶路测图像分割", authorizedTo: "AI数据团队", progress: 12, total: 1000, done: 120, status: "进行中", projectType: "图像类", taskType: "标注-质检", currentStage: "标注", source: "质检驳回",
@@ -94,6 +156,49 @@ const mockMyTasks: MyTask[] = [
       { operator: "李晓", action: "质检通过", time: "2026-03-14 11:00" },
       { operator: "张明", action: "开始验收", time: "2026-03-18 11:30" }
     ]
+  },
+  {
+    id: "BT-AL-03",
+    taskName: "道路场景预标注强化（BT-AL-03）",
+    authorizedTo: "任务池",
+    progress: 5,
+    total: 260,
+    done: 13,
+    status: "进行中",
+    projectType: "图像类",
+    taskType: "标注-质检-验收",
+    currentStage: "标注",
+    source: "任务大厅",
+    currentStatus: "标注中",
+    latestOperator: "李雷",
+    creator: "李雷",
+    createdAt: "2026-05-08",
+    activeLearningListTag: "已完成",
+    history: [
+      { operator: "李雷", action: "创建批次", time: "2026-05-08 08:00" },
+      { operator: "李雷", action: "开始标注", time: "2026-05-08 14:00" },
+    ],
+  },
+  {
+    id: "BT-AL-04",
+    taskName: "道路场景预标注强化（BT-AL-04）",
+    authorizedTo: "任务池",
+    progress: 2,
+    total: 310,
+    done: 6,
+    status: "进行中",
+    projectType: "图像类",
+    taskType: "标注-质检-验收",
+    currentStage: "标注",
+    source: "任务大厅",
+    currentStatus: "标注中",
+    latestOperator: "李雷",
+    creator: "李雷",
+    createdAt: "2026-05-09",
+    activeLearningListTag: "已完成",
+    history: [
+      { operator: "李雷", action: "从大厅领取", time: "2026-05-09 09:00" },
+    ],
   },
   {
     id: "BT-007", taskName: "客服对话意图标注", authorizedTo: "任务池", progress: 100, total: 500, done: 500, status: "已完成", projectType: "文本类", taskType: "标注-质检-验收", currentStage: "已完成", source: "任务大厅",
@@ -190,6 +295,9 @@ const sourceColors: Record<string, string> = {
 };
 
 const DataAnnotationMyTasks = () => {
+  usePreannotationProgress();
+  const preannotationConfigs = useTaskPreannotationStore((s) => s.configs);
+
   const [tab, setTab] = useState<"active" | "done">("active");
   const [searchText, setSearchText] = useState("");
   const [typeFilter, setTypeFilter] = useState("全部类型");
@@ -321,7 +429,41 @@ const DataAnnotationMyTasks = () => {
             {paginated.map(t => (
               <tr key={t.id} className="border-b last:border-0 hover:bg-muted/20">
                 <td className="py-3 px-4 font-medium">{t.id}</td>
-                <td className="py-3 px-4 text-foreground">{t.taskName}</td>
+                <td className="py-3 px-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-foreground">{t.taskName}</span>
+                    {(() => {
+                      const pc = preannotationConfigs[t.id];
+                      if (!t.activeLearningListTag && (!pc || !pc.batchEnabled)) return null;
+                      const percent = pc && pc.batchEnabled ? Math.round((pc.preannotated / pc.total) * 100) : 0;
+                      return (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {t.activeLearningListTag && <ActiveLearningMyTaskPill tag={t.activeLearningListTag} />}
+                          {pc && pc.batchEnabled && (
+                            <>
+                              {pc.status === "已完成" ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-bold">
+                                  <Sparkles className="w-2.5 h-2.5" />
+                                  已预标注 100%
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-700 text-[9px] font-bold">
+                                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                  预标注中 {percent}%
+                                </span>
+                              )}
+                              {pc.interactiveEnabled && (
+                                <span className="inline-flex items-center px-1 py-0.5 rounded bg-purple-50 border border-purple-200 text-purple-700 text-[9px] font-bold">
+                                  <Brain className="w-2.5 h-2.5 mr-0.5" />交互
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </td>
                 <td className="py-3 px-4"><span className="px-2 py-0.5 bg-muted rounded text-xs">{t.authorizedTo}</span></td>
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-2">
